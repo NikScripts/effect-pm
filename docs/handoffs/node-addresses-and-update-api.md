@@ -308,6 +308,50 @@ Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 
+#### `_tag` — key vs value (evaluation → lean: **key**)
+
+Effect uses `_tag` for **closed sums** you `Match` / decode as variants (`Data.TaggedError`,
+`Schema.TaggedStruct`, `Match.tag`). It does **not** put `_tag` on Context.Reference
+identity — refs are keyed by their string id / record field (`Sticky`, `StreamGap`).
+
+Policy has two shapes today:
+
+| Shape | Kind | `_tag` fit |
+|-------|------|------------|
+| `make({ Sticky: true, StreamGap: "stall" })` | **Product** (many knobs at once) | `_tag` on the bag doesn’t work (one object, many keys) |
+| `sticky` / `streamGap("stall")` fragments | **Sum** (which knob is this override?) | `_tag` names the knob — Effect-consistent |
+| Mode strings (`"stall"`, `"reject"`) | **Sum** (which mode?) | `_tag` on the **value** fits standards (`{ _tag: "Stall" }`) |
+
+**Lean (owner + Effect check): `_tag` on the key (fragment), not the Reference bag.**
+
+Each override is a tagged struct; `_tag` is the knob name (PascalCase, matches Reference /
+`.key("Sticky", …)`). Payload is the value (boolean, mode, …):
+
+```ts
+type Fragment =
+  | { readonly _tag: "Sticky"; readonly value: boolean }
+  | { readonly _tag: "StreamGap"; readonly value: StreamGap }
+  | { readonly _tag: "Verify"; readonly value: Verify }
+  // …
+
+Policy.succeed({ _tag: "Sticky", value: true })
+Policy.make([{ _tag: "Sticky", value: true }, { _tag: "StreamGap", value: "stall" }])
+// product bag can stay as sugar → expands to Fragment[]
+Policy.make({ Sticky: true, StreamGap: "stall" })
+```
+
+Why not value-only `_tag`: Sticky/Yield are booleans / Effects — no useful value tag.
+Key-tag gives one uniform fragment shape for every knob (including booleans). Mode values
+can stay string literals for now, or later move to PascalCase `_tag` modes under the
+payload (`value: { _tag: "Stall" }`) per owned-string standards — separate cut.
+
+Why not `_tag` instead of Context.Reference: ambient `yield* Policy.Sticky` and Layer
+overrides stay Reference-based (Effect Context). `_tag` is for the **fragment / config
+entry** sum, not for replacing refs.
+
+**Not Eng’d yet** — lock the lean; migrate `succeed` / fragment Schema when we Eng the
+cut (with `LookupPolicy` rename or sooner if desired).
+
 ### 3.4 Parked — prior long Address API notes
 
 > Former detailed §3.1–3.5 pass. Prefer §3.2–3.3. Kept for reference.
