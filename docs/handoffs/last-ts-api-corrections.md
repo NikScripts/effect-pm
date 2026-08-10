@@ -64,7 +64,7 @@ SSOT: [`page-document-lock.md`](./page-document-lock.md) — `Page.document`,
 
 1. **Single combined provider story** — baking one `Last.provider(…)` before use is the point; do not invent extra `RegistryProvider` / nested provider recipes in examples until locked.
 2. **File-router** (`last-ts/vite` `fileRouter`, `paths.gen`) — Eng’d without a full feature/standards write-up. Needs a proper design pass (capabilities, honesty of codegen, CI check, alignment with HttpApi Router). Do not grow catalog-merge APIs until that exists.
-3. **Layout as View-shaped default Component + provide-swap** — lean captured in [`page-layout-design.md`](./page-layout-design.md); overlaps `Layout.Root` in the Document lock — **not Eng’d**.
+3. **Layout as View-shaped default Component + provide-swap** — Eng’d in [`page-layout-lock.md`](./page-layout-lock.md) (`RootLayout` / `Layout.make` / `Layout.provide`).
 
 ---
 

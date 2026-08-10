@@ -2,15 +2,18 @@
  * PageProps + typed RouterBuilder.handle — schema-true page components.
  */
 import { describe, expectTypeOf, it } from "@effect/vitest";
-import { Effect, Schema } from "effect";
+import { Effect, Layer, Schema, pipe } from "effect";
 import { HttpApiEndpoint } from "effect/unstable/httpapi";
-import type { Layout } from "last-ts/Layout";
+import * as Layout from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
 import * as React from "react";
 
-const RootLayout: Layout = ({ children }) => children as React.ReactElement;
+class RootShell extends Layout.make()(
+  "test-d/layout/root",
+  Effect.sync(() => React.createElement(Layout.Outlet)),
+) {}
 
 class Site extends Router.make("site").add(
   Router.group("docs").add(
@@ -54,10 +57,13 @@ describe("RouterBuilder.handle page props", () => {
     ): React.ReactElement =>
       props.params.chapter as unknown as React.ReactElement;
 
-    const _layer = RouterBuilder.group(Site, "docs", RootLayout, (h) =>
-      h
-        .handle("index", () => null as unknown as React.ReactElement)
-        .handle("chapter", Chapter),
+    const _layer = pipe(
+      RouterBuilder.group(Site, "docs", (h) =>
+        h
+          .handle("index", () => null as unknown as React.ReactElement)
+          .handle("chapter", Chapter),
+      ),
+      Layout.provide(RootShell),
     );
     void _layer;
   });
@@ -70,14 +76,17 @@ describe("RouterBuilder.handle page props", () => {
       readonly href: string;
     }): React.ReactElement => null as unknown as React.ReactElement;
 
-    const _layer = RouterBuilder.group(Site, "docs", RootLayout, (h) =>
-      h
-        .handle("index", () => null as unknown as React.ReactElement)
-        .handle(
-          "chapter",
-          // @ts-expect-error — params.id:number is not chapter:string
-          Wrong,
-        ),
+    const _layer = pipe(
+      RouterBuilder.group(Site, "docs", (h) =>
+        h
+          .handle("index", () => null as unknown as React.ReactElement)
+          .handle(
+            "chapter",
+            // @ts-expect-error — params.id:number is not chapter:string
+            Wrong,
+          ),
+      ),
+      Layout.provide(RootShell),
     );
     void _layer;
   });
@@ -88,9 +97,29 @@ describe("RouterBuilder.handle page props", () => {
     );
     const chapterJsx = null as unknown as React.ReactElement;
 
-    const _layer = RouterBuilder.group(Site, "docs", RootLayout, (h) =>
-      h.handle("index", chapterJsx).handle("chapter", chapterEffect),
+    const _layer = pipe(
+      RouterBuilder.group(Site, "docs", (h) =>
+        h.handle("index", chapterJsx).handle("chapter", chapterEffect),
+      ),
+      Layout.provide(RootShell),
     );
     void _layer;
+  });
+
+  it("json-only group Layer has no remaining requirements", () => {
+    const apiGroup = RouterBuilder.group(Site, "api", (h) =>
+      h.handle("getUser", (req) => {
+        const params = (req as { readonly params: { readonly id: string } })
+          .params;
+        return Effect.succeed({ id: params.id });
+      }),
+    );
+    // Must be Layer<…, …, never> — no Layout.Slot debt
+    const _ok: Layer.Layer<unknown, never, never> = apiGroup as Layer.Layer<
+      unknown,
+      never,
+      never
+    >;
+    void _ok;
   });
 });

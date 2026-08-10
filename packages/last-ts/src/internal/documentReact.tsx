@@ -59,11 +59,15 @@ export const useCell = (): DocumentCell => {
   const cell = React.useContext(CellReact);
   if (cell === null) {
     throw new Error(
-      "Document: render under Document.FieldsProvider (Layout.Root / Last.provider)",
+      "Document: render under Document.FieldsProvider (RootLayout / Last.provider)",
     );
   }
   return cell;
 };
+
+/** @internal — null when outside FieldsProvider (bare layout tests). */
+export const useCellOption = (): DocumentCell | null =>
+  React.useContext(CellReact);
 
 export const useFields = (): BaseFields => {
   const cell = useCell();

@@ -11,7 +11,7 @@
 
 - `last-ts/Document` — `make`, `Default`, `Head`, `Fields`, `Cell`, `transform` + sugars, `provide` / `makeCell`
 - `Page.document` — patch / partial / class overloads
-- `Layout.Outlet` (component) + `Layout.Root.make` / `DefaultRoot`
+- `Layout.Outlet` (component); root html via `RootLayout.make` / `Default` (see `page-layout-lock.md`)
 - `Last.provider` wraps `Document.FieldsProvider` when `Cell` is in the Layer
 - Dogfood: `SiteDocument` + shared `siteCell` in `_root` + provider layer
 - Tests: `test/document-chrome.test.ts`
@@ -47,7 +47,8 @@ direct `waku` head APIs.
 |--------|------|
 | `last-ts/Document` | `Document.make`, `Document.Head` (Reference), `Document.Fields`, `Document.transform`, sugars (`title`, `meta`, `link`, …), `Document.provide` |
 | `last-ts/Page` | **`Page.document` only** (among this surface) — plus existing `Page.Request` / `Page.make` / … |
-| `last-ts/Layout` | `Layout.Outlet` (**component**), `Layout.Root` (Reference + `Root.make`) |
+| `last-ts/Layout` | Body layouts — `make` / `Outlet` / `provide` (see layout lock) |
+| `last-ts/RootLayout` | Root html — `make` / `Default` |
 
 Handlers typically:
 
@@ -232,17 +233,18 @@ Document.provide(
 </body>
 ```
 
-### Root (`Layout.Root` Reference)
+### Root (`RootLayout` — see [`page-layout-lock.md`](./page-layout-lock.md))
 
-Default root layout owns `<html>`, mounts Document provider **once**, renders Head:
+Default root owns `<html>`, reads `Document.Fields.lang`, mounts Document provider **once**, renders Head:
 
 ```tsx
-export class SiteRoot extends Layout.Root.make()(
+export class SiteRoot extends RootLayout.make()(
   "app/layout/root",
   Effect.fn(function* () {
     const Head = yield* Document.Head
+    const { lang } = yield* Document.Fields
     return (
-      <html lang="en">
+      <html lang={lang ?? "en"}>
         <head>
           <meta charSet="utf-8" />
           <Head />
@@ -253,14 +255,11 @@ export class SiteRoot extends Layout.Root.make()(
       </html>
     )
   }),
-)
+) {}
 ```
 
 - Nested / body layouts do **not** re-install the Document provider.
-- Document fields are **not** auto-applied to the host: the active Document render (`<Head />`) is the apply site inside the root layout.
-- Body layouts may `yield* Page.document(…)` to contribute fields; they don’t render `<html>` / `<head>` unless they are the Root.
-
-Swap root with Layers (`SiteRoot.layer`), same family as `Document.Head`.
+- Body layouts may `yield* Page.document(…)` to contribute fields; they don’t render `<html>` / `<head>`.
 
 ---
 
@@ -310,5 +309,5 @@ export const Provider = Last.provider(
 1. No public teaching of `(yield* Document)` / `.set` / `yield*` in `()`.
 2. `Page.document` + `Document.transform` sugars typecheck against class extras.
 3. `Document.provide` incomplete required fields ⇒ **type error**.
-4. Dogfood root uses `Layout.Root` + `Document.Head`; no hardcoded product title story divorced from `Page.document`.
+4. Dogfood root uses `RootLayout` + `Document.Head`; no hardcoded product title story divorced from `Page.document`.
 5. Apps still never import `waku`.

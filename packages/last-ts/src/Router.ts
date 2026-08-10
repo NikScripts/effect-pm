@@ -11,12 +11,15 @@
  *   ),
  * ) {}
  *
- * const app = RouterBuilder.group(Site, "app", Layout, (h) =>
- *   h.handle("home", Home).handle("getUser", (req) => Effect.succeed(…)),
+ * const app = pipe(
+ *   RouterBuilder.group(Site, "app", (h) =>
+ *     h.handle("home", Home).handle("getUser", (req) => Effect.succeed(…)),
+ *   ),
+ *   Layout.provide(AppShell),
  * )
- * const routes = RouterBuilder.layer(Site).pipe(Layer.provide(marketing))
+ * const routes = pipe(RouterBuilder.layer(Site), Layer.provide(app))
  * export const provider = Last.provider(
- *   History.layer.pipe(Layer.provide(routes)),
+ *   pipe(History.layer, Layer.provide(routes)),
  * )
  * ```
  *

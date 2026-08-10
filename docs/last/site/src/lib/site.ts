@@ -3,8 +3,8 @@
  * `docs/handoffs/router-httpapi-lock.md`). Host registration is
  * `last-ts/server`; path table is `last-ts/vite` `fileRouter`.
  */
-import { Layer, Schema } from "effect";
-import type { Layout } from "last-ts/Layout";
+import { Layer, pipe, Schema } from "effect";
+import * as Layout from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
@@ -23,16 +23,17 @@ export class Site extends Router.make("last-ts").add(
 
 export const urls = Route.urlBuilder(Site);
 
-const Passthrough: Layout = ({ children }) => children as never;
-
 /** Catalog + registry for `last-ts/Waku` layer (page bodies via `last-ts/server`). */
-const app = RouterBuilder.group(Site, "__top", Passthrough, (h) =>
-  h
-    .handle("index", () => null)
-    .handle("about", () => null)
-    .handle("guides_slug", () => null)
-    .handle("view", () => null)
-    .handle("docs_path", () => null),
+const app = pipe(
+  RouterBuilder.group(Site, "__top", (h) =>
+    h
+      .handle("index", () => null)
+      .handle("about", () => null)
+      .handle("guides_slug", () => null)
+      .handle("view", () => null)
+      .handle("docs_path", () => null),
+  ),
+  Layout.provide(Layout.Passthrough),
 );
 
-export const routes = RouterBuilder.layer(Site).pipe(Layer.provide(app));
+export const routes = pipe(RouterBuilder.layer(Site), Layer.provide(app));

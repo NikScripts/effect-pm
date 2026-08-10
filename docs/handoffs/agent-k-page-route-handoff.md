@@ -8,7 +8,8 @@
 ## Done this branch
 
 - Host façades (`last-ts/config`, `last-ts/server`); dogfood `createPages`; no app `waku` imports
-- **Document Eng’d** — `Document.make` / `provide` / `transform` / `Page.document` / `Layout.Root`+`Outlet`
+- **Document Eng’d** — `Document.make` / `provide` / `transform` / `Page.document`
+- **Layout Eng’d** — `RootLayout` / `Layout.make` / `provide` / `Outlet`; 3-arg `RouterBuilder.group`
 - Dogfood `_root` + `SiteDocument` shared cell; tests `test/document-chrome.test.ts`
 
 ## Still open (owner)

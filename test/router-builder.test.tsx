@@ -2,12 +2,12 @@
  * RouterBuilder + Memory.layer + Last.provider (HttpApi-shaped lock).
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Schema, pipe } from "effect";
 import { HttpApiEndpoint } from "effect/unstable/httpapi";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
-import type { Layout } from "last-ts/Layout";
 import * as Last from "last-ts/Last";
+import * as Layout from "last-ts/Layout";
 import * as Memory from "last-ts/Memory";
 import * as Page from "last-ts/Page";
 import { useRequest } from "last-ts/Page/react";
@@ -16,11 +16,27 @@ import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
 import * as View from "last-ts/View";
 
-const RootLayout: Layout = ({ children }) =>
-  React.createElement("div", { "data-layout": "root" }, children);
+class RootShell extends Layout.make()(
+  "test/layout/root",
+  Effect.sync(() =>
+    React.createElement(
+      "div",
+      { "data-layout": "root" },
+      React.createElement(Layout.Outlet),
+    ),
+  ),
+) {}
 
-const DocsLayout: Layout = ({ children }) =>
-  React.createElement("div", { "data-layout": "docs" }, children);
+class DocsShell extends Layout.make()(
+  "test/layout/docs",
+  Effect.sync(() =>
+    React.createElement(
+      "div",
+      { "data-layout": "docs" },
+      React.createElement(Layout.Outlet),
+    ),
+  ),
+) {}
 
 const Home = (): React.ReactElement =>
   React.createElement("span", null, "home");
@@ -33,6 +49,16 @@ const DocsIndex = (): React.ReactElement =>
 
 const Chapter = (props: Route.HandleArgs): React.ReactElement =>
   React.createElement("span", null, `chapter:${props.params.chapter ?? ""}`);
+
+const BareChapter = Effect.gen(function* () {
+  yield* Layout.provide(Layout.Passthrough);
+  const req = yield* Page.Request;
+  return React.createElement(
+    "span",
+    { "data-bare": "ok" },
+    `chapter:${req.params.chapter ?? ""}`,
+  );
+});
 
 class Site extends Router.make("site").add(
   Router.group("marketing", { topLevel: true }).add(
@@ -47,25 +73,26 @@ class Site extends Router.make("site").add(
     .prefix("/docs"),
 ) {}
 
-const marketing = RouterBuilder.group(
-  Site,
-  "marketing",
-  RootLayout,
-  (h) => h.handle("home", Home).handle("pricing", Pricing),
+const marketing = pipe(
+  RouterBuilder.group(Site, "marketing", (h) =>
+    h.handle("home", Home).handle("pricing", Pricing),
+  ),
+  Layout.provide(RootShell),
 );
 
-const docs = RouterBuilder.group(Site, "docs", DocsLayout, (h) =>
-  h
-    .handle("index", DocsIndex)
-    .handle("chapter", Chapter, { layout: false }),
+const docs = pipe(
+  RouterBuilder.group(Site, "docs", (h) =>
+    h.handle("index", DocsIndex).handle("chapter", BareChapter),
+  ),
+  Layout.provide(DocsShell),
 );
 
-const routes = RouterBuilder.layer(Site).pipe(
+const routes = pipe(
+  RouterBuilder.layer(Site),
   Layer.provide(Layer.mergeAll(marketing, docs)),
 );
 
-// Transport requires Catalog|Handlers from RouterBuilder.layer
-const provider = Last.provider(Memory.layer.pipe(Layer.provide(routes)));
+const provider = Last.provider(pipe(Memory.layer, Layer.provide(routes)));
 
 describe("RouterBuilder (HttpApi-shaped)", () => {
   it("Last.provider + Memory.layer renders Outlet with group layout", () => {
@@ -76,12 +103,11 @@ describe("RouterBuilder (HttpApi-shaped)", () => {
         React.createElement(Router.Outlet),
       ),
     );
-    // Memory starts at `/` → marketing home + RootLayout
     expect(html).toContain("data-layout=\"root\"");
     expect(html).toContain("home");
   });
 
-  it("navigate to docs chapter with layout: false", () => {
+  it("Layout.provide(Passthrough) overrides group shell for a page Effect", () => {
     const Probe = (): React.ReactElement => {
       const router = Router.useRouter();
       React.useEffect(() => {
@@ -117,11 +143,15 @@ const IndexPage = (): React.ReactElement =>
 const AboutPage = (): React.ReactElement =>
   React.createElement("span", null, "file-about");
 
-const filePages = RouterBuilder.group(FileSite, "root", RootLayout, (h) =>
-  h.handle("index", IndexPage).handle("about", AboutPage),
+const filePages = pipe(
+  RouterBuilder.group(FileSite, "root", (h) =>
+    h.handle("index", IndexPage).handle("about", AboutPage),
+  ),
+  Layout.provide(RootShell),
 );
 
-const fileRoutes = RouterBuilder.layer(FileSite).pipe(
+const fileRoutes = pipe(
+  RouterBuilder.layer(FileSite),
   Layer.provide(
     Layer.mergeAll(
       filePages,
@@ -131,7 +161,7 @@ const fileRoutes = RouterBuilder.layer(FileSite).pipe(
 );
 
 const fileProvider = Last.provider(
-  Memory.layer.pipe(Layer.provide(fileRoutes)),
+  pipe(Memory.layer, Layer.provide(fileRoutes)),
 );
 
 describe("RouterBuilder group.from(Service)", () => {
@@ -149,7 +179,7 @@ describe("RouterBuilder group.from(Service)", () => {
 
   it("UrlBuilder sees resolved file destinations", async () => {
     const runtime = ManagedRuntime.make(
-      Memory.layer.pipe(Layer.provide(fileRoutes)),
+      pipe(Memory.layer, Layer.provide(fileRoutes)),
     );
     try {
       const router = await runtime.runPromise(
@@ -177,19 +207,22 @@ class MixedSite extends Router.make("mixed").add(
   ),
 ) {}
 
-const mixed = RouterBuilder.group(MixedSite, "app", RootLayout, (h) =>
-  h
-    .handle("dashboard", () => React.createElement("span", null, "dash"))
-    .handle("getUser", (req) => {
-      const params = (req as { readonly params: { readonly id: string } })
-        .params;
-      return Effect.succeed({ id: params.id });
-    }),
+const mixed = pipe(
+  RouterBuilder.group(MixedSite, "app", (h) =>
+    h
+      .handle("dashboard", () => React.createElement("span", null, "dash"))
+      .handle("getUser", (req) => {
+        const params = (req as { readonly params: { readonly id: string } })
+          .params;
+        return Effect.succeed({ id: params.id });
+      }),
+  ),
+  Layout.provide(RootShell),
 );
 
-const mixedRoutes = RouterBuilder.layer(MixedSite).pipe(Layer.provide(mixed));
+const mixedRoutes = pipe(RouterBuilder.layer(MixedSite), Layer.provide(mixed));
 const mixedProvider = Last.provider(
-  Memory.layer.pipe(Layer.provide(mixedRoutes)),
+  pipe(Memory.layer, Layer.provide(mixedRoutes)),
 );
 
 describe("RouterBuilder mixed Page + Json handlers", () => {
@@ -201,7 +234,6 @@ describe("RouterBuilder mixed Page + Json handlers", () => {
         React.createElement(Router.Outlet),
       ),
     );
-    // Memory starts at `/` — no Page match; builder still constructs.
     expect(html.length).toBeGreaterThanOrEqual(0);
   });
 
@@ -221,10 +253,6 @@ describe("RouterBuilder mixed Page + Json handlers", () => {
     }
   });
 });
-
-// =============================================================================
-// Effect / JSX page handlers + Request / Document bridges
-// =============================================================================
 
 class EffectHomeSite extends Router.make("effect-home-site").add(
   Router.group("app", { topLevel: true }).add(Route.get("home", "/")),
@@ -281,56 +309,74 @@ const ViewEffectPage = View.effect(
   }),
 );
 
-const effectHomeRoutes = RouterBuilder.layer(EffectHomeSite).pipe(
+const effectHomeRoutes = pipe(
+  RouterBuilder.layer(EffectHomeSite),
   Layer.provide(
-    RouterBuilder.group(EffectHomeSite, "app", RootLayout, (h) =>
-      h.handle("home", effectHome),
+    pipe(
+      RouterBuilder.group(EffectHomeSite, "app", (h) =>
+        h.handle("home", effectHome),
+      ),
+      Layout.provide(RootShell),
     ),
   ),
 );
 const effectHomeProvider = Last.provider(
-  Memory.layer.pipe(Layer.provide(effectHomeRoutes)),
+  pipe(Memory.layer, Layer.provide(effectHomeRoutes)),
 );
 
-const jsxRoutes = RouterBuilder.layer(JsxSite).pipe(
+const jsxRoutes = pipe(
+  RouterBuilder.layer(JsxSite),
   Layer.provide(
-    RouterBuilder.group(JsxSite, "app", RootLayout, (h) =>
-      h.handle("about", aboutElement),
+    pipe(
+      RouterBuilder.group(JsxSite, "app", (h) =>
+        h.handle("about", aboutElement),
+      ),
+      Layout.provide(RootShell),
     ),
   ),
 );
-const jsxProvider = Last.provider(Memory.layer.pipe(Layer.provide(jsxRoutes)));
+const jsxProvider = Last.provider(
+  pipe(Memory.layer, Layer.provide(jsxRoutes)),
+);
 
-const nestedRoutes = RouterBuilder.layer(NestedSite).pipe(
+const nestedRoutes = pipe(
+  RouterBuilder.layer(NestedSite),
   Layer.provide(
-    RouterBuilder.group(NestedSite, "app", RootLayout, (h) =>
-      h.handle("nested", nestedPage),
+    pipe(
+      RouterBuilder.group(NestedSite, "app", (h) =>
+        h.handle("nested", nestedPage),
+      ),
+      Layout.provide(RootShell),
     ),
   ),
 );
 const nestedProvider = Last.provider(
-  Memory.layer.pipe(Layer.provide(nestedRoutes)),
+  pipe(Memory.layer, Layer.provide(nestedRoutes)),
 );
 
-const viewEffectRoutes = RouterBuilder.layer(ViewEffectSite).pipe(
+const viewEffectRoutes = pipe(
+  RouterBuilder.layer(ViewEffectSite),
   Layer.provide(
-    RouterBuilder.group(ViewEffectSite, "app", RootLayout, (h) =>
-      h.handle("home", ViewEffectPage),
+    pipe(
+      RouterBuilder.group(ViewEffectSite, "app", (h) =>
+        h.handle("home", ViewEffectPage),
+      ),
+      Layout.provide(RootShell),
     ),
   ),
 );
 const viewEffectProvider = Last.provider(
-  Memory.layer.pipe(Layer.provide(viewEffectRoutes)),
+  pipe(Memory.layer, Layer.provide(viewEffectRoutes)),
 );
 
 describe("RouterBuilder Effect / JSX page handlers", () => {
   it("registers PageEffect / PageElement / Page (View.effect) runtimes", async () => {
     const assertTag = async (
-      routes: typeof effectHomeRoutes,
+      routesLayer: typeof effectHomeRoutes,
       id: string,
       tag: string,
     ) => {
-      const rt = ManagedRuntime.make(routes);
+      const rt = ManagedRuntime.make(routesLayer);
       try {
         const registry = await rt.runPromise(
           Effect.gen(function* () {

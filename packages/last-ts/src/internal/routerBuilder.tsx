@@ -10,7 +10,7 @@
 import * as React from "react";
 import { Context, Effect, Layer, Option } from "effect";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
-import type { Layout } from "../Layout";
+import * as Layout from "../Layout";
 import type * as Route from "../Route";
 import * as catalog from "./routes";
 import type { Api, ApiConstraint, GroupTop, Match } from "./routes";
@@ -24,8 +24,6 @@ import type * as uiRoute from "./route";
 /** @deprecated Use {@link HandlerRuntime} */
 export type PageHandler = {
   readonly page: React.ComponentType<Route.HandleArgs>;
-  /** `false` = no layout; omit = use group layout. */
-  readonly layout: false | undefined;
 };
 
 /**
@@ -38,17 +36,14 @@ export type HandlerRuntime =
   | {
       readonly _tag: "Page";
       readonly page: React.ComponentType<Route.HandleArgs>;
-      readonly layout: false | undefined;
     }
   | {
       readonly _tag: "PageElement";
       readonly element: React.ReactElement;
-      readonly layout: false | undefined;
     }
   | {
       readonly _tag: "PageEffect";
       readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
-      readonly layout: false | undefined;
     }
   | {
       readonly _tag: "Api";
@@ -58,7 +53,8 @@ export type HandlerRuntime =
     };
 
 export type GroupImpl = {
-  readonly layout: Layout;
+  /** Zero-prop layout (`Layout.make` / Passthrough); set via `Layout.provide`. */
+  readonly layout: React.FC;
   readonly handlers: ReadonlyMap<string, HandlerRuntime>;
 };
 
@@ -102,7 +98,6 @@ type HandleAllHandlers<
       readonly page: pageSuccess.HandlerForEndpoint<
         EndpointsByIdentifier[Identifier]
       >;
-      readonly options?: HandleOptions | undefined;
     }
     | {
       readonly handler: pageSuccess.HandlerForEndpoint<
@@ -136,10 +131,6 @@ type ValidateHandlersReturn<
   : `Endpoint not handled: ${Missing & string}`)
   : `Must return the implemented handlers`;
 
-export type HandleOptions = {
-  readonly layout?: false | undefined;
-};
-
 /**
  * Mutable handler collection for one catalog group (`HttpApiBuilder.Handlers`).
  *
@@ -165,7 +156,6 @@ export interface Handlers<
   handle<Identifier extends keyof EndpointsByIdentifier & string>(
     identifier: Identifier & NotHandledIdentifier<Identifier, HandledIdentifiers>,
     handler: pageSuccess.HandlerForEndpoint<EndpointsByIdentifier[Identifier]>,
-    options?: HandleOptions,
   ): Handlers<EndpointsByIdentifier, HandledIdentifiers | Identifier>;
 
   /**
@@ -193,7 +183,6 @@ export interface Handlers<
    */
   handleEach(
     page: React.ComponentType<Route.HandleArgs>,
-    options?: HandleOptions,
   ): Handlers<EndpointsByIdentifier, keyof EndpointsByIdentifier>;
 }
 
@@ -223,7 +212,6 @@ const registerHandler = (
   self: Handlers<any, any>,
   identifier: string,
   handler: unknown,
-  options?: HandleOptions,
 ): Handlers<any, any> => {
   // `group.from(Service)` defers destinations until RouterBuilder.layer — skip
   // the static route-map check (HttpApi has no deferred endpoints).
@@ -246,7 +234,6 @@ const registerHandler = (
     Option.isSome(deferred) ||
     endpoint === undefined ||
     pageSuccess.isPageEndpoint(endpoint);
-  const layout = options?.layout === false ? false : undefined;
 
   if (!asPage) {
     self.handlers.set(identifier, {
@@ -262,7 +249,6 @@ const registerHandler = (
     self.handlers.set(identifier, {
       _tag: "PageElement",
       element: handler,
-      layout,
     });
     return self;
   }
@@ -271,7 +257,6 @@ const registerHandler = (
     self.handlers.set(identifier, {
       _tag: "PageEffect",
       effect: handler as Effect.Effect<React.ReactNode, unknown, unknown>,
-      layout,
     });
     return self;
   }
@@ -279,7 +264,6 @@ const registerHandler = (
   self.handlers.set(identifier, {
     _tag: "Page",
     page: handler as React.ComponentType<Route.HandleArgs>,
-    layout,
   });
   return self;
 };
@@ -294,9 +278,8 @@ const HandlersProto = {
     this: Handlers<any, any>,
     identifier: string,
     handler: unknown,
-    options?: HandleOptions,
   ) {
-    return registerHandler(this, identifier, handler, options);
+    return registerHandler(this, identifier, handler);
   },
   handleAll(
     this: Handlers<any, any>,
@@ -314,9 +297,8 @@ const HandlersProto = {
       ) {
         const e = entry as {
           readonly page: unknown;
-          readonly options?: HandleOptions;
         };
-        registerHandler(this, identifier, e.page, e.options);
+        registerHandler(this, identifier, e.page);
       } else if (
         entry !== null &&
         typeof entry === "object" &&
@@ -334,11 +316,10 @@ const HandlersProto = {
   handleEach(
     this: Handlers<any, any>,
     page: React.ComponentType<Route.HandleArgs>,
-    options?: HandleOptions,
   ) {
     for (const id of Object.keys(this.group.routes)) {
       if (!this.handlers.has(id)) {
-        registerHandler(this, id, page, options);
+        registerHandler(this, id, page);
       }
     }
     return this;
@@ -360,9 +341,34 @@ const makeHandlers = <G extends GroupTop>(
 
 type ApiIdOf<A> = A extends Api<infer Id, any> ? Id : string;
 
+type RouteIsPage<E> = pageSuccess.IsPageEndpoint<E> extends true ? true : false;
+
+type RoutesHavePage<Routes extends Record<string, unknown>> = true extends {
+  readonly [K in keyof Routes]: RouteIsPage<Routes[K]>;
+}[keyof Routes] ? true
+  : false;
+
+/** Empty route map (typical `group.from(Service)`) or any Page route → layout debt. */
+type GroupNeedsLayout<G extends { readonly routes: Record<string, unknown> }> =
+  [keyof G["routes"]] extends [never] ? true
+    : RoutesHavePage<G["routes"]> extends true ? true
+    : false;
+
+type GroupLayoutDebt<G extends { readonly routes: Record<string, unknown> }> =
+  GroupNeedsLayout<G> extends true ? Layout.Slot : never;
+
+const groupNeedsLayoutRuntime = (g: GroupTop): boolean => {
+  const deferred = Context.getOption(g.annotations, catalog.FromRoutes);
+  if (Option.isSome(deferred)) return true;
+  const routes = Object.values(g.routes);
+  if (routes.length === 0) return true;
+  return routes.some((endpoint) => pageSuccess.isPageEndpoint(endpoint));
+};
+
 /**
  * Implement one catalog group (`HttpApiBuilder.group`).
- * Signature: `(api, id, layout, build)` — layout is UI-only (3rd); handlers last.
+ * Signature: `(api, id, build)` — page groups leave {@link Layout.Slot} in `R`;
+ * fulfill with `pipe(group, Layout.provide(AppShell))`.
  */
 export const group = <
   A extends ApiConstraint,
@@ -371,7 +377,6 @@ export const group = <
 >(
   api: A,
   groupIdentifier: Identifier,
-  layout: Layout,
   build: (
     // Do not intersect with GroupTop — its `Record<string, …>` routes widen
     // keyof to `string` and breaks ValidateReturn completeness.
@@ -380,7 +385,8 @@ export const group = <
 ): Layer.Layer<
   catalog.Group.Service<ApiIdOf<A>, Identifier>,
   Handlers.Error<Return>,
-  Exclude<Handlers.Context<Return>, never>
+  | Exclude<Handlers.Context<Return>, never>
+  | GroupLayoutDebt<A["groups"][Identifier]>
 > =>
   Layer.effectContext(
     Effect.gen(function* () {
@@ -397,16 +403,21 @@ export const group = <
       const handlers: Handlers<any, any> = Effect.isEffect(result)
         ? yield* (result as Effect.Effect<Handlers<any, any>>)
         : (result as Handlers<any, any>);
+      const needsLayout = groupNeedsLayoutRuntime(g);
+      const layout = needsLayout
+        ? yield* Layout.Slot
+        : Layout.Passthrough.Component;
       const impl: GroupImpl = {
         layout,
         handlers: handlers.handlers,
       };
       return Context.makeUnsafe(new Map([[g.key, impl]]));
     }),
-  ) as Layer.Layer<
+  ) as unknown as Layer.Layer<
     catalog.Group.Service<ApiIdOf<A>, Identifier>,
     Handlers.Error<Return>,
-    Exclude<Handlers.Context<Return>, never>
+    | Exclude<Handlers.Context<Return>, never>
+    | GroupLayoutDebt<A["groups"][Identifier]>
   >;
 
 /**
@@ -471,7 +482,7 @@ export const resolveHandler = (
   match: Match,
 ): {
   readonly handler: Exclude<HandlerRuntime, { readonly _tag: "Api" }>;
-  readonly layout: Layout | null;
+  readonly layout: React.FC;
 } | null => {
   const impl = bag.groups.get(match.group.identifier);
   if (impl === undefined) return null;
@@ -479,7 +490,7 @@ export const resolveHandler = (
   if (h === undefined || h._tag === "Api") return null;
   return {
     handler: h,
-    layout: h.layout === false ? null : impl.layout,
+    layout: impl.layout,
   };
 };
 
@@ -494,7 +505,7 @@ export const resolveRender = (
   match: Match,
 ): {
   readonly page: React.ComponentType<Route.HandleArgs>;
-  readonly layout: Layout | null;
+  readonly layout: React.FC;
 } | null => {
   const resolved = resolveHandler(bag, match);
   if (resolved === null || resolved.handler._tag !== "Page") return null;

@@ -40,7 +40,7 @@ dispatch), not a second router.
 | `HttpApiGroup.key` / `Service` / `ToService` | `group.key` / `Group.Service` / `Group.ToService` |
 | `HttpApiEndpoint.get` (+ options) | `Route.get` (same options; default success → Page) |
 | `HttpApiBuilder.Handlers` | `RouterBuilder.Handlers` |
-| `HttpApiBuilder.group` | `RouterBuilder.group(api, id, layout?, build)` — layout UI-only when present |
+| `HttpApiBuilder.group` | `RouterBuilder.group(api, id, build)` — page groups + `Layout.provide` (see layout lock) |
 | `HttpApiBuilder.layer` | `RouterBuilder.layer(api)` |
 | `HttpApiClient.urlBuilder` | `RouterClient.urlBuilder` |
 | Node / browser transport | `History` / `Memory` / `Waku` (own namespaces) |
@@ -91,10 +91,13 @@ const Chapter = Effect.gen(function* () {
   return <h1>{req.params.chapter}</h1>
 })
 
-const app = RouterBuilder.group(Site, "app", AppLayout, (h) =>
-  h
-    .handle("chapter", Chapter)
-    .handle("getUser", (req) => Effect.succeed({ id: req.params.id })),
+const app = pipe(
+  RouterBuilder.group(Site, "app", (h) =>
+    h
+      .handle("chapter", Chapter)
+      .handle("getUser", (req) => Effect.succeed({ id: req.params.id })),
+  ),
+  Layout.provide(AppShell),
 )
 ```
 

@@ -7,6 +7,7 @@ import * as React from "react";
 import { Cause, Effect } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "../AtomReact";
+import * as Layout from "../Layout";
 import type * as Route from "../Route";
 import { handleOf } from "../Route";
 import * as pageContext from "./pageContext";
@@ -40,12 +41,14 @@ const toNode = (
   return value;
 };
 
-/** Run a page Effect with Request + Document, via the Atom runtime. */
+/** Run a page Effect with Request + Document + layout Override, via Atom. */
 const PageEffectView = (props: {
   readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
   readonly request: pageServices.RequestValue;
   readonly document: pageServices.DocumentApi;
   readonly args: Route.HandleArgs;
+  readonly override: Layout.OverrideCell;
+  readonly onOverride: () => void;
 }): React.ReactElement | null => {
   const runtime = AtomReact.useRuntime();
   const atom = React.useMemo(
@@ -54,6 +57,13 @@ const PageEffectView = (props: {
         props.effect.pipe(
           Effect.provideService(pageServices.Request, props.request),
           Effect.provideService(pageServices.Document, props.document),
+          Effect.provideService(Layout.Override, {
+            get: props.override.get,
+            set: (layout) => {
+              props.override.set(layout);
+              props.onOverride();
+            },
+          }),
         ) as Effect.Effect<
           React.ReactNode | React.ComponentType<Record<string, never>>,
           unknown
@@ -78,7 +88,7 @@ const PageEffectView = (props: {
 };
 
 const wrapLayout = (
-  layout: React.ComponentType<{ children: React.ReactNode }> | null,
+  layout: React.FC,
   body: React.ReactNode,
 ): React.ReactElement | null => {
   if (body === null || body === undefined || typeof body === "boolean") {
@@ -87,8 +97,10 @@ const wrapLayout = (
   const child = React.isValidElement(body)
     ? body
     : React.createElement(React.Fragment, null, body);
-  if (layout === null) return child;
-  return React.createElement(layout, { children: child });
+  return React.createElement(Layout.OutletProvider, {
+    body: child,
+    children: React.createElement(layout),
+  });
 };
 
 const MatchedBody = (props: {
@@ -100,24 +112,26 @@ const MatchedBody = (props: {
   const args: Route.HandleArgs = props.request;
   const bag = props.router._handlers;
   let body: React.ReactNode = null;
-  let layout: React.ComponentType<{ children: React.ReactNode }> | null = null;
+  let groupLayout: React.FC = Layout.Passthrough.Component;
 
   if (bag !== undefined) {
     const resolved = routerBuilder.resolveHandler(bag, props.match);
     if (resolved !== null) {
-      layout = resolved.layout;
+      groupLayout = resolved.layout;
       const h = resolved.handler;
       if (h._tag === "Page") {
         body = React.createElement(h.page, args);
       } else if (h._tag === "PageElement") {
         body = h.element;
       } else {
-        body = React.createElement(PageEffectView, {
+        body = React.createElement(PageEffectWithLayout, {
           effect: h.effect,
           request: props.request,
           document: documentApi,
           args,
+          groupLayout,
         });
+        return body as React.ReactElement;
       }
     }
   }
@@ -128,13 +142,46 @@ const MatchedBody = (props: {
     body = handler(args);
   }
 
+  return wrapLayout(groupLayout, body);
+};
+
+/** PageEffect + live layout override via {@link Layout.provide}. */
+const PageEffectWithLayout = (props: {
+  readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
+  readonly request: pageServices.RequestValue;
+  readonly document: pageServices.DocumentApi;
+  readonly args: Route.HandleArgs;
+  readonly groupLayout: React.FC;
+}): React.ReactElement | null => {
+  const override = React.useMemo((): Layout.OverrideCell => {
+    let current = props.groupLayout;
+    return {
+      get: () => current,
+      set: (layout) => {
+        current = layout;
+      },
+    };
+  }, [props.groupLayout]);
+  const [layout, setLayout] = React.useState(() => props.groupLayout);
+  React.useEffect(() => {
+    setLayout(props.groupLayout);
+  }, [props.groupLayout]);
+
+  const body = React.createElement(PageEffectView, {
+    effect: props.effect,
+    request: props.request,
+    document: props.document,
+    args: props.args,
+    override,
+    onOverride: () => setLayout(override.get()),
+  });
   return wrapLayout(layout, body);
 };
 
 /**
  * Matched-route renderer for {@link ../Router.Outlet}.
  *
- * Layout = component + `children` (no Outlet-as-service).
+ * Layout = zero-prop component + {@link Layout.Outlet}.
  *
  * @internal
  */

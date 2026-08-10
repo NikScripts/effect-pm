@@ -3,24 +3,28 @@
  * Isolated mini-catalog (does not replace Waku file routes).
  */
 import * as React from "react";
-import { Effect, Layer } from "effect";
-import type { Layout } from "last-ts/Layout";
+import { Effect, Layer, pipe } from "effect";
 import * as Last from "last-ts/Last";
+import * as Layout from "last-ts/Layout";
 import * as Memory from "last-ts/Memory";
 import * as Page from "last-ts/Page";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
 
-const DemoLayout: Layout = ({ children }) =>
-  React.createElement(
-    "div",
-    {
-      "data-demo": "router-page",
-      className: "border border-border rounded-lg p-3 text-sm",
-    },
-    children,
-  );
+class DemoShell extends Layout.make()(
+  "docs/site/layout/demo",
+  Effect.sync(() =>
+    React.createElement(
+      "div",
+      {
+        "data-demo": "router-page",
+        className: "border border-border rounded-lg p-3 text-sm",
+      },
+      React.createElement(Layout.Outlet),
+    ),
+  ),
+) {}
 
 class DemoSite extends Router.make("docs/site/router-page").add(
   Router.group("app", { topLevel: true }).add(
@@ -74,17 +78,21 @@ export const StampedAbout = Page.static("/about", () => aboutPage, {
   title: "About",
 });
 
-const routes = RouterBuilder.layer(DemoSite).pipe(
+const routes = pipe(
+  RouterBuilder.layer(DemoSite),
   Layer.provide(
-    RouterBuilder.group(DemoSite, "app", DemoLayout, (h) =>
-      h.handle("home", homePage).handle("about", aboutPage),
+    pipe(
+      RouterBuilder.group(DemoSite, "app", (h) =>
+        h.handle("home", homePage).handle("about", aboutPage),
+      ),
+      Layout.provide(DemoShell),
     ),
   ),
 );
 
 /** Memory transport + RouterBuilder catalog for the island. */
 export const DemoProvider = Last.provider(
-  Memory.layer.pipe(Layer.provide(routes)),
+  pipe(Memory.layer, Layer.provide(routes)),
 );
 
 export { Router };

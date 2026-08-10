@@ -67,6 +67,10 @@
       "types": "./src/Layout.tsx",
       "default": "./src/Layout.tsx"
     },
+    "./RootLayout": {
+      "types": "./src/RootLayout.tsx",
+      "default": "./src/RootLayout.tsx"
+    },
     "./Document": {
       "types": "./src/Document.tsx",
       "default": "./src/Document.tsx"

@@ -1,35 +1,30 @@
 /**
  * @module RouterBuilder
  *
- * Build handler + layout Layers for a {@link ./Router} catalog
+ * Build handler Layers for a {@link ./Router} catalog
  * (`HttpApiBuilder` analogue).
  *
  * ```ts
- * const marketing = RouterBuilder.group(
- *   Site,
- *   "marketing",
- *   RootLayout,
- *   (handlers) =>
- *     handlers
- *       .handle("home", Home) // ComponentType | JSX | Effect → ReactNode
- *       .handle("pricing", Pricing),
+ * const marketing = pipe(
+ *   RouterBuilder.group(Site, "marketing", (handlers) =>
+ *     handlers.handle("home", Home).handle("pricing", Pricing),
+ *   ),
+ *   Layout.provide(AppShell),
  * )
  *
- * const routes = RouterBuilder.layer(Site).pipe(
+ * const routes = pipe(
+ *   RouterBuilder.layer(Site),
  *   Layer.provide(Layer.mergeAll(marketing, docs)),
  * )
  * ```
  *
- * Page `handle` accepts a React component (legacy props), a JSX element, or an
- * Effect that yields `ReactNode`. Nested UI reads {@link ./Page.Request} /
- * {@link ./Page.Document} under {@link ./Router.Outlet}.
+ * Page groups leave {@link ./Layout.Slot} in `R` — fulfill with
+ * `Layout.provide`. See `docs/handoffs/page-layout-lock.md`.
  *
  * @public
  */
 import type { Layout } from "./Layout";
 import * as internal from "./internal/routerBuilder";
-
-export type { HandleOptions } from "./internal/routerBuilder";
 
 /** Handler builder (`HttpApiBuilder.Handlers`). @public */
 export type Handlers<
@@ -85,8 +80,8 @@ export const Registry: typeof internal.Registry = internal.Registry;
 export const Catalog: typeof internal.Catalog = internal.Catalog;
 
 /**
- * Implement one group — `(api, id, layout, build)`. Layout must accept
- * `children`. Use `.handle(id, Page, { layout: false })` to opt out.
+ * Implement one group — `(api, id, build)` (HttpApi-shaped). Page groups leave
+ * {@link ./Layout.Slot} in `R`; fulfill with `pipe(group, Layout.provide(…))`.
  *
  * Provides `Group.Service<ApiId, Identifier>` under `group.key`
  * (`HttpApiBuilder.group`).
