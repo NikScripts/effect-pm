@@ -1,20 +1,22 @@
 /**
  * @module Page
  *
- * Live-route bridges {@link Request} for Outlet trees, {@link document} for
- * head chrome, plus HttpApi-shaped page class mints ({@link make} / {@link static_}).
- *
- * **Document chrome** — [`page-document-lock.md`](../../../docs/handoffs/page-document-lock.md):
+ * Page mint (`make` / `static`) + live Outlet bridges (`Request`, `document`).
+ * Path comes from the file (`fileRouter`) — never on the mint.
+ * SSOT: `docs/handoffs/page-mint-lock.md`.
  *
  * ```ts
  * import * as Page from "last-ts/Page"
  * import * as Document from "last-ts/Document"
  *
- * const Chapter = Effect.gen(function* () {
- *   const req = yield* Page.Request
- *   yield* Page.document(Document.title(`Chapter ${req.params.chapter}`))
- *   return <h1>{req.params.chapter}</h1>
- * })
+ * export class About extends Page.make(
+ *   Effect.gen(function* () {
+ *     yield* Page.document(Document.title("About"))
+ *     return <h1>About</h1>
+ *   }),
+ * ) {}
+ *
+ * export const aboutStatic = About.pipe(Route.static)
  * ```
  *
  * Never `yield*` inside `()`. Never `getConfig` / `Page.asDefault`.
@@ -23,6 +25,7 @@ import type * as React from "react";
 import { Effect } from "effect";
 import * as Document from "./Document";
 import type * as pageServices from "./internal/pageServices";
+import * as pageMint from "./internal/pageMint";
 import type {
   ParamsTypeOf,
   QueryTypeOf,
@@ -31,41 +34,18 @@ import type {
 
 export type { RequestOptions } from "./internal/routeRequest";
 
-// =============================================================================
-// Mode
-// =============================================================================
+export type Mode = pageMint.Mode;
+export type Default = pageMint.Default;
+export type AnyPage<
+  Options extends RequestOptions = RequestOptions,
+  M extends Mode = Mode,
+> = pageMint.AnyPage<Options, M>;
+
+export const TypeId = pageMint.TypeId;
+export const isPage = pageMint.isPage;
 
 /**
- * How a page class records bake vs dynamic (catalog / marks).
- *
- * @public
- */
-export type Mode = "static" | "dynamic";
-
-// =============================================================================
-// Page class (HttpApi-shaped mint — not the RSC default-export bridge)
-// =============================================================================
-
-/** Brand on {@link make} / {@link static_} constructors. @internal */
-export const TypeId = "~last-ts/Page" as const;
-
-/**
- * Page class — request options + mode. Extend with {@link make} / {@link static_}.
- *
- * @public
- */
-export interface AnyPage<
-  out Options extends RequestOptions = RequestOptions,
-  out M extends Mode = Mode,
-> {
-  new(_: never): {};
-  readonly [TypeId]: typeof TypeId;
-  readonly options: Options;
-  readonly mode: M;
-}
-
-/**
- * Props derived from a page class’s request options.
+ * Props derived from a page mint’s request options.
  *
  * @public
  */
@@ -77,14 +57,14 @@ export type PropsFromOptions<O extends RequestOptions> = {
 };
 
 /**
- * Props for a page class (`typeof Chapter`).
+ * Props for a page mint (`typeof Chapter`).
  *
  * @public
  */
 export type Props<P extends AnyPage> = PropsFromOptions<P["options"]>;
 
 /**
- * React page body.
+ * React page body (props component).
  *
  * @public
  */
@@ -92,59 +72,28 @@ export type Component<P extends object = {}> = (
   props: P,
 ) => React.ReactElement | null;
 
-const makePageClass = <
-  Options extends RequestOptions,
-  M extends Mode,
->(
-  options: Options,
-  mode: M,
-): AnyPage<Options, M> => {
-  class PageClass {
-    static readonly [TypeId] = TypeId;
-    static readonly options = options;
-    static readonly mode = mode;
-  }
-  return PageClass as unknown as AnyPage<Options, M>;
-};
-
 /**
- * Dynamic page class (default) — optional request options first (same bag as
- * {@link ./Route.get}).
+ * Dynamic page mint — `Page.make(default)` or `Page.make(options, default)`.
+ * Default: JSX element, component, or Effect → ReactNode.
  *
  * @public
  */
-export const make: {
-  <Options extends RequestOptions>(
-    options: Options,
-  ): AnyPage<Options, "dynamic">;
-  (): AnyPage<RequestOptions, "dynamic">;
-} = ((options?: RequestOptions) =>
-  makePageClass(options ?? ({} as RequestOptions), "dynamic")) as typeof make;
+export const make = pageMint.make;
 
 /**
- * Static (SSG) page class — optional request options first.
+ * Static page mint (sugar). To flip an existing page, use `page.pipe(Route.static)`.
  *
  * @public
  */
-export const static_: {
-  <Options extends RequestOptions>(
-    options: Options,
-  ): AnyPage<Options, "static">;
-  (): AnyPage<RequestOptions, "static">;
-} = ((options?: RequestOptions) =>
-  makePageClass(options ?? ({} as RequestOptions), "static")) as typeof static_;
+export const static_: typeof pageMint.static_ = pageMint.static_;
 
 export { static_ as static };
 
-/** Whether `u` is a {@link make} / {@link static_} page class. @public */
-export const isPage = (u: unknown): u is AnyPage =>
-  typeof u === "function" &&
-  u !== null &&
-  TypeId in u &&
-  (u as AnyPage)[TypeId] === TypeId;
+/** @internal — used by `Route.static`. */
+export const remintStatic = pageMint.remintStatic;
 
 // =============================================================================
-// Live route services (Router.Outlet) — RSC-safe Effect tags
+// Live route services (Router.Outlet)
 // =============================================================================
 
 /** Matched request bag (`params` / `query` / `pathname` / `href`). @public */
@@ -179,7 +128,6 @@ export { Document } from "./internal/pageServices";
 /**
  * Merge head-chrome patches / partials into the current {@link Document.Cell}.
  *
- * Overloads: patches; partial + patches; `Doc` class + patches; `Doc` + partial + patches.
  * Never `yield*` inside `()`.
  *
  * @public

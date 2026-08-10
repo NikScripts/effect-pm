@@ -91,15 +91,16 @@ describe("RouterBuilder.handle page props", () => {
     void _layer;
   });
 
-  it("accepts Effect → ReactNode and JSX element page handlers", () => {
+  it("accepts Effect → ReactNode and component page handlers", () => {
     const chapterEffect = Effect.succeed(
       null as unknown as React.ReactElement,
     );
-    const chapterJsx = null as unknown as React.ReactElement;
+    const Index = (): React.ReactElement =>
+      null as unknown as React.ReactElement;
 
     const _layer = pipe(
       RouterBuilder.group(Site, "docs", (h) =>
-        h.handle("index", chapterJsx).handle("chapter", chapterEffect),
+        h.handle("index", Index).handle("chapter", chapterEffect),
       ),
       Layout.provide(RootShell),
     );

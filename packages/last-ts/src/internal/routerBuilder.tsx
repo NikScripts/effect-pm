@@ -11,6 +11,7 @@ import * as React from "react";
 import { Context, Effect, Layer, Option } from "effect";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Layout from "../Layout";
+import * as Page from "../Page";
 import type * as Route from "../Route";
 import * as catalog from "./routes";
 import type { Api, ApiConstraint, GroupTop, Match } from "./routes";
@@ -243,6 +244,11 @@ const registerHandler = (
       ) => Effect.Effect<unknown, unknown, unknown>,
     });
     return self;
+  }
+
+  // Page mint → unwrap default (component | Effect | JSX)
+  if (Page.isPage(handler)) {
+    return registerHandler(self, identifier, handler.default);
   }
 
   if (React.isValidElement(handler)) {

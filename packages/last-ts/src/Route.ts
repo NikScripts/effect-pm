@@ -41,6 +41,7 @@ import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import type { ReactNode } from "react";
+import * as pageModule from "./Page";
 import * as endpoint from "./internal/route";
 import * as fileRouter from "./internal/fileRouter";
 import * as catalog from "./internal/routes";
@@ -172,10 +173,10 @@ export const isRoute = isEndpoint;
 export const Page: typeof endpoint.pageSuccess.Page = endpoint.pageSuccess.Page;
 
 /**
- * Declare a page destination (`HttpApiEndpoint.get` + {@link Page} success).
+ * Declare a page destination (`HttpApiEndpoint.get` + Page success schema).
  *
- * **Dynamic by default** (SSR). Same {@link RequestOptions} bag as
- * {@link ./Page.make}. Static vs dynamic is owned here — never `getConfig`.
+ * Catalog path declaration — fileRouter owns disk paths for Page mints.
+ * Bake mode: {@link static_} / `Page.static`. Never `getConfig`.
  *
  * @public
  */
@@ -183,6 +184,20 @@ export const get: typeof endpoint.get = endpoint.get;
 
 /** Shared with {@link ./Page.make}. @public */
 export type RequestOptions = endpoint.RequestOptions;
+
+/**
+ * Mark an existing {@link ./Page} mint as static bake.
+ *
+ * Class form: define the class, then pipe (not inside `extends`):
+ * `export const aboutStatic = About.pipe(Route.static)`.
+ *
+ * @public
+ */
+export const static_: <P extends pageModule.AnyPage>(
+  self: P,
+) => pageModule.AnyPage<P["options"], "static"> = pageModule.remintStatic;
+
+export { static_ as static };
 
 /**
  * Attach a params schema. Dual.

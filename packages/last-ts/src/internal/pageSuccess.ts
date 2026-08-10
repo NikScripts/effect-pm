@@ -108,13 +108,13 @@ export type PagePropsFromEndpoint<E> = {
 };
 
 /**
- * Page handler success — ReactNode, thunk component, JSX element, or Effect of
- * those. Legacy: `ComponentType<PageProps>` still accepted.
+ * Page handler — component, Effect → ReactNode, or a {@link ../Page} mint
+ * (builder unwraps `.default`).
  *
  * @internal
  */
 export type PageHandlerInput<E> =
-  | React.ReactElement
+  | import("./pageMint").AnyPage
   | React.ComponentType<PagePropsFromEndpoint<E>>
   | React.ComponentType<Record<string, never>>
   | Effect.Effect<
