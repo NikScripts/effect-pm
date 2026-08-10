@@ -69,7 +69,7 @@ A leaves / before the first transport error. Effect RPCs retry once on `RpcClien
 
 Directory-mode `Hyperlink.peersLayer(Tag, ThisNode)` shares Track D parity with `lookupClient`:
 build-then-swap peer dials, one `RpcClientError` retry, stable `peers[nodeKey]` facade, streams
-under `Policy.StreamGap`. Compose Policy on the peers layer the same way:
+under `Policy.streamGap`. Compose Policy on the peers layer the same way:
 
 ```ts
 Hyperlink.peersLayer(Pool, East).pipe(
