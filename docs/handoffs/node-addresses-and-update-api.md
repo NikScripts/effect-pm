@@ -154,26 +154,34 @@ by client Policy (sticky, prefer, fail-closed) — same family as multi-row Dire
 | **Address list** | A Node carries many addresses (any protocol mix). |
 | **Primary vs labeled** | Unnamed = primary (client-facing). Labeled (A/B/…) = roles / backends. |
 | **make ≡ pipe** | Same address set whether passed to `make` or piped on afterward. |
-| **Listen** | Process binds the addresses it runs with (default: all declared — Policy can narrow). |
-| **Dial / advertise** | Clients and Directory default to **primaries**; Policy can widen or proxy. |
-| **Policy** | Non-defaults: proxy primary→labeled, bind this instance to a role, multi-primary pick, listen subset. |
+| **Listen** | Process binds the addresses it runs with (default: all declared — `NodePolicy` can narrow). |
+| **Advertise** | Directory default = **primaries**; `NodePolicy` can widen. Clients dial what Directory publishes (+ client `Policy` pick). |
+| **NodePolicy** | Node-side: listen / advertise / proxy / which labeled process this is. |
+| **Policy** | Client-side (Eng’d): sticky, verify, stream-gap, pick, conflict, yield — unchanged. |
 | **Key-derived Unix** | `Address.unixFromKey` — Unix primary from node key (no manual path helper). |
 | **One list** | Replaces today’s `endpoints` / `withProtocol` for new code. |
 
-Cutover shapes (stable front+A/B, dual-public replace, role-split processes) are **Policy +
-deploy** on top of this list — not separate address models. Update API stayed parked.
+Cutover shapes (stable front+A/B, dual-public replace, split A/B processes) are
+**NodePolicy + deploy** on top of this list — not separate address models. Update API
+stayed parked.
 
 ### 3.3 API (sketch)
 
-Address = identity + dial. **Policy** = what this process does with those addresses
-(listen / advertise / dial / proxy / role). Same `hyperlink-ts/Policy` module as today’s
-client fragments (`Sticky`, `Verify`, …) — address knobs are additional fragments, not a
-second policy type.
+Two policy modules — different jobs:
+
+| Module | Owns |
+|--------|------|
+| **`hyperlink-ts/Policy`** | **Client** dial behavior (Eng’d): `Sticky`, `Verify`, `StreamGap`, `Pick`, `ColdAmbiguous`, `Conflict`, `Yield` |
+| **`hyperlink-ts/NodePolicy`** | **This process** vs its address list: bind, publish, proxy, which labeled side it is |
+
+Address = identity + dial target. **NodePolicy** = what this OS process does with that
+list. Do **not** stuff node knobs into client `Policy.make`.
 
 ```ts
 import * as Address from "hyperlink-ts/Address"
 import * as Node from "hyperlink-ts/Node"
-import * as Policy from "hyperlink-ts/Policy"
+import * as NodePolicy from "hyperlink-ts/NodePolicy"
+import * as Policy from "hyperlink-ts/Policy"   // client only
 
 // ── Address factories ──────────────────────────────────────────────
 Address.http(":8080")
@@ -182,40 +190,37 @@ Address.ws([4000, 4001])
 Address.http({ A: 3000, B: 3001 })
 Address.unixFromKey                         // no ()
 
-// ── Address Policy fragments (pipe onto Node — same style as Address.*) ──
-Policy.listen("all")                        // | "primary" | ReadonlyArray<label>
-Policy.advertise("primary")                 // | "all" | ReadonlyArray<label>
-Policy.dial("primary")                      // | "all" | ReadonlyArray<label> | Pick
-Policy.proxy("prefer")                      // primary → live labeled (Advice)
-Policy.role("A")                            // this OS process is bound to label A
+// ── NodePolicy — pipe onto Node (same style as Address.*) ──────────
+NodePolicy.listen("all")                    // | "primary" | ReadonlyArray<label>
+NodePolicy.advertise("primary")             // | "all" | ReadonlyArray<label>
+NodePolicy.proxy("prefer")                  // primary forwards → live labeled (Advice)
+NodePolicy.as("A")                          // this OS process is the "A" side
 
-// object form — same knobs, merges with Eng’d client Policy.make
-Policy.make({
+NodePolicy.make({
   Listen: "all",
   Advertise: "primary",
-  Dial: "primary",
   Proxy: "prefer",
-  Role: "A",
-  Sticky: true,                             // existing client knobs stay here
-  Verify: "reject",
+  As: "A",
 })
 
-// ── Node.make + pipe Address.* + pipe Policy.* ─────────────────────
+// Client Policy stays separate — provide on lookupClient, not on Node.make
+Policy.make({ Sticky: true, Verify: "reject" })
+
+// ── Node.make + pipe Address.* + pipe NodePolicy.* ─────────────────
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
-  // defaults if omitted: listen all, advertise/dial primary — explicit when non-default:
-  Policy.proxy("prefer"),
+  NodePolicy.proxy("prefer"),
 ) {}
 
+// Split deploy: this box only runs the A addresses
 class WorkerA extends Node.make("fleet/Worker", [
   Address.http(":8080"),
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
 ]).pipe(
-  Policy.role("A"),
-  Policy.listen(["A"]),                     // this process only binds A
-  Policy.advertise("primary"),              // still publish primary (or not — Policy)
+  NodePolicy.as("A"),
+  NodePolicy.listen(["A"]),
 ) {}
 
 class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
@@ -224,21 +229,26 @@ class DualHttp extends Node.make("fleet/Edge", [
   Address.http(":8080"),
   Address.http(":8081"),
 ]).pipe(
-  Policy.advertise("all"),                  // multi-primary: publish both
-  Policy.dial("first"),                     // or custom Pick — client soft pick
+  NodePolicy.advertise("all"),              // publish both primaries
 ) {}
+// multi-primary client pick → Policy.pick / ColdAmbiguous (client), not NodePolicy
 ```
 
-**Defaults (candidate):** listen **all** declared; advertise/dial **primaries**; no proxy;
-no role. Overlap = same concrete dial → reject.
+**Defaults (candidate):** listen **all** declared; advertise **primaries**; no proxy; no
+`as`. Overlap = same concrete dial → reject.
 
 | Knob | Meaning |
 |------|---------|
 | **Listen** | Which declared addresses this process **binds** |
-| **Advertise** | Which land in **Directory** |
-| **Dial** | Which clients / peers **connect** to by default |
-| **Proxy** | Primary **forwards** to live labeled (e.g. via Advice prefer) |
-| **Role** | This OS process instance is bound to a **label** (A vs B) |
+| **Advertise** | Which land in **Directory** (what clients can discover) |
+| **Proxy** | Primary **forwards** to the live labeled side (e.g. Advice prefer) |
+| **As** | This OS process **is** labeled side `"A"` / `"B"` (not a vague “role”) |
+
+**Why not `Role`:** “role” reads like RBAC / job title. The question is only: *which
+labeled address side is this process?* → `NodePolicy.as("A")`.
+
+**Why no Dial on NodePolicy:** clients dial what Directory advertises; soft-pick /
+sticky / wait-advice stay on client **`Policy`**. One dial story, not two.
 
 ### 3.4 Parked — prior long Address API notes
 
@@ -369,28 +379,32 @@ options arg**, so don’t make the signature rest-only.
 
 ### 3.4.5 Address policies — define knobs, then defaults (parked)
 
-**API surface lives in §3.3** (`Policy.listen` / `advertise` / `dial` / `proxy` / `role`
-+ `Policy.make({ Listen, … })`). This subsection keeps rationale + example matrix.
+**API surface lives in §3.3** (`NodePolicy.listen` / `advertise` / `proxy` / `as` +
+`NodePolicy.make`). Client dial pick stays on Eng’d **`Policy`**. This subsection keeps
+rationale + example matrix.
 
 Address marks **identity + primary (unnamed) vs labeled + dial**. That is description
-only. **Policy** decides what the runtime does with each address. Prefer / sticky /
-stream-gap stay on Policy — not restart options.
+only. **NodePolicy** decides what *this process* does with each address. Prefer /
+sticky / stream-gap stay on client **Policy** — not restart options, not NodePolicy.
 
 **Owner (2026-08-09):** do **not** invent a default like “labeled sit idle” before the
 policy surface exists. If an address is on the Node, the obvious assumption is you meant
 to use it — especially for listen. Define the knobs first; pick defaults second.
 
-Primary vs labeled is an input to those knobs (e.g. dial defaults toward primaries;
+**Owner (2026-08-10):** separate module **`NodePolicy`** (not stuffed into client
+`Policy`); rename vague **Role** → **`as`** (“this process is labeled side A”).
+
+Primary vs labeled is an input to those knobs (advertise defaults toward primaries;
 proxy often primary→labeled), not a hidden “don’t listen” flag.
 
 #### Example configurations (not defaults yet)
 
-| Intent | Listen | Advertise | Dial | Proxy / role |
-|--------|--------|-----------|------|----------------|
-| Serve everything declared | all | primaries? / all? | primaries | — |
-| Stable primary, A/B backends (§4 β) | primary (proxy) + live role | primary | primary | primary → A or B |
-| This box is role A only | A (maybe + primary) | primary and/or A | primary | role = A |
-| Multi-primary edge | all primaries | all primaries | Policy pick | — |
+| Intent | Listen | Advertise | Proxy / as | Client dial |
+|--------|--------|-----------|------------|-------------|
+| Serve everything declared | all | primaries | — | Directory primaries |
+| Stable primary, A/B backends (§4 β) | primary + live side | primary | proxy prefer; as = A or B on backends | primary |
+| This box is A only | `["A"]` | primary (and/or A) | `as("A")` | primary |
+| Multi-primary edge | all primaries | all primaries | — | `Policy.pick` / ColdAmbiguous |
 
 Directory today: **one row per `nodeKey`**. May need to grow for proxy/backends — open.
 
@@ -872,8 +886,8 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 ## 10. Next
 
-1. Confirm **Address + Policy API** (§3.3) — fragment names / value spaces / defaults.
+1. Confirm **Address + NodePolicy API** (§3.3) — `as` / value spaces / defaults.
 2. Locality word + `Node.make` vs `Service`.
-3. Eng Address + Node.make + address Policy fragments.
+3. Eng Address + Node.make + `NodePolicy`.
 4. Update dream / backup-build simulate — **later**.
 5. Dream-redeploy stays **provisional** until address/make exists.
