@@ -969,6 +969,6 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 1. Confirm **Address + NodePolicy API** (§3.3) — `as` / value spaces / defaults.
 2. Locality word + `Node.make` vs `Service`.
 3. ~~`PolicyBuilder` kernel + refactor Eng’d `Policy` onto it~~ — **Eng’d**.
-4. Eng Address + Node.make + `NodePolicy` **and** rename `Policy` → `LookupPolicy` (same cut).
+4. ~~`NodePolicy` + rename `Policy` → `LookupPolicy`~~ **Eng’d**. Still open: Address + `Node.make` pipe.
 5. Update dream / backup-build simulate — **later**.
 6. Dream-redeploy stays **provisional** until address/make exists.
