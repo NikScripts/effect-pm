@@ -214,6 +214,9 @@ NodePolicy.make({
 // LookupPolicy — provide on lookupClient / follow / membership, not on Node.make
 LookupPolicy.make({ Sticky: true, Verify: "reject" })
 
+// Runnable file-split: examples/node/forward-proxy/{shared,main}.ts
+//   pnpm run example:node-forward-proxy
+//
 // ── ONE Node.make per identity — never make the same key twice ─────
 // Public class = client-facing dials only (no A/B on construction).
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
