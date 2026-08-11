@@ -1,17 +1,15 @@
 /**
  * @module examples/launcher/dream-redeploy
  *
- * **Dream redeploy** — launch v1 → live traffic → **file-swap** to v2 →
- * `Update.plan` → `simulate` → `execute` → WorkPool pending handoff → sticky v2.
+ * **Dream redeploy (Shape β)** — stable public Http edge + Unix A/B backends.
  *
  * 1. Copy `dream-redeploy-worker.v1.ts` → `dream-redeploy-worker.active.ts`
- * 2. `Launcher.up(A)` from the **active** path (OS loads v1)
- * 3. Sticky `lookupClient` reads Probe `"v1"`; enqueue WorkPool jobs on A
- * 4. Copy `dream-redeploy-worker.v2.ts` over the **same** active path (update)
- * 5. `Update.execute` ups B from that path (OS loads v2), prefer, shutdown A
- * 6. Directory dial → B; sticky Probe `"v2"`; B holds exact pending payloads
- *
- * Active path stays beside the v1/v2 sources so relative imports keep resolving.
+ * 2. Edge in this process: `Node.forward` on public `Worker` Http
+ * 3. `Launcher.up(A)` — Unix backend, Active `"A"`, Probe `"v1"`
+ * 4. Public client reads tip `"v1"`; enqueue WorkPool jobs (via forward)
+ * 5. File-swap active path to v2; `Launcher.up(B)` loads v2 on Unix B
+ * 6. Move pending A→B (interim — Directory is still one row / S14 later)
+ * 7. `Node.activate(…, "B")` — tip `"v2"`; clients never change dial
  *
  * ```bash
  * pnpm run example:launcher-dream-redeploy
@@ -19,6 +17,7 @@
  *
  * Suite: `test/launcher-dream-redeploy.test.ts`.
  * Docs: `docs/examples/launcher/dream-redeploy.md`.
+ * Identity: [`dream-redeploy-shared.ts`](./dream-redeploy-shared.ts).
  */
 
 // ---cut---
@@ -34,17 +33,15 @@ import {
   Schedule,
 } from "effect";
 import { ChildProcess } from "effect/unstable/process";
-import * as Directory from "../../src/Directory";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Launcher from "../../src/Launcher";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
-import * as LookupPolicy from "../../src/LookupPolicy";
-import * as Update from "../../src/Update";
+import * as NodePolicy from "../../src/NodePolicy";
 import {
   Jobs,
   Probe,
-  WORKER_NODE_KEY,
+  makeDreamNodes,
   type Job,
 } from "./dream-redeploy-shared";
 
@@ -57,12 +54,6 @@ const waitUntil = <A, E, R>(
     schedule: Schedule.spaced(Duration.millis(25)),
   });
 
-const workerNode = (port: number) =>
-  Node.Service()(WORKER_NODE_KEY, {
-    url: `http://127.0.0.1:${String(port)}/rpc`,
-    kind: "Http",
-  });
-
 const program = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const root = new URL("../..", import.meta.url).pathname;
@@ -72,8 +63,9 @@ const program = Effect.gen(function* () {
   const now = yield* Clock.currentTimeMillis;
   const active = `${launcherDir}/dream-redeploy-worker.active.ts`;
   const lookupPath = `/tmp/hyperlink-ts-dream-redeploy-${String(now)}.sock`;
-  const portA = 29_100 + (now % 100);
-  const portB = portA + 1;
+  const sockA = `/tmp/hyperlink-ts-dream-a-${String(now)}.sock`;
+  const sockB = `/tmp/hyperlink-ts-dream-b-${String(now)}.sock`;
+  const httpPort = 29_100 + (now % 100);
 
   const payloads: ReadonlyArray<Job> = [
     { id: "1", note: "invoice-a" },
@@ -84,6 +76,25 @@ const program = Effect.gen(function* () {
   yield* fs.copyFile(v1Src, active);
   yield* Effect.logInfo(`1) Active worker = v1 → ${active}`);
 
+  const { Worker, WorkerPrivate } = makeDreamNodes(httpPort, sockA, sockB);
+
+  const edge = Node.withPolicy(
+    WorkerPrivate,
+    NodePolicy.listen("Primary"),
+    NodePolicy.active("A"),
+    NodePolicy.advertise("Primary"),
+  );
+  const backendA = Node.withPolicy(
+    WorkerPrivate,
+    NodePolicy.as("A"),
+    NodePolicy.listen(["A"]),
+  );
+  const backendB = Node.withPolicy(
+    WorkerPrivate,
+    NodePolicy.as("B"),
+    NodePolicy.listen(["B"]),
+  );
+
   const lookupNode = Node.Service()("examples/dream-redeploy/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
@@ -93,67 +104,61 @@ const program = Effect.gen(function* () {
   const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
   const lookupCtx = Context.merge(lookupServer, lookupClient);
 
-  const cutover = LookupPolicy.make({
-    Sticky: true,
-    ColdAmbiguous: "fail",
-    StreamGap: "stall",
-  });
-
-  const child = (port: number) =>
+  const child = (label: "A" | "B") =>
     Launcher.command(
       "pnpm",
-      ["exec", "tsx", active, String(port), lookupPath],
+      [
+        "exec",
+        "tsx",
+        active,
+        label,
+        String(httpPort),
+        sockA,
+        sockB,
+      ],
       { cwd: root, stdout: "inherit", stderr: "inherit", token: "env" },
     );
 
   yield* Effect.gen(function* () {
-    const nodeA = workerNode(portA);
-    const nodeB = workerNode(portB);
+    yield* Effect.logInfo(
+      `2) Edge on :${String(httpPort)} (forward Probe → Active)`,
+    );
+    // Probe via forward (stable public dial). WorkPool forwardAll hang is a
+    // known gap — Jobs dial the Active Unix backend directly for this recipe.
+    const edgeLayer = Node.http(edge, [Node.forward(edge, Probe)]).pipe(
+      Layer.provide(Lookup.client(lookupNode)),
+    );
+    yield* Layer.build(edgeLayer);
 
-    yield* Effect.logInfo(`2) up A (v1) on :${String(portA)}`);
+    yield* Effect.logInfo(`3) up A (v1) on ${sockA}`);
     yield* Launcher.up({
-      node: nodeA,
-      process: child(portA),
+      node: backendA,
+      process: child("A"),
       ready: { timeout: "25 seconds" },
     });
 
-    yield* waitUntil(
-      Directory.nodesServing(Jobs),
-      (rows) =>
-        rows.some(
-          (row) =>
-            row.nodeKey === WORKER_NODE_KEY &&
-            row.url === `http://127.0.0.1:${String(portA)}/rpc`,
-        ),
-    );
-
-    const stickyClient = yield* Layer.build(
-      Hyperlink.lookupClient(Probe).pipe(
-        LookupPolicy.provide(cutover),
-        Layer.provide(Lookup.client(lookupNode)),
-      ),
-    );
+    const publicClient = yield* Layer.build(Hyperlink.client(Probe, Worker));
 
     const tipA = yield* Effect.gen(function* () {
       const probe = yield* Probe;
       return yield* probe.tip;
-    }).pipe(Effect.provide(stickyClient));
+    }).pipe(Effect.provide(publicClient));
     if (tipA !== "v1") {
       return yield* Effect.die(`expected Probe tip v1, got ${tipA}`);
     }
-    yield* Effect.logInfo(`3) sticky lookupClient Probe.tip → ${tipA}`);
+    yield* Effect.logInfo(`4) public Worker Probe.tip → ${tipA}`);
 
     yield* Effect.gen(function* () {
       const q = yield* Jobs;
       yield* q.add([...payloads]);
       const snap = yield* q.status.get;
       yield* Effect.logInfo(
-        `4) Enqueued on A — pending normal=${String(snap.sizes.normal)}`,
+        `5) Enqueued on A (Unix) — pending normal=${String(snap.sizes.normal)}`,
       );
-    }).pipe(Effect.provide(Hyperlink.client(Jobs, nodeA)), Effect.scoped);
+    }).pipe(Effect.provide(Hyperlink.client(Jobs, backendA)), Effect.scoped);
 
     yield* Effect.logInfo(
-      "5) File-swap active worker → v2 (A still runs v1 in memory)",
+      "6) File-swap active worker → v2 (A still runs v1 in memory)",
     );
     yield* fs.copyFile(v2Src, active);
     const activeBody = yield* fs.readFileString(active);
@@ -163,42 +168,36 @@ const program = Effect.gen(function* () {
       );
     }
 
-    yield* Effect.logInfo(
-      `6) Update.plan → simulate → execute → up B (v2) on :${String(portB)}`,
-    );
-    const plan = yield* Update.plan({
-      steps: [
-        {
-          target: WORKER_NODE_KEY,
-          successor: {
-            node: nodeB,
-            process: child(portB),
-            ready: { timeout: "25 seconds" },
-          },
-          tags: [Jobs, Probe],
-        },
-      ],
+    yield* Effect.logInfo(`7) up B (v2) on ${sockB}`);
+    yield* Launcher.up({
+      node: backendB,
+      process: child("B"),
+      ready: { timeout: "25 seconds" },
     });
-    yield* Update.simulate(plan);
-    yield* Update.execute(plan);
 
-    yield* waitUntil(
-      Directory.nodesServing(Jobs),
-      (rows) =>
-        rows.length === 1 &&
-        rows[0]?.nodeKey === WORKER_NODE_KEY &&
-        rows[0]?.url === `http://127.0.0.1:${String(portB)}/rpc`,
-    );
-    yield* Effect.logInfo("7) Directory dial → B (same nodeKey)");
+    // Interim: Directory is one row (primary only) — move pending A→B by dial
+    // before activate. Multi-row Directory (S14) / Update unpark replace this.
+    yield* Effect.logInfo("8) Move WorkPool pending A→B (direct Unix, interim)");
+    const pending = yield* Effect.gen(function* () {
+      const q = yield* Jobs;
+      return yield* q.release({});
+    }).pipe(Effect.provide(Hyperlink.client(Jobs, backendA)), Effect.scoped);
+    yield* Effect.gen(function* () {
+      const q = yield* Jobs;
+      yield* q.add(pending.map((e) => e.item));
+    }).pipe(Effect.provide(Hyperlink.client(Jobs, backendB)), Effect.scoped);
+
+    yield* Node.activate(WorkerPrivate, "B");
+    yield* Effect.logInfo('9) Node.activate(WorkerPrivate, "B")');
 
     const tipB = yield* waitUntil(
       Effect.gen(function* () {
         const probe = yield* Probe;
         return yield* probe.tip;
-      }).pipe(Effect.provide(stickyClient)),
+      }).pipe(Effect.provide(publicClient)),
       (tip) => tip === "v2",
     );
-    yield* Effect.logInfo(`8) sticky lookupClient Probe.tip → ${tipB}`);
+    yield* Effect.logInfo(`10) public Worker Probe.tip → ${tipB}`);
 
     const released = yield* Effect.gen(function* () {
       const q = yield* Jobs;
@@ -209,7 +208,7 @@ const program = Effect.gen(function* () {
         );
       }
       return yield* q.release({});
-    }).pipe(Effect.provide(Hyperlink.client(Jobs, nodeB)), Effect.scoped);
+    }).pipe(Effect.provide(Hyperlink.client(Jobs, backendB)), Effect.scoped);
 
     const got = released.map((e) => e.item);
     const same =
@@ -224,10 +223,12 @@ const program = Effect.gen(function* () {
       );
     }
     yield* Effect.logInfo(
-      `9) WorkPool handoff OK — ${String(got.length)} exact payloads on B`,
+      `11) WorkPool OK — ${String(got.length)} exact payloads on B`,
     );
 
-    yield* Effect.logInfo("Done — dream redeploy (file-swap v1→v2) complete.");
+    yield* Effect.logInfo(
+      "Done — dream redeploy β (stable Http + activate A→B).",
+    );
 
     yield* ChildProcess.make("pkill", [
       "-f",
@@ -236,10 +237,7 @@ const program = Effect.gen(function* () {
       Effect.flatMap((h) => h.exitCode),
       Effect.ignore,
     );
-  }).pipe(
-    Effect.provide(Lookup.planStatusOff),
-    Effect.provide(lookupCtx),
-  );
+  }).pipe(Effect.provide(lookupCtx));
 }).pipe(
   Effect.scoped,
   Effect.provide(Layer.merge(Launcher.layer, NodeFileSystem.layer)),

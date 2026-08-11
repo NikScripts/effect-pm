@@ -330,8 +330,9 @@ References stay PascalCase.
 + `Address` factories + `Node.make` pipe + listen-set bind + advertise-set
 Directory row + `Node.forward` / `NodePolicy.active` / `Node.activate` (Proxy
 Prefer → labeled backend). Apps import singular modules / `Address`, not the
-builder. **Update plan API parked.** **Next:** `unixFromKey` bind Config;
-multi-row Directory (S14); locality Host/Machine.
+builder. **Update plan API parked.** Dream-redeploy rewritten onto Shape β
+(`examples/launcher/dream-redeploy*`). **Next:** WorkPool + `forwardAll`;
+`unixFromKey` bind Config; multi-row Directory (S14); locality Host/Machine.
 
 #### `_tag` — key vs value (Eng’d: **key**)
 
