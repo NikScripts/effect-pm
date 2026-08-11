@@ -30,6 +30,8 @@ const modules = import.meta.glob(
     "../../../../examples/observe/**/*.ts",
     "../../../../examples/ui/**/*.ts",
     "../../../../examples/ui/**/*.tsx",
+    "../../../../examples/last/**/*.ts",
+    "../../../../examples/last/**/*.tsx",
     "../../../../examples/apps/**/*.ts",
     "../../../../examples/apps/**/*.tsx",
     "../../../../examples/scenarios/**/*.ts",

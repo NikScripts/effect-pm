@@ -563,6 +563,11 @@ Tagged `TargetValue`, `viewOf` / `memberOf`, health / logs / schedule.
 `examples/ui/file-router/codegen-demo.ts` · `pnpm run example:ui-file-router-codegen`  
 Closed `FilePath` / `RoutePath` unions → `Route.fileRoot` → typed `urls.*`.
 
+### [last-ts spine](/docs/last-ts-spine)
+
+`examples/last/spine/demo.tsx` · `pnpm run example:last-spine` → <http://localhost:5230>  
+Page mint → `Server.fromPage` → soft-nav catalog → `Document.provide` → `Last.provider`.
+
 ---
 
 ## Scenarios

@@ -24,7 +24,7 @@ const listMd = (dir: string): Array<string> => {
 };
 
 const pages = listMd(examplesDocsRoot).sort();
-const fenceRe = /\{\.twoslash([^}]*)\}\s*\n```\s*ts\n([\s\S]*?)```/g;
+const fenceRe = /\{\.twoslash([^}]*)\}\s*\n```\s*(tsx?)\n([\s\S]*?)```/g;
 
 await loadHighlighter();
 let failed = 0;
@@ -34,7 +34,8 @@ for (const rel of pages) {
   for (const m of raw.matchAll(fenceRe)) {
     blocks += 1;
     const include = /\binclude\s*=\s*"([^"]+)"/.exec(m[1] ?? "")?.[1]?.trim();
-    let code = m[2] ?? "";
+    const lang = (m[2] ?? "ts") as "ts" | "tsx";
+    let code = m[3] ?? "";
     if (include !== undefined && include !== "") {
       const loaded = loadExampleIncludeFromDisk(repoRoot, include, (abs) =>
         readFileSync(abs, "utf8"),
@@ -49,7 +50,7 @@ for (const rel of pages) {
       code = preamble === "" ? prepared : `${preamble}\n${prepared}`;
     }
     try {
-      highlightToHast(code, "ts", { twoslash: true });
+      highlightToHast(code, lang, { twoslash: true });
       console.log(`OK ${rel}${include !== undefined ? ` ← ${include}` : ""}`);
     } catch (e) {
       failed += 1;

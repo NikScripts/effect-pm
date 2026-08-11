@@ -2,6 +2,7 @@
 
 **Status:** teaching SSOT for the Eng’d stack on `cursor/agent-k-page-route-6d0e`  
 **Acceptance demo (package bar):** [`examples/last/spine`](../../examples/last/spine/) — finish this before growing Last site / Hyperlink  
+**Twoslash (docs site):** [`examples/last/spine/demo.tsx`](../../examples/last/spine/demo.tsx) · [`docs/examples/last/last-ts-spine.md`](../examples/last/last-ts-spine.md) → `/docs/last-ts-spine`  
 **Later dogfood:** [`docs/last/site`](../last/site/) · Hyperlink [`docs/site`](../site/)
 
 ## One path

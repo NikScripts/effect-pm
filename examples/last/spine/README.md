@@ -1,7 +1,8 @@
 # last-ts spine demo
 
 **Acceptance bar for “package done” before Last site / Hyperlink dogfood.**  
-Lock: [`docs/handoffs/last-ts-spine.md`](../../../docs/handoffs/last-ts-spine.md)
+Lock: [`docs/handoffs/last-ts-spine.md`](../../../docs/handoffs/last-ts-spine.md)  
+Twoslash (docs site): [`demo.tsx`](./demo.tsx) · page [`docs/examples/last/last-ts-spine.md`](../../../docs/examples/last/last-ts-spine.md)
 
 ## Run
 
