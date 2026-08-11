@@ -87,7 +87,7 @@ Follow **[`router-httpapi-lock.md`](./router-httpapi-lock.md)** for Router / Rou
 | App imports | last-ts only |
 |-------------|--------------|
 | Config | `last-ts/config` (`defineConfig`) — file may still be named `waku.config.ts` for the CLI |
-| RSC server entry | `last-ts/server` (`createPages` + `adapter`) — not `fsRouter` |
+| RSC server entry | **Do not teach** Waku `createPages` / `createRoot` / `createLayout` in apps. `last-ts/server` re-exports are host-engine leftovers, not product API. Product: Page / RootLayout / Last.provider / catalog. |
 | Soft-nav transport | `last-ts/Waku` |
 | Path codegen | `last-ts/vite` `fileRouter` → `paths.gen.ts` |
 

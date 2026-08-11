@@ -48,25 +48,13 @@ export class Chapter extends Page.make(
 ) {}
 ```
 
-## Host registration
+## Host
 
-```ts
-import * as Server from "last-ts/server"
-import { Home } from "./pages/index"
-import { Chapter } from "./pages/guides/[slug]"
+Page bodies are written against soft-nav / `Page.Props` (nested `params`).  
+`fileRouter` / `paths.gen` stay **path-only** (no mode codegen).
 
-createPage({ ...Server.fromPage("/", Home) })
-createPage({
-  ...Server.fromPage("/guides/[slug]", Chapter),
-  staticPaths: ["routing"],
-})
-```
-
-- `path` — file path string (prefer `fromPage(path, mint)` so it is included)
-- `render` — `page.mode` (`Server.fromPage`)
-- `component` — unwrapped `.default`, with **Waku flat props → soft-nav `{ params, query, pathname, href }`**
-- Page bodies are written against soft-nav / `Page.Props` (nested `params`), not Waku flats
-- `fileRouter` / `paths.gen` stay **path-only** (no mode codegen)
+**Do not teach** app-authored Waku `createPages` / `createRoot` / `Server.fromPage` lists —
+that is host-engine glue, not product API. Product registration is the Page mint + catalog.
 
 ## Forbidden
 

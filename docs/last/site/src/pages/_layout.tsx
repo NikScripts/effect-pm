@@ -1,5 +1,5 @@
 /**
- * Host body shell (Waku createLayout). Soft-nav Provider lives on `_root`.
+ * Temporary body shell — not product `Layout.make` (host-engine leftover).
  */
 import type { ReactNode } from "react";
 import { Nav } from "../islands/Nav";

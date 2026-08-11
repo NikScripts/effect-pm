@@ -7,11 +7,9 @@
 # Last.ts — spine acceptance
 
 {.draft}
-**Draft** — Twoslash fences include the **runnable** spine app under `examples/last/spine/src/`
-(one file per concern). That tree is the package bar.
+**Draft** — Twoslash fences include the runnable spine under `examples/last/spine/src/`.
 
 **App:** [`examples/last/spine/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/spine/)  
-**Run:** `pnpm run example:last-spine` → `http://localhost:5230`  
 **Handoff:** [`docs/handoffs/last-ts-spine.md`](../../handoffs/last-ts-spine.md) · hub: [Examples → UI](/docs/examples#ui)
 
 ## Layout
@@ -22,15 +20,14 @@ examples/last/spine/src/
     index.tsx              Page.static  → /
     about.tsx              Page.make(Effect) → /about
     guides/[slug].tsx      Page.static + params → /guides/[slug]
-    _layout.tsx            host body shell
-    _root.tsx              Last.provider + RootLayout
   lib/
     site.ts                Router catalog + RouterBuilder.handle(mint)
     document.tsx           Document.provide
     Provider.tsx           Last.provider (provideMerge Document.Cell)
-  waku.server.tsx          Server.fromPage(path, mint)
   paths.gen.ts             fileRouter unions (committed)
 ```
+
+Waku `createPages` / `waku.server.tsx` / `_root.tsx` are **not** product surface — deleted from this demo.
 
 ## 1. Page mints — path from the file only
 
@@ -71,21 +68,8 @@ Typed `urls.*` + `RouterBuilder.handle(mint)`. Paths align with `paths.gen`.
 ## 4. Last.provider
 
 `Layer.provideMerge` keeps `Document.Cell` in the Layer output (plain `provide` drops it).
+Transport is a Layer swap (`Waku` / `History` / `Memory`).
 
 {.twoslash include="examples/last/spine/src/lib/Provider.tsx"}
-``` tsx
-```
-
-## 5. Root
-
-{.twoslash include="examples/last/spine/src/pages/_root.tsx"}
-``` tsx
-```
-
-## 6. Host — `Server.fromPage` only
-
-No app `waku` / `getConfig`. Waku flats → soft-nav `{ params, query, pathname, href }` inside `fromPage`.
-
-{.twoslash include="examples/last/spine/src/waku.server.tsx"}
 ``` tsx
 ```

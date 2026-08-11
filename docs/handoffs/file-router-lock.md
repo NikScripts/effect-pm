@@ -30,7 +30,7 @@
 | Surface | Owner |
 |---------|--------|
 | Soft-nav catalog | `Router.make` + `Route.get(…, { params })` |
-| Host registration | `Server.fromPage(path, mint)` (+ `staticPaths` when needed) |
+| Host registration | **Not** app `createPages` — product is Page mint + catalog; engine bridge internal |
 | Page body | `Page.make` / `Page.static` (path from file only) |
 
 Align catalog ids/paths with `paths.gen` by hand (or a local `Expect` type test). Do **not** invent `*FromPages` merge APIs.

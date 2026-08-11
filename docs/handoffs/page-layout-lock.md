@@ -170,7 +170,7 @@ Body / root Effects may `yield* Page.document(…)`. Field merge rules stay in [
 - `last-ts/RootLayout` — `make`, `Default`, `Tag`
 - `last-ts/Layout` — `make`, `Outlet`, `Passthrough`, `provide`, `Slot`
 - `RouterBuilder.group(api, id, build)` only; page groups require `Layout.Slot`
-- Dogfood `_root.tsx` uses `RootLayout.Default`; site catalog uses `Layout.provide(Passthrough)`
+- No app `_root.tsx` / `createRoot` — one `RootLayout` Reference; site catalog uses `Layout.provide(Passthrough)`
 
 ---
 

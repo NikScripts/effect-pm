@@ -565,8 +565,7 @@ Closed `FilePath` / `RoutePath` unions → `Route.fileRoot` → typed `urls.*`.
 
 ### [last-ts spine](/docs/last-ts-spine)
 
-`examples/last/spine/src/` · `pnpm run example:last-spine` → <http://localhost:5230>  
-Page mint → `Server.fromPage` → soft-nav catalog → `Document.provide` → `Last.provider`.
+`examples/last/spine/src/` — Page mint → soft-nav catalog → `Document.provide` → `Last.provider`.
 
 ---
 

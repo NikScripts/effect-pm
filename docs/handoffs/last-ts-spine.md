@@ -10,13 +10,17 @@
 ```text
 Page.make / Page.static     →  body + bake mode (no path on mint)
 file under pages/**         →  URL path (fileRouter → paths.gen)
-Server.fromPage(path, mint) →  host createPages (mode + prop adapt)
 Router.make + Route.get     →  soft-nav catalog + urls.*
 RouterBuilder.handle(mint)  →  catalog handlers (unwraps .default)
 Layout.provide(…)           →  page-group layout debt
+RootLayout.make / Default   →  one html root (Context.Reference)
 Document.provide(…)         →  Document.Cell (title + titleTransform)
 Last.provider(layer)        →  one children-only React provider
 ```
+
+**Not product / never teach in apps:** Waku `createPages` / `createRoot` / `createLayout` /
+`createPage`, `waku.server.tsx`, hand-rolled `_root.tsx`. That is host-engine glue
+(re-exported by mistake as `last-ts/server`). Product APIs above already cover the surface.
 
 ## Minimal site
 
@@ -32,19 +36,7 @@ export class Chapter extends Page.static(
 ) {}
 ```
 
-### 2. Host registration
-
-```ts
-// waku.server.tsx — CLI filename; imports from last-ts/server only
-createPage({
-  ...Server.fromPage("/guides/[slug]", Chapter),
-  staticPaths: ["routing", "view-service"],
-})
-```
-
-Waku flats (`{ slug }`) → soft-nav `{ params, query, pathname, href }` inside `fromPage`.
-
-### 3. Soft-nav catalog
+### 2. Soft-nav catalog
 
 ```ts
 export class Site extends Router.make("app").add(
@@ -53,6 +45,8 @@ export class Site extends Router.make("app").add(
   }),
 ) {}
 
+export const urls = Route.urlBuilder(Site)
+
 const app = pipe(
   RouterBuilder.group(Site, "__top", (h) => h.handle("guides_slug", Chapter)),
   Layout.provide(Layout.Passthrough),
@@ -60,7 +54,7 @@ const app = pipe(
 export const routes = pipe(RouterBuilder.layer(Site), Layer.provide(app))
 ```
 
-### 4. Document + provider
+### 3. Document + provider
 
 ```ts
 export const siteDocumentLayer = Document.provide(
@@ -71,24 +65,17 @@ export const siteDocumentLayer = Document.provide(
 
 export const Provider = Last.provider(
   pipe(
-    Waku.layer,
+    Waku.layer, // or History.layer / Memory.layer — transport swap only
     Layer.provide(routes),
     Layer.provideMerge(siteDocumentLayer), // Cell must stay in output
   ),
 )
 ```
 
-### 5. Root
+### 4. Root layout
 
-```tsx
-export default function Root(props: { readonly children: ReactNode }) {
-  return (
-    <Provider>
-      <RootLayout.Default.Component>{props.children}</RootLayout.Default.Component>
-    </Provider>
-  )
-}
-```
+One `RootLayout` Reference — package `Default` is `RootLayout.make(…)`, same as a custom root.
+Override via Layer on the Reference. No second “Root” component. No `_root.tsx`.
 
 ## Locks
 
@@ -104,4 +91,6 @@ export default function Root(props: { readonly children: ReactNode }) {
 
 ## Forbidden (never teach)
 
-`import` from `waku` · `getConfig` · `pageConfig` · `Page.asDefault` · path on `Page.make` · catalog-merge `*FromPages` · nested product providers
+`import` from `waku` · `getConfig` · `pageConfig` · `Page.asDefault` · path on `Page.make` ·
+catalog-merge `*FromPages` · nested product providers · app `createPages` / `createRoot` /
+`createLayout` / `waku.server.tsx` · `RootLayout.Default.Component` wrappers

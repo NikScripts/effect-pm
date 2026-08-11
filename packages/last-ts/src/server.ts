@@ -1,29 +1,15 @@
 /**
  * @module server
  *
- * RSC host server-entry façade. Apps register routes through this module and
- * never import `waku` / `waku/router` / adapters directly.
+ * **Not the product host API.** Thin re-exports of Waku’s RSC entry helpers for
+ * legacy/internal host wiring. Apps compose {@link ./Page}, {@link ./RootLayout},
+ * {@link ./Last.provider}, and the Router catalog — they do **not** author
+ * `createPages` / `createRoot` / `createLayout` lists.
  *
- * ```ts
- * import * as Server from "last-ts/server"
- * import { Home } from "./pages/index"
+ * {@link fromPage} adapts a Page mint to Waku flat props when an internal host
+ * bridge needs it. Do not teach `createPages` in examples or guides.
  *
- * export default Server.adapter(
- *   Server.createPages(async ({ createPage, createRoot }) => [
- *     createRoot({ render: "static", component: Root }),
- *     createPage({ ...Server.fromPage("/", Home) }),
- *     createPage({
- *       ...Server.fromPage("/guides/[slug]", Chapter),
- *       staticPaths: ["intro"],
- *     }),
- *   ]),
- * )
- * ```
- *
- * Prefer `fromPage(path, mint)` so the host adapts Waku flat props
- * (`{ slug }`) into soft-nav {@link ./Page} props (`{ params }`).
- *
- * @public
+ * @internal
  */
 
 export { createPages } from "waku/router/server";
