@@ -37,8 +37,8 @@ stale — fix on sight.
 | **`Page.asDefault`** | Bridge so Waku fs-router accepts a class default export | Not approved; do not reintroduce |
 | **`static Component` on Page classes** as the app pattern | Mimicked React class fields for RSC file modules | Not approved teaching shape |
 | **`Page.modeOf` / `optionsOf` / `extract` / `paramBagsOf` / `configOf`** (+ `WakuConfig` helper surface) | Adapter/test helpers for the inject/`getConfig` bridge and catalog merge | Unapproved public API — **deleted**. Revisit only via owner lock + correct process |
-| **`Route.fromEffect` / `staticFromEffect` / `mixedFromEffect` / `fromPage`** | Catalog bake / Page-class merge invented on the branch | Unapproved — **deleted** |
-| **`Route.fileRootFromPages` / `Router.fileSystemFromPages` / `destinationsFromPages` / `pagesByIdFromModules`** (and siblings that exist only to merge Page classes into the file table) | Dogfood shortcut | Unapproved — **deleted** |
+| **`Route.fromEffect` / `staticFromEffect` / `mixedFromEffect` / `Route.fromPage`** (top-level Page-class catalog bake) | Catalog bake / Page-class merge invented on the branch | Unapproved — **deleted**. **Not** `Group.fromEffect` / `group.from` — those stay core public (HttpApi dual; fileRouter / `Route.fileRoot` builds on them). |
+| **`Route.fileRootFromPages` / `Router.fileSystemFromPages` / `destinationsFromPages` / `pagesByIdFromModules`** (and siblings that exist only to merge **Page classes** into the file table) | Dogfood shortcut | Unapproved — **deleted**. Distinct from path-table `Route.fileRoot` / `group.fromEffect`. |
 | Teaching **`Shell.layer.pipe(Layer.provide(…))`** as the house style | Reads as a triple chain | Prefer `pipe(Shell.layer, Layer.provide(…))` (or other rearrangement). Avoid long `.a.b.pipe` chains without a visual break |
 
 ---
