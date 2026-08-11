@@ -36,11 +36,13 @@ clients ──Http──►  edge (Node.forward, stable Worker)
 2. Edge in the orchestrator binds public Http; `Node.forwardAll` → Active label
 3. `Launcher.up(A)` loads active (v1) on Unix A
 4. `Hyperlink.client(Probe, Worker)` → tip `"v1"` (stable dial)
-5. Enqueue WorkPool jobs on Unix A (direct — WorkPool+`forwardAll` still a gap)
+5. Enqueue WorkPool jobs via public `Worker` (`forwardAll` — one-shot methods; stream/ref skip)
 6. File-swap active → v2; `Launcher.up(B)` loads v2 on Unix B
 7. Move pending A→B over direct Unix (**interim** — Directory is one row; S14 later)
-8. `Node.activate(WorkerPrivate, "B")` → tip `"v2"`; public Probe dial never rebinds
-9. Release exact payloads from B
+8. `Node.activate(WorkerPrivate, "B")` → tip `"v2"`; public dial never rebinds
+9. Release exact payloads via public `Worker`
+
+Public clients use `LookupPolicy.verifyOff` until stream/ref forward + verify are Eng’d.
 
 ## Identity (public / private)
 

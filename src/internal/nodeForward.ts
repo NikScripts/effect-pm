@@ -10,7 +10,7 @@
  * @module internal/nodeForward
  * @internal
  */
-import { Context, Data, Effect, Layer, Ref } from "effect";
+import { Context, Data, Effect, Layer, Ref, Stream } from "effect";
 import * as Hyperlink from "../Hyperlink";
 import * as LookupPolicy from "../LookupPolicy";
 import type { AddressedNode, AnyNode } from "./nodeCore";
@@ -95,6 +95,26 @@ const callActive = (
  *
  * @internal
  */
+const setPath = (
+  impl: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): void => {
+  const parts = path.split(".");
+  if (parts.length === 1) {
+    impl[path] = value;
+    return;
+  }
+  let cursor = impl;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i]!;
+    cursor[part] =
+      (cursor[part] as Record<string, unknown> | undefined) ?? {};
+    cursor = cursor[part] as Record<string, unknown>;
+  }
+  cursor[parts[parts.length - 1]!] = value;
+};
+
 const forwardImpl = (
   node: AnyNode & { readonly key: string },
   tag: AnyTag,
@@ -104,23 +124,27 @@ const forwardImpl = (
     Hyperlink.specOf(tag) as Hyperlink.Spec,
   );
   const impl: Record<string, unknown> = {};
-  for (const path of Object.keys(flat)) {
-    const parts = path.split(".");
-    if (parts.length === 1) {
-      impl[path] = (payload: unknown) =>
-        callActive(node, tag, path, payload, labelRef);
+  for (const [path, method] of Object.entries(flat)) {
+    // Stream / ref members need scoped stream forwarding. Stub a Subscribable
+    // so Hyperlink.serve still wires the Rpc group; one-shot methods forward.
+    // Full ref/stream proxy is follow-up (client verify + live watch).
+    if (
+      typeof method === "object" &&
+      method !== null &&
+      "stream" in method &&
+      (method as { readonly stream?: unknown }).stream === true
+    ) {
+      setPath(impl, path, {
+        get: Effect.die(
+          `Node.forward: stream/ref "${path}" get is not Eng'd yet`,
+        ),
+        changes: Stream.never,
+      });
       continue;
     }
-    let cursor = impl;
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i]!;
-      cursor[part] =
-        (cursor[part] as Record<string, unknown> | undefined) ?? {};
-      cursor = cursor[part] as Record<string, unknown>;
-    }
-    const last = parts[parts.length - 1]!;
-    cursor[last] = (payload: unknown) =>
-      callActive(node, tag, path, payload, labelRef);
+    setPath(impl, path, (payload: unknown) =>
+      callActive(node, tag, path, payload, labelRef),
+    );
   }
   return impl;
 };

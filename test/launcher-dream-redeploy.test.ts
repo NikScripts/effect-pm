@@ -21,6 +21,7 @@ import { ChildProcess } from "effect/unstable/process";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Launcher from "../src/Launcher";
 import * as Lookup from "../src/Lookup";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Node from "../src/Node";
 import * as NodePolicy from "../src/NodePolicy";
 import {
@@ -138,9 +139,16 @@ describe("Launcher dream redeploy (Shape β forward + activate)", () => {
           Lookup.client(lookupNode),
           Effect.gen(function* () {
             const edgeLayer = Node.http(edge, [
-              Node.forward(edge, Probe),
+              Node.forwardAll(edge, [Probe, Jobs]),
             ]).pipe(Layer.provide(Lookup.client(lookupNode)));
             yield* Layer.build(edgeLayer);
+
+            const publicProbe = Hyperlink.client(Probe, Worker).pipe(
+              LookupPolicy.provide(LookupPolicy.verifyOff),
+            );
+            const publicJobs = Hyperlink.client(Jobs, Worker).pipe(
+              LookupPolicy.provide(LookupPolicy.verifyOff),
+            );
 
             yield* Launcher.up({
               node: backendA,
@@ -148,9 +156,7 @@ describe("Launcher dream redeploy (Shape β forward + activate)", () => {
               ready: { timeout: "25 seconds" },
             });
 
-            const publicClient = yield* Layer.build(
-              Hyperlink.client(Probe, Worker),
-            );
+            const publicClient = yield* Layer.build(publicProbe);
 
             const tipA = yield* Effect.gen(function* () {
               const probe = yield* Probe;
@@ -161,12 +167,16 @@ describe("Launcher dream redeploy (Shape β forward + activate)", () => {
             yield* Effect.gen(function* () {
               const q = yield* Jobs;
               yield* q.add([...payloads]);
-              const snap = yield* q.status.get;
-              expect(snap.sizes.normal).toBe(payloads.length);
+            }).pipe(Effect.provide(publicJobs), Effect.scoped);
+
+            const pendingA = yield* Effect.gen(function* () {
+              const q = yield* Jobs;
+              return yield* q.status.get;
             }).pipe(
               Effect.provide(Hyperlink.client(Jobs, backendA)),
               Effect.scoped,
             );
+            expect(pendingA.sizes.normal).toBe(payloads.length);
 
             yield* fs.copyFile(v2Src, active);
             const swapped = yield* fs.readFileString(active);
@@ -213,13 +223,8 @@ describe("Launcher dream redeploy (Shape β forward + activate)", () => {
 
             const released = yield* Effect.gen(function* () {
               const q = yield* Jobs;
-              const snap = yield* q.status.get;
-              expect(snap.sizes.normal).toBe(payloads.length);
               return yield* q.release({});
-            }).pipe(
-              Effect.provide(Hyperlink.client(Jobs, backendB)),
-              Effect.scoped,
-            );
+            }).pipe(Effect.provide(publicJobs), Effect.scoped);
             expect(released.map((e) => e.item)).toEqual([...payloads]);
 
             yield* reapDreamChildren;
