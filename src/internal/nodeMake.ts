@@ -616,10 +616,12 @@ export class WithPolicyRequiresMake extends Data.TaggedError(
  *
  * @internal
  */
+type MadeNode = AnyNode & { readonly key: string };
+
 export const withPolicy = (
-  node: AnyNode & { readonly key: string },
+  node: MadeNode,
   ...policies: ReadonlyArray<NodePolicyValue>
-): AnyNode & { readonly key: string } => {
+): MadeNode => {
   const addresses = addressesOf(node);
   if (addresses === undefined) {
     throw new WithPolicyRequiresMake({ nodeKey: node.key });
@@ -632,9 +634,9 @@ export const withPolicy = (
   }
   assertKnownPolicyLabels(node.key, addresses, policy);
   const legacy = stampLegacyFromPolicy(node.key, addresses, policy);
-  // Plain listen view — not a new Tag / not a second make.
-  return {
-    key: node.key,
+  // Overlay on a Tag-shaped shell — same key / prototype, not a second make.
+  const shell: MadeNode = Object.create(Object.getPrototypeOf(node));
+  return Object.assign(shell, node, {
     url: legacy.url,
     path: legacy.path,
     kind: legacy.kind,
@@ -642,7 +644,7 @@ export const withPolicy = (
     onConflict: onConflictOf(node) ?? "inherit",
     [AddressesKey]: addresses,
     [NodePolicyConfigKey]: Object.freeze({ ...policy }),
-  } as AnyNode & { readonly key: string };
+  });
 };
 
 /**
