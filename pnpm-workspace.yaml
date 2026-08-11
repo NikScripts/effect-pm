@@ -2,3 +2,4 @@ packages:
   - "."
   - "packages/*"
   - "docs/last/site"
+  - "examples/last/spine"

@@ -278,8 +278,7 @@ export const Provider = Last.provider(
   pipe(
     Waku.layer, // transport — last-ts/Waku only
     Layer.provide(routes),
-    Layer.provide(SiteRoot.layer),
-    Layer.provide(
+    Layer.provideMerge(
       Document.provide(
         SiteDocument,
         Document.title("last.ts"),
@@ -288,7 +287,7 @@ export const Provider = Last.provider(
         ),
         Document.lang("en"),
       ),
-    ),
+    ), // provideMerge keeps Document.Cell in the Layer output
   ),
 )
 ```

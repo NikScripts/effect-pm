@@ -44,6 +44,7 @@ Waku layout matching may keep `(book)` in **host** `createPage` / `createLayout`
 Dogfood trees that ship the plugin must stay in sync:
 
 ```bash
+pnpm hyp file-router check --pages examples/last/spine/src/pages --out examples/last/spine/src/paths.gen.ts
 pnpm hyp file-router check --pages docs/last/site/src/pages --out docs/last/site/src/paths.gen.ts
 pnpm hyp file-router check --pages docs/site/src/pages --out docs/site/src/paths.gen.ts
 ```

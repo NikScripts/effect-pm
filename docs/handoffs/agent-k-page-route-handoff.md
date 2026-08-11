@@ -19,7 +19,14 @@
 - **`Server.fromPage(path, mint)`** — bake mode + Waku flat → soft-nav props
 - **File-router lock** — path-only table; `(group)` strip; CI check on dogfood gens
 - **Last.provider lock** — one Layer bake
-- **Last site** + **Hyperlink `docs/site`** cut over off Waku fs-router
+- **Spine acceptance demo** — [`examples/last/spine`](../../examples/last/spine/) (package bar)
+- Last site + Hyperlink `docs/site` host cutover exist on branch but are **provisional** until the demo bar is the teaching SSOT
+
+## Sequence (owner)
+
+1. Prove / polish **spine demo**
+2. Align Last site to the demo
+3. Then Hyperlink
 
 ## Parked (not this arc)
 

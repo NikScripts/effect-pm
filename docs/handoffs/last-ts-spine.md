@@ -1,7 +1,8 @@
 # last-ts spine (canonical walkthrough)
 
 **Status:** teaching SSOT for the Eng’d stack on `cursor/agent-k-page-route-6d0e`  
-**Dogfood:** [`docs/last/site`](../last/site/) (reference) · Hyperlink [`docs/site`](../site/) (same host boundary)
+**Acceptance demo (package bar):** [`examples/last/spine`](../../examples/last/spine/) — finish this before growing Last site / Hyperlink  
+**Later dogfood:** [`docs/last/site`](../last/site/) · Hyperlink [`docs/site`](../site/)
 
 ## One path
 
@@ -68,7 +69,11 @@ export const siteDocumentLayer = Document.provide(
 )
 
 export const Provider = Last.provider(
-  pipe(Waku.layer, Layer.provide(routes), Layer.provide(siteDocumentLayer)),
+  pipe(
+    Waku.layer,
+    Layer.provide(routes),
+    Layer.provideMerge(siteDocumentLayer), // Cell must stay in output
+  ),
 )
 ```
 

@@ -64,6 +64,15 @@ export const fileRouter = () =>
       "file-router",
       "check",
       "--pages",
+      "examples/last/spine/src/pages",
+      "--out",
+      "examples/last/spine/src/paths.gen.ts",
+    ]);
+    yield* run("pnpm", [
+      "hyp",
+      "file-router",
+      "check",
+      "--pages",
       "docs/last/site/src/pages",
       "--out",
       "docs/last/site/src/paths.gen.ts",

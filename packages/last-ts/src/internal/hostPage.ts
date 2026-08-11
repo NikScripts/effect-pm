@@ -10,7 +10,6 @@ import * as React from "react";
 import { Effect } from "effect";
 import type { RequestOptions } from "./routeRequest";
 import * as pageMint from "./pageMint";
-import * as View from "../View";
 import type * as Route from "../Route";
 
 /**
@@ -176,7 +175,21 @@ const toComponent = (
     return Fixed;
   }
   if (Effect.isEffect(body)) {
-    return View.effect(body) as HostComponent;
+    // RSC host: run the Effect once per request. Do **not** import View /
+    // AtomReact here — those are client-only (`createContext`) and break RSC.
+    // Soft-nav Outlet still uses View.effect / Atom for live Effect pages.
+    const program = body;
+    const EffectPage = async (): Promise<React.ReactNode> => {
+      const node = await Effect.runPromise(
+        program as Effect.Effect<React.ReactNode>,
+      );
+      if (node === null || node === undefined || typeof node === "boolean") {
+        return null;
+      }
+      return node;
+    };
+    EffectPage.displayName = "Page.default(effect)";
+    return EffectPage as HostComponent;
   }
   const Comp = body as React.ComponentType<Route.HandleArgs>;
   const Wrapped: React.FC<Record<string, unknown>> = (props) =>

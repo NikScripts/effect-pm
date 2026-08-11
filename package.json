@@ -438,6 +438,7 @@
     "example:apps-view-compose": "vite --config examples/apps/view-compose/vite.config.ts",
     "example:apps-title-live": "vite --config examples/apps/title-live/vite.config.ts",
     "docs:last-site": "pnpm --dir docs/last/site dev",
+    "example:last-spine": "pnpm --dir examples/last/spine dev",
     "example:apps-router-docs": "vite --config examples/apps/router-docs/vite.config.ts",
     "example:ui-router-mini-docs": "tsx examples/ui/router-mini-docs.ts",
     "example:ui-group-nav": "tsx examples/ui/group-nav.ts",

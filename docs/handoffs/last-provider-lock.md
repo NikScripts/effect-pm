@@ -20,9 +20,9 @@ import { siteDocumentLayer } from "./document"
 
 export const Provider = Last.provider(
   pipe(
-    Waku.layer,                 // soft-nav transport
-    Layer.provide(routes),      // catalog + Layout.provide
-    Layer.provide(siteDocumentLayer), // Document.Cell
+    Waku.layer,                        // soft-nav transport
+    Layer.provide(routes),             // catalog + Layout.provide
+    Layer.provideMerge(siteDocumentLayer), // Document.Cell (must stay in output)
   ),
 )
 // <Provider>…</Provider>
@@ -36,7 +36,7 @@ Prefer `pipe(layer, Layer.provide(…))` over long `.pipe` chains.
 |-------|-----|
 | Soft-nav transport | `Waku.layer` / `History.layer` / `Memory.layer` |
 | Routes | `RouterBuilder.layer` + group handlers + `Layout.provide` |
-| Document | `Document.provide(Doc, Document.title(…), Document.titleTransform(…), …)` |
+| Document | `Document.provide(…)` merged with **`Layer.provideMerge`** so `Document.Cell` remains in the Layer output (plain `Layer.provide` drops it) |
 
 `Last.provider` wraps `Document.FieldsProvider` when `Document.Cell` is present.
 
