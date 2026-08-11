@@ -200,6 +200,11 @@ Guides: [Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/pol
 
 `examples/node/serve-handoff.ts` · `pnpm run example:node-serve-handoff` — custom `{ handoff }` / `HandoffDeferred`
 
+### [forward-proxy (public / private + activate)](/docs/node-forward-proxy)
+
+`examples/node/forward-proxy/` · `pnpm run example:node-forward-proxy` — in-process Shape β;
+full `shared.ts` + `main.ts` on the page  
+
 ### [drain yield refuse](/docs/node-drain-yield-refuse)
 
 `examples/node/drain-yield-refuse.ts` · `pnpm run example:node-drain-yield-refuse`
@@ -296,23 +301,12 @@ Guide: [Update](/docs/update)
 `examples/launcher/restart-successor.ts` · `pnpm run example:launcher-restart-successor` — OS A→B; Directory dial moves; B answers  
 Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
 
-### [dream redeploy (file-swap v1→v2)](/docs/launcher-dream-redeploy)
+### [dream redeploy (Shape β forward + activate)](/docs/launcher-dream-redeploy)
 
-`examples/launcher/dream-redeploy.ts` · `pnpm run example:launcher-dream-redeploy` — file-swap worker entry v1→v2, then:
-
-```ts
-const plan = yield* Update.plan({
-  steps: [{
-    target: WORKER_NODE_KEY,
-    successor: { node: nodeB, process: child(portB), ready: { timeout: "25 seconds" } },
-    tags: [Jobs, Probe],
-  }],
-})
-yield* Update.simulate(plan)
-yield* Update.execute(plan) // sticky Probe.tip "v1"→"v2"; WorkPool handoff
-```
-
-Guide: [Update](/docs/update) · [Launcher](/docs/launcher) · [Policy](/docs/policy)
+`examples/launcher/dream-redeploy*.ts` · `pnpm run example:launcher-dream-redeploy` —
+stable public Http edge + Unix A/B + file-swap + `Node.activate`. Full sources on the
+page (shared / orchestrator / worker v1 / worker v2).  
+Guide: [Launcher](/docs/launcher) · [addresses dock](./handoffs/node-addresses-and-update-api.md) · twin [forward-proxy](/docs/node-forward-proxy)
 
 ### [minimal up](/docs/launcher-minimal-up)
 

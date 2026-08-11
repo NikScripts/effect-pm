@@ -9,6 +9,7 @@
  * ```
  *
  * Split: [`shared.ts`](./shared.ts) (Tags + public/private Node) · this file (roles + run).
+ * Docs: `docs/examples/node/forward-proxy.md` (full sources).
  * Dock: `docs/handoffs/node-addresses-and-update-api.md`.
  */
 
