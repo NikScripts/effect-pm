@@ -462,13 +462,14 @@ options arg**, so don’t make the signature rest-only.
 
 ### 3.4.5 Address policies — define knobs, then defaults (parked)
 
-**API surface lives in §3.3** (`NodePolicy.listen` / `advertise` / `proxy` / `as` +
-`NodeLookupPolicy.make`). Dial / claim / yield stay on **`LookupPolicy`** (rename of Eng’d
-`Policy`). This subsection keeps rationale + example matrix.
+**API surface lives in §3.3** (`NodePolicy.primaryAddress` / `listen` / `advertise` /
+`proxy` / `as` + `NodePolicy.make`). Dial / claim / yield stay on **`LookupPolicy`**.
+This subsection keeps rationale + example matrix.
 
-Address marks **identity + primary (unnamed) vs labeled + dial**. That is description
-only. **NodePolicy** decides what *this process* does with each address. Prefer /
-sticky / stream-gap stay on **LookupPolicy** — not restart options, not NodePolicy.
+Address = identity + optional label + dial. **Unlabeled ≠ primary** until
+`PrimaryAddress` says so (default `"AllUnlabeled"`). **NodePolicy** decides what
+*this process* does with each address. Prefer / sticky / stream-gap stay on
+**LookupPolicy** — not restart options, not NodePolicy.
 
 **Owner (2026-08-09):** do **not** invent a default like “labeled sit idle” before the
 policy surface exists. If an address is on the Node, the obvious assumption is you meant
@@ -478,17 +479,17 @@ to use it — especially for listen. Define the knobs first; pick defaults secon
 **`as`**. **Agent 5 call:** Eng’d `Policy` → **`LookupPolicy`** (not `ClientPolicy` —
 names the Lookup/Directory job; pairs `Lookup`↔`LookupPolicy`, `Node`↔`NodePolicy`).
 
-Primary vs labeled is an input to those knobs (advertise defaults toward primaries;
-proxy often primary→labeled), not a hidden “don’t listen” flag.
+Owned mode strings are PascalCase. `"Primary"` on Listen/Advertise means the
+`PrimaryAddress` set.
 
-#### Example configurations (not defaults yet)
+#### Example configurations
 
-| Intent | Listen | Advertise | Proxy / as | Client dial |
-|--------|--------|-----------|------------|-------------|
-| Serve everything declared | all | primaries | — | Directory primaries |
-| Stable primary, A/B backends (§4 β) | primary + live side | primary | proxy prefer; as = A or B on backends | primary |
-| This box is A only | `["A"]` | primary (and/or A) | `as("A")` | primary |
-| Multi-primary edge | all primaries | all primaries | — | `LookupPolicy.pick` / ColdAmbiguous |
+| Intent | PrimaryAddress | Listen | Advertise | Proxy / as |
+|--------|----------------|--------|-----------|------------|
+| Serve everything declared | `AllUnlabeled` | `All` | `Primary` | — |
+| Stable front, A/B backends (§4 β) | `AllUnlabeled` | `All` | `Primary` | `Prefer`; `as("A"\|"B")` on backends |
+| This box is A only | `AllUnlabeled` | `["A"]` | `Primary` | `as("A")` |
+| Multi-primary edge (2× unlabeled Http) | `AllUnlabeled` | `All` | `Primary` | — |
 
 Directory today: **one row per `nodeKey`**. May need to grow for proxy/backends — open.
 
