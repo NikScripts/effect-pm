@@ -1,8 +1,8 @@
 {#last-ts-spine title="Last.ts — spine acceptance" status="draft" appliesTo=last-ts}
 <!-- docs-site-link:begin -->
 > [!NOTE]
-> You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://dev.hyperlink.cool/docs/last-ts-spine>.
+> Rendered docs (Tailscale):
+> <http://100.67.32.32:5192/docs/last-ts-spine>
 <!-- docs-site-link:end -->
 # Last.ts — spine acceptance
 
