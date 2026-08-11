@@ -1,10 +1,13 @@
 /**
- * NodePolicy — this process vs its address list (listen, advertise, proxy, as).
+ * NodePolicy — this process vs its address list (primary set, listen, advertise, proxy, as).
  *
  * Built on {@link PolicyBuilder}: private plural constructable `NodePolicies`
  * declares Schema keys / PascalCase References and camelCase Layer methods
  * (`Uncapitalize` — `"Listen"` → `listen`). This singular module re-exports
  * those. Apps import this namespace — not the builder.
+ *
+ * Owned mode strings are PascalCase (`"All"`, `"Primary"`, `"AllUnlabeled"`,
+ * `"Prefer"`). App labels (`"A"` / `"B"`) keep the app’s spelling.
  *
  * Pairs with `Node`. Sister module: {@link LookupPolicy} (Lookup / Directory
  * participation). Dial / sticky / verify stay on LookupPolicy — not here.
@@ -12,15 +15,17 @@
  * ```ts
  * import * as NodePolicy from "hyperlink-ts/NodePolicy"
  *
- * NodePolicy.listen("all")
- * NodePolicy.advertise("primary")
- * NodePolicy.proxy("prefer")
+ * NodePolicy.primaryAddress("AllUnlabeled") // default — primary set = unlabeled
+ * NodePolicy.listen("All")
+ * NodePolicy.advertise("Primary")           // publish the PrimaryAddress set
+ * NodePolicy.proxy("Prefer")
  * NodePolicy.as("A")
  *
  * NodePolicy.make({
- *   Listen: "all",
- *   Advertise: "primary",
- *   Proxy: "prefer",
+ *   PrimaryAddress: "AllUnlabeled",
+ *   Listen: "All",
+ *   Advertise: "Primary",
+ *   Proxy: "Prefer",
  *   As: "A",
  * })
  * ```
@@ -38,14 +43,30 @@ const builderId = "hyperlink-ts/NodePolicy" as const;
 // =============================================================================
 
 /**
- * Address-list selection — all declared, primaries only, or an explicit label list.
+ * How the primary address set is defined.
+ *
+ * - `"AllUnlabeled"` — every unlabeled address (several same-protocol OK; list, not last-wins)
+ * - `"All"` — every declared address is primary
+ * - label list — explicit primary set
+ *
+ * @category schemas
+ * @public
+ */
+export const primaryAddressSchema = Schema.Union([
+  Schema.Literals(["AllUnlabeled", "All"]),
+  Schema.Array(Schema.String),
+]);
+
+/**
+ * Address-list selection — all declared, the primary set, or an explicit label list.
+ *
+ * `"Primary"` means the set from {@link PrimaryAddress} (not “unlabeled” by itself).
  *
  * @category schemas
  * @public
  */
 export const addressSelectionSchema = Schema.Union([
-  Schema.Literal("all"),
-  Schema.Literal("primary"),
+  Schema.Literals(["All", "Primary"]),
   Schema.Array(Schema.String),
 ]);
 
@@ -71,7 +92,7 @@ export const advertiseSchema = addressSelectionSchema;
  * @category schemas
  * @public
  */
-export const proxySchema = Schema.Literal("prefer");
+export const proxySchema = Schema.Literal("Prefer");
 
 /**
  * This OS process **is** labeled side `"A"` / `"B"` (not a vague “role”).
@@ -84,6 +105,14 @@ export const asSchema = Schema.String;
 // =============================================================================
 // Models
 // =============================================================================
+
+/**
+ * Primary-set definition.
+ *
+ * @category models
+ * @public
+ */
+export type PrimaryAddress = Schema.Schema.Type<typeof primaryAddressSchema>;
 
 /**
  * Address-list selection value.
@@ -132,6 +161,7 @@ export type As = Schema.Schema.Type<typeof asSchema>;
  * @public
  */
 export type Config = {
+  readonly PrimaryAddress?: PrimaryAddress;
   readonly Listen?: Listen;
   readonly Advertise?: Advertise;
   readonly Proxy?: Proxy;
@@ -145,6 +175,7 @@ export type Config = {
  * @public
  */
 export type Fragment =
+  | { readonly _tag: "PrimaryAddress"; readonly value: PrimaryAddress }
   | { readonly _tag: "Listen"; readonly value: Listen }
   | { readonly _tag: "Advertise"; readonly value: Advertise }
   | { readonly _tag: "Proxy"; readonly value: Proxy }
@@ -196,14 +227,18 @@ export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
 /**
  * Private plural constructable. Singular module namespace is `NodePolicy`.
  *
- * Defaults (candidate lock): listen all; advertise primaries; no proxy; no as.
+ * Defaults: primary set = all unlabeled; listen all; advertise primary set;
+ * no proxy; no as.
  */
 class NodePolicies extends PolicyBuilder.make(builderId)
+  .key("PrimaryAddress", primaryAddressSchema, {
+    defaultValue: (): PrimaryAddress => "AllUnlabeled",
+  })
   .key("Listen", listenSchema, {
-    defaultValue: (): Listen => "all",
+    defaultValue: (): Listen => "All",
   })
   .key("Advertise", advertiseSchema, {
-    defaultValue: (): Advertise => "primary",
+    defaultValue: (): Advertise => "Primary",
   })
   .key("Proxy", Schema.Union([proxySchema, Schema.Undefined]), {
     defaultValue: (): Proxy | undefined => undefined,
@@ -217,7 +252,15 @@ class NodePolicies extends PolicyBuilder.make(builderId)
 // =============================================================================
 
 /**
- * Which declared addresses this process binds. Default `"all"`.
+ * How the primary address set is defined. Default `"AllUnlabeled"`.
+ *
+ * @category references
+ * @public
+ */
+export const PrimaryAddress = NodePolicies.PrimaryAddress;
+
+/**
+ * Which declared addresses this process binds. Default `"All"`.
  *
  * @category references
  * @public
@@ -225,7 +268,8 @@ class NodePolicies extends PolicyBuilder.make(builderId)
 export const Listen = NodePolicies.Listen;
 
 /**
- * Which addresses Directory publishes. Default `"primary"`.
+ * Which addresses Directory publishes. Default `"Primary"` (the
+ * {@link PrimaryAddress} set).
  *
  * @category references
  * @public
@@ -251,6 +295,9 @@ export const As = NodePolicies.As;
 // =============================================================================
 // Layer helpers (camelCase — Uncapitalize of PascalCase key / `_tag`)
 // =============================================================================
+
+/** Define the primary address set. @category layers @public */
+export const primaryAddress = NodePolicies.primaryAddress;
 
 /** Bind selection. @category layers @public */
 export const listen = NodePolicies.listen;

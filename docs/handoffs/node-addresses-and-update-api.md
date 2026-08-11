@@ -197,15 +197,17 @@ Address.http({ A: 3000, B: 3001 })
 Address.unixFromKey                         // no ()
 
 // ── NodePolicy — pipe onto Node (same style as Address.*) ──────────
-NodePolicy.listen("all")                    // | "primary" | ReadonlyArray<label>
-NodePolicy.advertise("primary")             // | "all" | ReadonlyArray<label>
-NodePolicy.proxy("prefer")                  // primary forwards → live labeled (Advice)
+NodePolicy.primaryAddress("AllUnlabeled")   // | "All" | ReadonlyArray<label>
+NodePolicy.listen("All")                    // | "Primary" | ReadonlyArray<label>
+NodePolicy.advertise("Primary")             // | "All" | ReadonlyArray<label>
+NodePolicy.proxy("Prefer")                  // primary forwards → live labeled (Advice)
 NodePolicy.as("A")                          // this OS process is the "A" side
 
-NodeLookupPolicy.make({
-  Listen: "all",
-  Advertise: "primary",
-  Proxy: "prefer",
+NodePolicy.make({
+  PrimaryAddress: "AllUnlabeled",
+  Listen: "All",
+  Advertise: "Primary",
+  Proxy: "Prefer",
   As: "A",
 })
 
@@ -216,7 +218,7 @@ LookupPolicy.make({ Sticky: true, Verify: "reject" })
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
-  NodePolicy.proxy("prefer"),
+  NodePolicy.proxy("Prefer"),
 ) {}
 
 // Split deploy: this box only runs the A addresses
@@ -235,18 +237,20 @@ class DualHttp extends Node.make("fleet/Edge", [
   Address.http(":8080"),
   Address.http(":8081"),
 ]).pipe(
-  NodePolicy.advertise("all"),              // publish both primaries
+  NodePolicy.advertise("All"),              // publish every declared address
 ) {}
 // multi-primary pick → LookupPolicy.pick / ColdAmbiguous, not NodePolicy
 ```
 
-**Defaults (candidate):** listen **all** declared; advertise **primaries**; no proxy; no
-`as`. Overlap = same concrete dial → reject.
+**Defaults:** `PrimaryAddress` = `"AllUnlabeled"` (every unlabeled address — several
+same-protocol OK); listen `"All"`; advertise `"Primary"` (that set); no proxy; no `as`.
+Owned mode strings are PascalCase. Overlap = same concrete dial → reject.
 
 | Knob | Meaning |
 |------|---------|
+| **PrimaryAddress** | Defines the primary **set** (`"AllUnlabeled"` / `"All"` / labels) |
 | **Listen** | Which declared addresses this process **binds** |
-| **Advertise** | Which land in **Directory** (what clients can discover) |
+| **Advertise** | Which land in **Directory** (`"Primary"` = the PrimaryAddress set) |
 | **Proxy** | Primary **forwards** to the live labeled side (e.g. Advice prefer) |
 | **As** | This OS process **is** labeled side `"A"` / `"B"` (not a vague “role”) |
 
