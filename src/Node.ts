@@ -4,6 +4,8 @@
  * Consume as `import * as Node from "hyperlink-ts/Node"`.
  *
  * - {@link make} — address-list node (`class X extends Node.make(key, Address.http(":8080")).pipe(…) {}`)
+ * - {@link resolvedAddressesOf} / {@link resolveNodeAddresses} — Primary/Listen/Advertise sets
+ * - {@link EmptyPrimarySet} / {@link UnknownAddressLabel} — address-policy failures
  * - {@link Service} — declare a named transport endpoint (`class X extends Node.Service()(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link asLookup} — brand a Tag node as the Lookup-server (`isLookupNode: true`)
@@ -22,8 +24,21 @@
  *
  * @module Node
  */
-export { make, addressesOf, nodePolicyOf } from "./internal/nodeMake";
-export type { NodeMakeDef, NodeMakeOptions } from "./internal/nodeMake";
+export {
+  make,
+  addressesOf,
+  nodePolicyOf,
+  resolvedAddressesOf,
+  resolveNodeAddresses,
+  EmptyPrimarySet,
+  UnknownAddressLabel,
+} from "./internal/nodeMake";
+export type {
+  NodeMakeDef,
+  NodeMakeOptions,
+  PolicyLabelsOk,
+  SelectionLabelsOk,
+} from "./internal/nodeMake";
 export {
   Service,
   withProtocol,

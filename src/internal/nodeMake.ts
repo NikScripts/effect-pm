@@ -13,10 +13,27 @@ import {
   ConfigKey as PolicyConfigKey,
 } from "./policyBuilder";
 import {
+  EmptyPrimarySet,
+  UnknownAddressLabel,
+  labelsOfAddresses,
+  resolveNodeAddresses,
+} from "./nodeAddressPolicy";
+import {
   assembleNode,
   type Endpoints,
   type ProtocolKind,
 } from "./nodeCore";
+
+export {
+  EmptyPrimarySet,
+  UnknownAddressLabel,
+  resolveNodeAddresses,
+  resolvePrimarySet,
+  resolveAddressSelection,
+  effectiveNodePolicy,
+  defaultNodePolicyConfig,
+  labelsOfAddresses,
+} from "./nodeAddressPolicy";
 
 const NODE_POLICY_ID = "hyperlink-ts/NodePolicy";
 
@@ -51,9 +68,83 @@ const isAddressFragment = (
       (item) => address.isAddressValue(item) || address.isUnixFromKey(item),
     ));
 
-/** Dial fields for legacy connect/listen from an address list. @internal */
+/** Fill one endpoints slot from an address (last write per kind). @internal */
+const applyAddressToEndpoints = (
+  endpoints: {
+    Http?: { readonly url: string };
+    WebSocket?: { readonly url: string };
+    IpcSocket?: { readonly path: string };
+  },
+  item: AnyAddress,
+): number | undefined => {
+  if (item._tag === "UnixFromKey") return undefined;
+  const { kind, dial } = item;
+  if (kind === "Http") {
+    if (dial._tag === "HttpPort") {
+      endpoints.Http = {
+        url: `http://localhost:${String(dial.port)}/rpc`,
+      };
+      return dial.port;
+    }
+    if (dial._tag === "HttpUrl") {
+      endpoints.Http = { url: dial.url };
+    }
+  } else if (kind === "WebSocket" && dial._tag === "WsUrl") {
+    endpoints.WebSocket = { url: dial.url };
+  } else if (kind === "IpcSocket" && dial._tag === "UnixPath") {
+    endpoints.IpcSocket = { path: dial.path };
+  }
+  return undefined;
+};
+
+/** Scalar dial fields from one preferred address. @internal */
+const scalarFromAddress = (
+  preferred: AnyAddress | undefined,
+): {
+  readonly url: string | undefined;
+  readonly path: string | undefined;
+  readonly kind: ProtocolKind | undefined;
+  readonly httpPort?: number;
+} => {
+  if (preferred === undefined) {
+    return { url: undefined, path: undefined, kind: undefined };
+  }
+  if (preferred._tag === "UnixFromKey") {
+    return { url: undefined, path: undefined, kind: "IpcSocket" };
+  }
+  const kind = preferred.kind;
+  const dial = preferred.dial;
+  if (dial._tag === "HttpPort") {
+    return {
+      kind,
+      url: `http://localhost:${String(dial.port)}/rpc`,
+      path: undefined,
+      httpPort: dial.port,
+    };
+  }
+  if (dial._tag === "HttpUrl" || dial._tag === "WsUrl") {
+    return { kind, url: dial.url, path: undefined };
+  }
+  if (dial._tag === "UnixPath") {
+    return { kind, url: undefined, path: dial.path };
+  }
+  return { kind, url: undefined, path: undefined };
+};
+
+/**
+ * Dial fields for legacy connect/listen from an address list.
+ *
+ * `preferred` — first advertise (or listen) address for scalar url/path/kind.
+ * `endpointSource` — addresses that fill the per-protocol endpoints map (listen set).
+ *
+ * @internal
+ */
 export const legacyFieldsFromAddresses = (
   addresses: ReadonlyArray<AnyAddress>,
+  options?: {
+    readonly preferred?: ReadonlyArray<AnyAddress>;
+    readonly endpointSource?: ReadonlyArray<AnyAddress>;
+  },
 ): {
   readonly url: string | undefined;
   readonly path: string | undefined;
@@ -61,75 +152,182 @@ export const legacyFieldsFromAddresses = (
   readonly endpoints: Endpoints;
   readonly httpPort?: number;
 } => {
+  const endpointSource = options?.endpointSource ?? addresses;
+  const preferredList = options?.preferred ?? addresses;
+  const preferred =
+    preferredList[0] ??
+    addresses.find((a) => a.label === undefined) ??
+    addresses[0];
+
   const endpoints: {
     Http?: { readonly url: string };
     WebSocket?: { readonly url: string };
     IpcSocket?: { readonly path: string };
   } = {};
   let httpPort: number | undefined;
-  // Prefer first unlabeled for legacy primary fields; else first address.
-  const preferred =
-    addresses.find((a) => a.label === undefined) ?? addresses[0];
-
-  for (const item of addresses) {
-    if (item._tag === "UnixFromKey") {
-      // Resolved at bind — no concrete endpoint yet.
-      continue;
-    }
-    const { kind, dial } = item;
-    if (kind === "Http") {
-      if (dial._tag === "HttpPort") {
-        const url = `http://localhost:${String(dial.port)}/rpc`;
-        endpoints.Http = { url };
-        if (httpPort === undefined) httpPort = dial.port;
-      } else if (dial._tag === "HttpUrl") {
-        endpoints.Http = { url: dial.url };
-      }
-    } else if (kind === "WebSocket") {
-      if (dial._tag === "WsUrl") {
-        endpoints.WebSocket = { url: dial.url };
-      }
-    } else if (kind === "IpcSocket") {
-      if (dial._tag === "UnixPath") {
-        endpoints.IpcSocket = { path: dial.path };
-      }
-    }
+  for (const item of endpointSource) {
+    const port = applyAddressToEndpoints(endpoints, item);
+    if (httpPort === undefined && port !== undefined) httpPort = port;
   }
   const frozenEndpoints: Endpoints = endpoints;
+  const scalar = scalarFromAddress(preferred);
+  if (scalar.httpPort !== undefined) httpPort = scalar.httpPort;
 
-  let url: string | undefined;
-  let path: string | undefined;
-  let kind: ProtocolKind | undefined;
-  if (preferred !== undefined && preferred._tag !== "UnixFromKey") {
-    kind = preferred.kind;
-    const dial = preferred.dial;
-    if (dial._tag === "HttpPort") {
-      url = `http://localhost:${String(dial.port)}/rpc`;
-      httpPort = dial.port;
-    } else if (dial._tag === "HttpUrl" || dial._tag === "WsUrl") {
-      url = dial.url;
-    } else if (dial._tag === "UnixPath") {
-      path = dial.path;
-    }
-  } else if (preferred?._tag === "UnixFromKey") {
-    kind = "IpcSocket";
-  } else {
-    kind =
-      frozenEndpoints.Http !== undefined
-        ? "Http"
-        : frozenEndpoints.WebSocket !== undefined
-          ? "WebSocket"
-          : frozenEndpoints.IpcSocket !== undefined
-            ? "IpcSocket"
-            : undefined;
-    url = frozenEndpoints.Http?.url ?? frozenEndpoints.WebSocket?.url;
-    path = frozenEndpoints.IpcSocket?.path;
+  if (scalar.kind !== undefined) {
+    return {
+      url: scalar.url,
+      path: scalar.path,
+      kind: scalar.kind,
+      endpoints: frozenEndpoints,
+      httpPort,
+    };
   }
 
-  return { url, path, kind, endpoints: frozenEndpoints, httpPort };
+  const kind: ProtocolKind | undefined =
+    frozenEndpoints.Http !== undefined
+      ? "Http"
+      : frozenEndpoints.WebSocket !== undefined
+        ? "WebSocket"
+        : frozenEndpoints.IpcSocket !== undefined
+          ? "IpcSocket"
+          : undefined;
+  return {
+    url: frozenEndpoints.Http?.url ?? frozenEndpoints.WebSocket?.url,
+    path: frozenEndpoints.IpcSocket?.path,
+    kind,
+    endpoints: frozenEndpoints,
+    httpPort,
+  };
+};
+
+/**
+ * Runtime-check As / label lists against declared labels.
+ * Does not apply Primary/Listen/Advertise defaults (those run in resolve).
+ *
+ * @internal
+ */
+export const assertKnownPolicyLabels = (
+  nodeKey: string,
+  addresses: ReadonlyArray<AnyAddress>,
+  policy: NodePolicyConfig,
+): void => {
+  const known = labelsOfAddresses(addresses);
+  const checkSel = (sel: unknown): void => {
+    if (Array.isArray(sel)) {
+      for (const label of sel) {
+        if (typeof label === "string" && !known.includes(label)) {
+          throw new UnknownAddressLabel({ nodeKey, label, known });
+        }
+      }
+    }
+  };
+  checkSel(policy.PrimaryAddress);
+  checkSel(policy.Listen);
+  checkSel(policy.Advertise);
+  if (typeof policy.As === "string" && !known.includes(policy.As)) {
+    throw new UnknownAddressLabel({
+      nodeKey,
+      label: policy.As,
+      known,
+    });
+  }
+};
+
+/**
+ * Resolve listen/advertise sets into legacy dial fields.
+ *
+ * {@link EmptyPrimarySet} is deferred (pipe intermediates may still add
+ * unlabeled addresses or change PrimaryAddress / Advertise). Call
+ * {@link resolveNodeAddresses} at listen / directory advertise for the loud fail.
+ *
+ * @internal
+ */
+export const stampLegacyFromPolicy = (
+  nodeKey: string,
+  addresses: ReadonlyArray<AnyAddress>,
+  policy: NodePolicyConfig,
+): {
+  readonly url: string | undefined;
+  readonly path: string | undefined;
+  readonly kind: ProtocolKind | undefined;
+  readonly endpoints: Endpoints;
+  readonly httpPort?: number;
+} => {
+  assertKnownPolicyLabels(nodeKey, addresses, policy);
+  try {
+    const resolved = resolveNodeAddresses(nodeKey, addresses, policy);
+    return legacyFieldsFromAddresses(addresses, {
+      preferred: resolved.advertise,
+      endpointSource: resolved.listen,
+    });
+  } catch (e) {
+    if (e instanceof EmptyPrimarySet) {
+      return legacyFieldsFromAddresses(addresses);
+    }
+    throw e;
+  }
 };
 
 type LabelsOf<As extends ReadonlyArray<AnyAddress>> = address.LabelsOf<As>;
+
+/** Owned selection mode strings — not app labels. */
+type OwnedSelectionMode = "All" | "Primary" | "AllUnlabeled";
+
+/**
+ * Label-list selection: every element must be in `Labels`.
+ * Mode strings (`"All"` / `"Primary"` / …) always ok.
+ *
+ * @internal
+ */
+export type SelectionLabelsOk<
+  Labels extends string,
+  Sel,
+> = [Sel] extends [never]
+  ? true
+  : Sel extends OwnedSelectionMode
+    ? true
+    : Sel extends readonly string[]
+      ? [Exclude<Sel[number], Labels>] extends [never]
+        ? true
+        : false
+      : true;
+
+type AsLabelOk<Labels extends string, C> = "As" extends keyof C
+  ? C["As"] extends string
+    ? C["As"] extends Labels
+      ? true
+      : false
+    : true
+  : true;
+
+/**
+ * True when every As / label-list reference in `C` is declared on `Labels`.
+ *
+ * @internal
+ */
+export type PolicyLabelsOk<
+  Labels extends string,
+  C,
+> = AsLabelOk<Labels, C> extends true
+  ? SelectionLabelsOk<
+      Labels,
+      "PrimaryAddress" extends keyof C ? C["PrimaryAddress"] : never
+    > extends true
+    ? SelectionLabelsOk<
+        Labels,
+        "Listen" extends keyof C ? C["Listen"] : never
+      > extends true
+      ? SelectionLabelsOk<
+          Labels,
+          "Advertise" extends keyof C ? C["Advertise"] : never
+        >
+      : false
+    : false
+  : false;
+
+type PipeLabelError = {
+  readonly ["NodePolicy label error"]: "references a label not declared on this node's addresses";
+};
 
 /**
  * Made-node constructable — Tag + address list + NodePolicy product + pipe.
@@ -147,7 +345,12 @@ export type NodeMakeDef<
   readonly [NodePolicyConfigKey]: Policy;
   readonly labels: Labels;
   pipe: <const Fs extends ReadonlyArray<PipeArg>>(
-    ...fs: Fs
+    ...fs: PolicyLabelsOk<
+      Labels | PipeLabels<Fs>,
+      PipePolicy<Policy, Fs>
+    > extends true
+      ? Fs
+      : readonly [PipeLabelError]
   ) => NodeMakeDef<
     Key,
     PipeAddresses<As, Fs>,
@@ -193,10 +396,7 @@ type PipePolicy<
   : Fs extends readonly [infer H, ...infer Rest]
     ? Rest extends ReadonlyArray<PipeArg>
       ? H extends NodePolicyValue
-        ? PipePolicy<
-            Prev & NodePolicy.ConfigOf<H>,
-            Rest
-          >
+        ? PipePolicy<Prev & NodePolicy.ConfigOf<H>, Rest>
         : PipePolicy<Prev, Rest>
       : Prev
     : Prev;
@@ -222,7 +422,11 @@ const buildDef = <
   readonly onConflict: OnConflict;
 }): NodeMakeDef<Key, As, Labels, Policy> => {
   address.assertNoDialOverlap(state.addresses);
-  const legacy = legacyFieldsFromAddresses(state.addresses);
+  const legacy = stampLegacyFromPolicy(
+    state.key,
+    state.addresses,
+    state.policy,
+  );
   const base = assembleNode(state.key, {
     url: legacy.url,
     path: legacy.path,
@@ -320,4 +524,27 @@ export const nodePolicyOf = (
     ];
   }
   return undefined;
+};
+
+/**
+ * Resolve stamped addresses + NodePolicy (throws {@link EmptyPrimarySet} /
+ * {@link UnknownAddressLabel}). Undefined when the node has no address stamp.
+ *
+ * @internal
+ */
+export const resolvedAddressesOf = (
+  node: unknown,
+):
+  | ReturnType<typeof resolveNodeAddresses>
+  | undefined => {
+  const addresses = addressesOf(node);
+  if (addresses === undefined) return undefined;
+  const key =
+    (typeof node === "object" || typeof node === "function") &&
+    node !== null &&
+    "key" in node &&
+    typeof (node as { readonly key: unknown }).key === "string"
+      ? (node as { readonly key: string }).key
+      : "(unknown)";
+  return resolveNodeAddresses(key, addresses, nodePolicyOf(node));
 };

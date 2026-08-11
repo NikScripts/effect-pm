@@ -81,6 +81,14 @@ import {
 } from "./Identity";
 import type { AnyNode } from "./internal/nodeCore";
 import { asLookup, Service as NodeTag } from "./internal/nodeCore";
+import {
+  addressesOf,
+  EmptyPrimarySet,
+  legacyFieldsFromAddresses,
+  nodePolicyOf,
+  resolveNodeAddresses,
+  UnknownAddressLabel,
+} from "./internal/nodeMake";
 import type { OnConflict, OnConflictResolved } from "./LookupPolicy";
 import { onConflictOf, resolveOnConflict } from "./LookupPolicy";
 import * as LookupPolicy from "./LookupPolicy";
@@ -597,14 +605,45 @@ export const directoryAdvertiseLayer = (
   node: AnyNode & { readonly key: string },
   serves: ReadonlyArray<string>,
   options?: { readonly onConflict?: OnConflict },
-): Layer.Layer<never, IncumbentAlive> =>
+): Layer.Layer<
+  never,
+  IncumbentAlive | EmptyPrimarySet | UnknownAddressLabel
+> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const dirOpt = yield* Effect.serviceOption(Directory);
       if (Option.isNone(dirOpt)) {
         return;
       }
-      const kind = node.kind;
+
+      // Made nodes: resolve Advertise set (loud EmptyPrimarySet). Legacy nodes: scalar stamps.
+      const addresses = addressesOf(node);
+      let kind = node.kind;
+      let path = typeof node.path === "string" ? node.path : undefined;
+      let url = typeof node.url === "string" ? node.url : undefined;
+      if (addresses !== undefined) {
+        const resolved = yield* Effect.try({
+          try: () =>
+            resolveNodeAddresses(node.key, addresses, nodePolicyOf(node)),
+          catch: (cause) => {
+            if (
+              cause instanceof EmptyPrimarySet ||
+              cause instanceof UnknownAddressLabel
+            ) {
+              return cause;
+            }
+            throw cause;
+          },
+        });
+        const dial = legacyFieldsFromAddresses(addresses, {
+          preferred: resolved.advertise,
+          endpointSource: resolved.listen,
+        });
+        kind = dial.kind;
+        path = dial.path;
+        url = dial.url;
+      }
+
       if (kind === undefined) {
         return;
       }
@@ -623,8 +662,8 @@ export const directoryAdvertiseLayer = (
           kind,
           serves: [...serves],
           onConflict: wirePref,
-          ...(typeof node.path === "string" ? { path: node.path } : {}),
-          ...(typeof node.url === "string" ? { url: node.url } : {}),
+          ...(path !== undefined ? { path } : {}),
+          ...(url !== undefined ? { url } : {}),
         }),
       );
       yield* Effect.addFinalizer(() =>
@@ -633,8 +672,8 @@ export const directoryAdvertiseLayer = (
             new UnregisterRequest({
               nodeKey: node.key,
               kind,
-              ...(typeof node.path === "string" ? { path: node.path } : {}),
-              ...(typeof node.url === "string" ? { url: node.url } : {}),
+              ...(path !== undefined ? { path } : {}),
+              ...(url !== undefined ? { url } : {}),
             }),
           )
           .pipe(Effect.ignore),

@@ -314,9 +314,11 @@ Layer methods are `Uncapitalize(key)` (`sticky`, `streamGap`). Classes / types /
 References stay PascalCase.
 
 **Eng’d:** `LookupPolicy` / `LookupPolicies` + `NodePolicy` / `NodePolicies`
-+ `Address` factories + `Node.make` pipe (address list + NodePolicy stamps).
-Apps import singular modules / `Address`, not the builder. **Next:** bind/advertise
-wiring from the address list + `PrimaryAddress` resolution; label-constrained `as`.
++ `Address` factories + `Node.make` pipe (address list + NodePolicy stamps) +
+`PrimaryAddress` / Listen / Advertise resolution into legacy dial stamps +
+label-constrained `as` / label lists (type + runtime). Apps import singular
+modules / `Address`, not the builder. **Next:** full multi-address Directory
+rows; `unixFromKey` bind Config; locality Host/Machine.
 
 #### `_tag` — key vs value (Eng’d: **key**)
 
@@ -975,6 +977,7 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 1. Confirm **Address + NodePolicy API** (§3.3) — `as` / value spaces / defaults.
 2. Locality word + `Node.make` vs `Service`.
 3. ~~`PolicyBuilder` kernel + refactor Eng’d `Policy` onto it~~ — **Eng’d**.
-4. ~~`NodePolicy` + rename `Policy` → `LookupPolicy` + Address + `Node.make` pipe~~ **Eng’d**. Still open: listen/advertise from address list + label-constrained `as`.
+4. ~~`NodePolicy` + rename `Policy` → `LookupPolicy` + Address + `Node.make` pipe + primary/listen/advertise resolve + label-constrained `as`~~ **Eng’d** (v1: one Directory row from first advertise dial; multi-row later).
 5. Update dream / backup-build simulate — **later**.
 6. Dream-redeploy stays **provisional** until address/make exists.
+7. Full multi-address listen/advertise (Directory beyond one row); `unixFromKey` slug/root Config; locality Host/Machine.

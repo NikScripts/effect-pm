@@ -1,5 +1,5 @@
 /**
- * Node.make type locks — LabelsOf from address list.
+ * Node.make type locks — LabelsOf from address list; label-constrained NodePolicy.
  */
 import * as Address from "../src/Address";
 import * as Node from "../src/Node";
@@ -31,9 +31,27 @@ type _Checks = [
     >,
     "A"
   >,
+  AssertEqual<
+    Node.PolicyLabelsOk<"A" | "B", { As: "A"; Listen: readonly ["B"] }>,
+    true
+  >,
+  AssertEqual<Node.PolicyLabelsOk<"A", { As: "C" }>, false>,
+  AssertEqual<Node.PolicyLabelsOk<"A", { Listen: readonly ["Z"] }>, false>,
 ];
 
 // @ts-expect-error — lowercase owned NodePolicy mode rejected at NodePolicy API
 NodePolicy.listen("all");
+
+// @ts-expect-error — As label not on this node's addresses
+Node.make("d/BadAs", Address.http(":8080")).pipe(
+  Address.unix("A", "/tmp/a.sock"),
+  NodePolicy.as("C"),
+);
+
+// @ts-expect-error — listen label list not on this node's addresses
+Node.make("d/BadListen", Address.http(":8080")).pipe(
+  Address.unix("A", "/tmp/a.sock"),
+  NodePolicy.listen(["Z"]),
+);
 
 export type { _Checks, AddressList };
