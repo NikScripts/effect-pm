@@ -46,22 +46,22 @@ describe("Node address policy resolve", () => {
     ).toBe("/tmp/side-a.sock");
   });
 
-  it("unknown As label throws at pipe", () => {
+  it("unknown As label throws via resolve", () => {
     expect(() =>
-      Node.make("test/addr-policy/BadAs", Address.http(":8080")).pipe(
-        Address.unix("A", "/tmp/a.sock"),
-        // @ts-expect-error intentional unknown label for runtime assert
-        NodePolicy.as("C"),
+      Node.resolveNodeAddresses(
+        "test/addr-policy/BadAs",
+        [Address.http(":8080"), Address.unix("A", "/tmp/a.sock")],
+        { As: "C" },
       ),
     ).toThrow(Node.UnknownAddressLabel);
   });
 
-  it("unknown listen label throws at pipe", () => {
+  it("unknown listen label throws via resolve", () => {
     expect(() =>
-      Node.make("test/addr-policy/BadListen", Address.http(":8080")).pipe(
-        Address.unix("A", "/tmp/a.sock"),
-        // @ts-expect-error intentional unknown label for runtime assert
-        NodePolicy.listen(["Z"]),
+      Node.resolveNodeAddresses(
+        "test/addr-policy/BadListen",
+        [Address.http(":8080"), Address.unix("A", "/tmp/a.sock")],
+        { Listen: ["Z"] },
       ),
     ).toThrow(Node.UnknownAddressLabel);
   });

@@ -325,12 +325,20 @@ export type PolicyLabelsOk<
     : false
   : false;
 
-type PipeLabelError = {
-  readonly ["NodePolicy label error"]: "references a label not declared on this node's addresses";
+/**
+ * Pipe result when NodePolicy names a label absent from the address list.
+ *
+ * @internal
+ */
+export type NodePolicyLabelError = {
+  readonly ["~NodePolicyLabelError"]: "references a label not declared on this node's addresses";
 };
 
 /**
  * Made-node constructable — Tag + address list + NodePolicy product + pipe.
+ *
+ * Label mistakes surface on the **return** of `pipe` (not the arg list) so
+ * Effect's Pipeable `pipe` overloads on the Tag do not steal the call.
  *
  * @internal
  */
@@ -345,18 +353,18 @@ export type NodeMakeDef<
   readonly [NodePolicyConfigKey]: Policy;
   readonly labels: Labels;
   pipe: <const Fs extends ReadonlyArray<PipeArg>>(
-    ...fs: PolicyLabelsOk<
-      Labels | PipeLabels<Fs>,
-      PipePolicy<Policy, Fs>
-    > extends true
-      ? Fs
-      : readonly [PipeLabelError]
-  ) => NodeMakeDef<
-    Key,
-    PipeAddresses<As, Fs>,
+    ...fs: Fs
+  ) => [PolicyLabelsOk<
     Labels | PipeLabels<Fs>,
     PipePolicy<Policy, Fs>
-  >;
+  >] extends [true]
+    ? NodeMakeDef<
+        Key,
+        PipeAddresses<As, Fs>,
+        Labels | PipeLabels<Fs>,
+        PipePolicy<Policy, Fs>
+      >
+    : NodePolicyLabelError;
 };
 
 type PipeArg =
@@ -459,7 +467,7 @@ const buildDef = <
       });
     },
   });
-  return def as NodeMakeDef<Key, As, Labels, Policy>;
+  return def as unknown as NodeMakeDef<Key, As, Labels, Policy>;
 };
 
 /**

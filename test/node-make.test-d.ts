@@ -43,15 +43,15 @@ type _Checks = [
 NodePolicy.listen("all");
 
 // @ts-expect-error — As label not on this node's addresses
-Node.make("d/BadAs", Address.http(":8080")).pipe(
+class _BadAs extends Node.make("d/BadAs", Address.http(":8080")).pipe(
   Address.unix("A", "/tmp/a.sock"),
   NodePolicy.as("C"),
-);
+) {}
 
 // @ts-expect-error — listen label list not on this node's addresses
-Node.make("d/BadListen", Address.http(":8080")).pipe(
+class _BadListen extends Node.make("d/BadListen", Address.http(":8080")).pipe(
   Address.unix("A", "/tmp/a.sock"),
   NodePolicy.listen(["Z"]),
-);
+) {}
 
 export type { _Checks, AddressList };

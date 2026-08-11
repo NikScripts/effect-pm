@@ -168,6 +168,29 @@ export const resolveNodeAddresses = (
   readonly advertise: ReadonlyArray<AnyAddress>;
 } => {
   const policy = effectiveNodePolicy(stamped);
+  const known = labelsOfAddresses(addresses);
+  if (typeof policy.As === "string" && !known.includes(policy.As)) {
+    throw new UnknownAddressLabel({
+      nodeKey,
+      label: policy.As,
+      known,
+    });
+  }
+  // Stamped label lists (before defaults) — catch unknown labels even when
+  // effective Listen/Advertise is a mode string.
+  for (const sel of [
+    stamped?.PrimaryAddress,
+    stamped?.Listen,
+    stamped?.Advertise,
+  ]) {
+    if (Array.isArray(sel)) {
+      for (const label of sel) {
+        if (typeof label === "string" && !known.includes(label)) {
+          throw new UnknownAddressLabel({ nodeKey, label, known });
+        }
+      }
+    }
+  }
   const primary = resolvePrimarySet(
     addresses,
     policy.PrimaryAddress,

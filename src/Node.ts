@@ -36,6 +36,7 @@ export {
 export type {
   NodeMakeDef,
   NodeMakeOptions,
+  NodePolicyLabelError,
   PolicyLabelsOk,
   SelectionLabelsOk,
 } from "./internal/nodeMake";
