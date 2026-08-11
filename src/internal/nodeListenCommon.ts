@@ -18,6 +18,7 @@ import {
   UnixListenRequiresIpc,
   WsListenRequiresWs,
 } from "./nodeCore"
+import { listenAddressesOfKind } from "./nodeAddressListen"
 import { retype } from "./nodeServerCommon"
 
 /**
@@ -173,10 +174,29 @@ export const softBakeLookupLayer = <A, E, R>(
   });
 
 /** Http / WebSocket (or url-only) Nodes are not Unix-domain IPC. @internal */
-export const isNonIpcNode = (node: AnyNode): boolean =>
-  node.kind === "Http" ||
-  node.kind === "WebSocket" ||
-  (node.path === undefined && typeof node.url === "string");
+export const isNonIpcNode = (node: AnyNode): boolean => {
+  // Made nodes: protocol siblings consult the listen set, not the advertise scalar.
+  if (
+    "key" in node &&
+    typeof (node as { readonly key: unknown }).key === "string"
+  ) {
+    try {
+      const ipc = listenAddressesOfKind(
+        node as AnyNode & { readonly key: string },
+        "IpcSocket",
+      );
+      if (ipc !== undefined) return ipc.length === 0;
+    } catch {
+      // EmptyPrimary / unknown label — let listen fail loudly later.
+      return false;
+    }
+  }
+  return (
+    node.kind === "Http" ||
+    node.kind === "WebSocket" ||
+    (node.path === undefined && typeof node.url === "string")
+  );
+};
 
 /** Nodes that need {@link unix} (IpcSocket / address-less ipc). @internal */
 export const isIpcListenNode = (node: AnyNode): boolean => {
@@ -236,12 +256,29 @@ export const httpRequiresHttpLayer = (
  * Nodes that are not Http for {@link http} (IpcSocket / WebSocket / ws urls / unix paths).
  * @internal
  */
-export const isNonHttpNode = (node: AnyNode): boolean =>
-  node.kind === "IpcSocket" ||
-  node.kind === "WebSocket" ||
-  typeof node.path === "string" ||
-  (typeof node.url === "string" &&
-    (node.url.startsWith("ws://") || node.url.startsWith("wss://")));
+export const isNonHttpNode = (node: AnyNode): boolean => {
+  if (
+    "key" in node &&
+    typeof (node as { readonly key: unknown }).key === "string"
+  ) {
+    try {
+      const http = listenAddressesOfKind(
+        node as AnyNode & { readonly key: string },
+        "Http",
+      );
+      if (http !== undefined) return http.length === 0;
+    } catch {
+      return false;
+    }
+  }
+  return (
+    node.kind === "IpcSocket" ||
+    node.kind === "WebSocket" ||
+    typeof node.path === "string" ||
+    (typeof node.url === "string" &&
+      (node.url.startsWith("ws://") || node.url.startsWith("wss://")))
+  );
+};
 
 /** Nodes that need {@link http} (Http kind / http(s) url). @internal */
 export const isHttpListenNode = (node: AnyNode): boolean => {
@@ -266,12 +303,29 @@ export const wsRequiresWsLayer = (
  * Nodes that are not WebSocket for {@link ws} (IpcSocket / Http / http(s) urls / unix paths).
  * @internal
  */
-export const isNonWsNode = (node: AnyNode): boolean =>
-  node.kind === "IpcSocket" ||
-  node.kind === "Http" ||
-  typeof node.path === "string" ||
-  (typeof node.url === "string" &&
-    (node.url.startsWith("http://") || node.url.startsWith("https://")));
+export const isNonWsNode = (node: AnyNode): boolean => {
+  if (
+    "key" in node &&
+    typeof (node as { readonly key: unknown }).key === "string"
+  ) {
+    try {
+      const ws = listenAddressesOfKind(
+        node as AnyNode & { readonly key: string },
+        "WebSocket",
+      );
+      if (ws !== undefined) return ws.length === 0;
+    } catch {
+      return false;
+    }
+  }
+  return (
+    node.kind === "IpcSocket" ||
+    node.kind === "Http" ||
+    typeof node.path === "string" ||
+    (typeof node.url === "string" &&
+      (node.url.startsWith("http://") || node.url.startsWith("https://")))
+  );
+};
 
 /** Nodes that need {@link ws} (WebSocket kind / ws(s) url). @internal */
 export const isWsListenNode = (node: AnyNode): boolean => {

@@ -20,8 +20,18 @@ import {
 import { unaddressedLayer } from "./nodeConnect"
 import { httpServer } from "./nodeHttpServer"
 import {
+  dialNodeFromAddress,
+  EmptyPrimarySet,
+  isAdvertiseDial,
+  listenAddressesOfKind,
+  UnknownAddressLabel,
+  UnixFromKeyBindPending,
+} from "./nodeAddressListen"
+import { addressesOf } from "./nodeMake"
+import {
   anonymousNodeKey,
   coerceHttpListenOptions,
+  failLayer,
   failListenTagNode,
   httpListenUrlFromOptions,
   httpRequiresHttpLayer,
@@ -39,12 +49,17 @@ import {
   type ServeLayerList,
   type ServesForCatalog,
 } from "./nodeListenCommon"
-import { retype } from "./nodeServerCommon"
+import { mergeServeList, retype } from "./nodeServerCommon"
 
 /** Listen-side erase — keeps address/claim/protocol errors; public overloads reify serve E/R. */
 type ListenLayer = Layer.Layer<
   never,
-  AddressLessClaimLost | UnaddressedNode | HttpListenRequiresHttp,
+  | AddressLessClaimLost
+  | UnaddressedNode
+  | HttpListenRequiresHttp
+  | EmptyPrimarySet
+  | UnknownAddressLabel
+  | UnixFromKeyBindPending,
   never
 >
 
@@ -253,6 +268,63 @@ const httpListenOn = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
 ): ListenLayer => {
+  // Made nodes: bind every Http address in the NodePolicy listen set.
+  if (
+    addressesOf(node) !== undefined &&
+    typeof node.key === "string"
+  ) {
+    try {
+      const httpAddrs = listenAddressesOfKind(
+        node as AnyNode & { readonly key: string },
+        "Http",
+      );
+      if (httpAddrs !== undefined) {
+        if (httpAddrs.length === 0) {
+          return httpRequiresHttpLayer(node.key, "listen-set");
+        }
+        const binds = httpAddrs.map((addr) => {
+          const dial = dialNodeFromAddress(node.key, addr);
+          const port = parseLoopbackHttpPort(dial.url);
+          if (port === undefined) {
+            return httpRequiresHttpLayer(
+              node.key,
+              typeof dial.url === "string" ? `remote:${dial.url}` : "Http",
+            );
+          }
+          const advertise =
+            isAdvertiseDial(node as AnyNode & { readonly key: string }, addr)
+              ? (dial as AnyNode & { readonly key: string })
+              : undefined;
+          return withListenNode(
+            dial,
+            httpBind(dial, list, options, advertise).pipe(
+              Layer.provide(localhostHttpPlatform(port)),
+            ),
+          );
+        });
+        return retype<ListenLayer>(
+          (binds.length === 1
+            ? binds[0]!
+            : mergeServeList(
+                binds as unknown as readonly [
+                  Layer.Any,
+                  ...ReadonlyArray<Layer.Any>,
+                ],
+              )) as never,
+        );
+      }
+    } catch (cause) {
+      if (
+        cause instanceof EmptyPrimarySet ||
+        cause instanceof UnknownAddressLabel ||
+        cause instanceof UnixFromKeyBindPending
+      ) {
+        return failLayer(cause);
+      }
+      throw cause;
+    }
+  }
+
   // Nameless / address-less + options.port|url → fixed loopback bind (not ephemeral port 0).
   const addressed = stampListenUrl(
     node,
@@ -380,11 +452,13 @@ const httpBind = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
+  advertiseNode: (AnyNode & { readonly key: string }) | undefined = node as
+    | (AnyNode & { readonly key: string })
+    | undefined,
 ): ListenLayer => {
   if (node.url === undefined) {
     return unaddressedLayer(node.key);
   }
-  const advertiseNode = node as AnyNode & { readonly key: string };
   // Platform HttpServer is provided by the listen caller (localhost bind / NodeHttpServer).
   return retype<ListenLayer>(
     httpServer(list, {
@@ -402,7 +476,7 @@ const httpBind = (
         ? { assumeToken: options.assumeToken }
         : {}),
       ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
-      advertiseNode,
+      ...(advertiseNode !== undefined ? { advertiseNode } : {}),
     }) as never,
   );
 };

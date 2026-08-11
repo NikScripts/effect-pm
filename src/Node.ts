@@ -5,6 +5,7 @@
  *
  * - {@link make} — address-list node (`class X extends Node.make(key, Address.http(":8080")).pipe(…) {}`)
  * - {@link resolvedAddressesOf} / {@link resolveNodeAddresses} — Primary/Listen/Advertise sets
+ * - {@link forward} / {@link activate} — Proxy Prefer → Active labeled backend
  * - {@link EmptyPrimarySet} / {@link UnknownAddressLabel} — address-policy failures
  * - {@link Service} — declare a named transport endpoint (`class X extends Node.Service()(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
@@ -40,6 +41,18 @@ export type {
   PolicyLabelsOk,
   SelectionLabelsOk,
 } from "./internal/nodeMake";
+export {
+  forward,
+  forwardAll,
+} from "./internal/nodeForward";
+export {
+  ActiveLabel,
+  ActiveLabelMissing,
+  activeLabelLayer,
+  activate,
+  active,
+} from "./internal/nodeActive";
+export { UnixFromKeyBindPending } from "./internal/nodeAddressListen";
 export {
   Service,
   withProtocol,

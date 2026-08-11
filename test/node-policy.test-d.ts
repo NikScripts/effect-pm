@@ -13,10 +13,12 @@ const made = NodePolicy.make({
   PrimaryAddress: "AllUnlabeled",
   Listen: "All",
   Advertise: "Primary",
+  Active: "A",
   As: "A",
 });
 const via = NodePolicy.listen(["A"]);
 const proxied = NodePolicy.proxy("Prefer");
+const active = NodePolicy.active("A");
 const primary = NodePolicy.primaryAddress("AllUnlabeled");
 
 type _Checks = [
@@ -27,11 +29,13 @@ type _Checks = [
       PrimaryAddress: "AllUnlabeled";
       Listen: "All";
       Advertise: "Primary";
+      Active: "A";
       As: "A";
     }>
   >,
   AssertExtends<typeof via, NodePol<{ Listen: readonly ["A"] }>>,
   AssertExtends<typeof proxied, NodePol<{ Proxy: "Prefer" }>>,
+  AssertExtends<typeof active, NodePol<{ Active: "A" }>>,
   AssertExtends<
     typeof primary,
     NodePol<{ PrimaryAddress: "AllUnlabeled" }>

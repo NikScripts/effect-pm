@@ -28,22 +28,25 @@ describe("Node address policy resolve", () => {
     ).toBe("Http");
   });
 
-  it("advertise label list stamps scalar from that address", () => {
+  it("listen label list stamps bind dial; advertise resolve stays separate", () => {
     class SideA extends Node.make(
       "test/addr-policy/SideA",
       Address.http(":8080"),
     ).pipe(
       Address.unix("A", "/tmp/side-a.sock"),
+      NodePolicy.listen(["A"]),
       NodePolicy.advertise(["A"]),
       NodePolicy.as("A"),
     ) {}
 
+    // Bind surface = listen set (not advertise).
     expect(
       (SideA as unknown as { readonly kind: string }).kind,
     ).toBe("IpcSocket");
     expect(
       (SideA as unknown as { readonly path: string }).path,
     ).toBe("/tmp/side-a.sock");
+    expect(Node.resolvedAddressesOf(SideA)?.advertise).toHaveLength(1);
   });
 
   it("unknown As label throws via resolve", () => {

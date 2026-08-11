@@ -18,14 +18,16 @@
  * NodePolicy.primaryAddress("AllUnlabeled") // default — primary set = unlabeled
  * NodePolicy.listen("All")
  * NodePolicy.advertise("Primary")           // publish the PrimaryAddress set
- * NodePolicy.proxy("Prefer")
- * NodePolicy.as("A")
+ * NodePolicy.proxy("Prefer")                // primary forwards → Active label
+ * NodePolicy.active("A")                    // Prefer target (flip via Node.activate)
+ * NodePolicy.as("A")                        // this OS process is the "A" side
  *
  * NodePolicy.make({
  *   PrimaryAddress: "AllUnlabeled",
  *   Listen: "All",
  *   Advertise: "Primary",
  *   Proxy: "Prefer",
+ *   Active: "A",
  *   As: "A",
  * })
  * ```
@@ -87,7 +89,7 @@ export const listenSchema = addressSelectionSchema;
 export const advertiseSchema = addressSelectionSchema;
 
 /**
- * Primary forwards to the live labeled side (e.g. Advice prefer).
+ * Primary forwards to the live labeled side ({@link Active} / {@link Node.activate}).
  *
  * @category schemas
  * @public
@@ -101,6 +103,15 @@ export const proxySchema = Schema.Literal("Prefer");
  * @public
  */
 export const asSchema = Schema.String;
+
+/**
+ * Which labeled backend {@link NodePolicy.Proxy} Prefer currently dials.
+ * Flip at runtime with {@link Node.activate} (seeded from this stamp).
+ *
+ * @category schemas
+ * @public
+ */
+export const activeSchema = Schema.String;
 
 // =============================================================================
 // Models
@@ -155,6 +166,14 @@ export type Proxy = Schema.Schema.Type<typeof proxySchema>;
 export type As = Schema.Schema.Type<typeof asSchema>;
 
 /**
+ * Live Prefer target label (`"A"` / `"B"` / …).
+ *
+ * @category models
+ * @public
+ */
+export type Active = Schema.Schema.Type<typeof activeSchema>;
+
+/**
  * Product bag for {@link make} / stamped {@link config}.
  *
  * @category models
@@ -165,6 +184,7 @@ export type Config = {
   readonly Listen?: Listen;
   readonly Advertise?: Advertise;
   readonly Proxy?: Proxy;
+  readonly Active?: Active;
   readonly As?: As;
 };
 
@@ -179,6 +199,7 @@ export type Fragment =
   | { readonly _tag: "Listen"; readonly value: Listen }
   | { readonly _tag: "Advertise"; readonly value: Advertise }
   | { readonly _tag: "Proxy"; readonly value: Proxy }
+  | { readonly _tag: "Active"; readonly value: Active }
   | { readonly _tag: "As"; readonly value: As };
 
 /**
@@ -243,6 +264,9 @@ class NodePolicies extends PolicyBuilder.make(builderId)
   .key("Proxy", Schema.Union([proxySchema, Schema.Undefined]), {
     defaultValue: (): Proxy | undefined => undefined,
   })
+  .key("Active", Schema.Union([activeSchema, Schema.Undefined]), {
+    defaultValue: (): Active | undefined => undefined,
+  })
   .key("As", Schema.Union([asSchema, Schema.Undefined]), {
     defaultValue: (): As | undefined => undefined,
   }) {}
@@ -285,6 +309,14 @@ export const Advertise = NodePolicies.Advertise;
 export const Proxy = NodePolicies.Proxy;
 
 /**
+ * Live Prefer target label. Default unset (forward seeds first labeled address).
+ *
+ * @category references
+ * @public
+ */
+export const Active = NodePolicies.Active;
+
+/**
  * Labeled side this OS process is. Default unset.
  *
  * @category references
@@ -307,6 +339,9 @@ export const advertise = NodePolicies.advertise;
 
 /** Primary forwards to live labeled side. @category layers @public */
 export const proxy = NodePolicies.proxy;
+
+/** Seed / stamp the Prefer target label. @category layers @public */
+export const active = NodePolicies.active;
 
 /** This process is labeled side `label`. @category layers @public */
 export const as = NodePolicies.as;

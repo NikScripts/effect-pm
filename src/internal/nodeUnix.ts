@@ -14,12 +14,23 @@ import {
   ListenOptions,
   Service as Tag,
   UnaddressedNode,
+  UnixListenRequiresIpc,
 } from "./nodeCore"
 import { unaddressedLayer } from "./nodeConnect"
 import { ipcServer } from "./nodeIpcServer"
 import {
+  dialNodeFromAddress,
+  EmptyPrimarySet,
+  isAdvertiseDial,
+  listenAddressesOfKind,
+  UnknownAddressLabel,
+  UnixFromKeyBindPending,
+} from "./nodeAddressListen"
+import { addressesOf } from "./nodeMake"
+import {
   anonymousNodeKey,
   coerceIpcListenArg,
+  failLayer,
   failListenTagNode,
   isDynamicInstanceNode,
   isHyperlinkTagArg,
@@ -36,7 +47,7 @@ import {
   type ServeLayerList,
   type ServesForCatalog,
 } from "./nodeListenCommon"
-import { retype } from "./nodeServerCommon"
+import { mergeServeList, retype } from "./nodeServerCommon"
 
 /**
  * Unix-domain IPC listen — all ipc mint/bind. **Nameless** forms Soft-bake
@@ -211,7 +222,16 @@ export function unix(
 /**
  * Listen-side erase — keeps address/claim errors; public overloads still reify serve-list E/R.
  */
-type ListenLayer = Layer.Layer<never, AddressLessClaimLost | UnaddressedNode, never>;
+type ListenLayer = Layer.Layer<
+  never,
+  | AddressLessClaimLost
+  | UnaddressedNode
+  | UnixListenRequiresIpc
+  | EmptyPrimarySet
+  | UnknownAddressLabel
+  | UnixFromKeyBindPending,
+  never
+>;
 
 const ipcNameless = (
   list: ServeLayerList,
@@ -242,6 +262,51 @@ const ipcListenOn = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
 ): ListenLayer => {
+  // Made nodes: bind every IpcSocket address in the NodePolicy listen set.
+  if (
+    addressesOf(node) !== undefined &&
+    typeof node.key === "string"
+  ) {
+    try {
+      const ipcAddrs = listenAddressesOfKind(
+        node as AnyNode & { readonly key: string },
+        "IpcSocket",
+      );
+      if (ipcAddrs !== undefined) {
+        if (ipcAddrs.length === 0) {
+          return unixRequiresIpcLayer(node.key, "listen-set");
+        }
+        const binds = ipcAddrs.map((addr) => {
+          const dial = dialNodeFromAddress(node.key, addr);
+          const advertise =
+            isAdvertiseDial(node as AnyNode & { readonly key: string }, addr)
+              ? (dial as AnyNode & { readonly key: string })
+              : undefined;
+          return withListenNode(dial, ipcBind(dial, list, options, advertise));
+        });
+        return retype<ListenLayer>(
+          (binds.length === 1
+            ? binds[0]!
+            : mergeServeList(
+                binds as unknown as readonly [
+                  Layer.Any,
+                  ...ReadonlyArray<Layer.Any>,
+                ],
+              )) as never,
+        );
+      }
+    } catch (cause) {
+      if (
+        cause instanceof EmptyPrimarySet ||
+        cause instanceof UnknownAddressLabel ||
+        cause instanceof UnixFromKeyBindPending
+      ) {
+        return failLayer(cause);
+      }
+      throw cause;
+    }
+  }
+
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
@@ -323,11 +388,13 @@ const ipcBind = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
+  advertiseNode: (AnyNode & { readonly key: string }) | undefined = node as
+    | (AnyNode & { readonly key: string })
+    | undefined,
 ): ListenLayer => {
   if (node.path === undefined) {
     return unaddressedLayer(node.key);
   }
-  const advertiseNode = node as AnyNode & { readonly key: string };
   const server = retype<
     (serves: ServeLayerList, options: Parameters<typeof ipcServer>[1]) => ListenLayer
   >(ipcServer as never);
@@ -346,7 +413,7 @@ const ipcBind = (
       ? { assumeToken: options.assumeToken }
       : {}),
     ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
-    advertiseNode,
+    ...(advertiseNode !== undefined ? { advertiseNode } : {}),
   });
 };
 

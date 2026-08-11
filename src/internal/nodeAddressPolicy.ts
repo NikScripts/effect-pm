@@ -66,6 +66,7 @@ export const effectiveNodePolicy = (
   readonly Listen: AddressSelection;
   readonly Advertise: AddressSelection;
   readonly Proxy: NodePolicyConfig["Proxy"];
+  readonly Active: NodePolicyConfig["Active"];
   readonly As: NodePolicyConfig["As"];
 } => ({
   PrimaryAddress:
@@ -73,6 +74,7 @@ export const effectiveNodePolicy = (
   Listen: stamped?.Listen ?? defaultNodePolicyConfig.Listen,
   Advertise: stamped?.Advertise ?? defaultNodePolicyConfig.Advertise,
   Proxy: stamped?.Proxy,
+  Active: stamped?.Active,
   As: stamped?.As,
 });
 
@@ -173,6 +175,13 @@ export const resolveNodeAddresses = (
     throw new UnknownAddressLabel({
       nodeKey,
       label: policy.As,
+      known,
+    });
+  }
+  if (typeof policy.Active === "string" && !known.includes(policy.Active)) {
+    throw new UnknownAddressLabel({
+      nodeKey,
+      label: policy.Active,
       known,
     });
   }

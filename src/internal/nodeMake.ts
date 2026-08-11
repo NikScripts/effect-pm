@@ -231,6 +231,13 @@ export const assertKnownPolicyLabels = (
       known,
     });
   }
+  if (typeof policy.Active === "string" && !known.includes(policy.Active)) {
+    throw new UnknownAddressLabel({
+      nodeKey,
+      label: policy.Active,
+      known,
+    });
+  }
 };
 
 /**
@@ -256,8 +263,9 @@ export const stampLegacyFromPolicy = (
   assertKnownPolicyLabels(nodeKey, addresses, policy);
   try {
     const resolved = resolveNodeAddresses(nodeKey, addresses, policy);
+    // Bind surface = listen set. Directory advertise re-resolves separately.
     return legacyFieldsFromAddresses(addresses, {
-      preferred: resolved.advertise,
+      preferred: resolved.listen,
       endpointSource: resolved.listen,
     });
   } catch (e) {
@@ -292,35 +300,41 @@ export type SelectionLabelsOk<
         : false
       : true;
 
-type AsLabelOk<Labels extends string, C> = "As" extends keyof C
-  ? C["As"] extends string
-    ? C["As"] extends Labels
+type LabelFieldOk<
+  Labels extends string,
+  C,
+  Field extends string,
+> = Field extends keyof C
+  ? C[Field] extends string
+    ? C[Field] extends Labels
       ? true
       : false
     : true
   : true;
 
 /**
- * True when every As / label-list reference in `C` is declared on `Labels`.
+ * True when every As / Active / label-list reference in `C` is declared on `Labels`.
  *
  * @internal
  */
 export type PolicyLabelsOk<
   Labels extends string,
   C,
-> = AsLabelOk<Labels, C> extends true
-  ? SelectionLabelsOk<
-      Labels,
-      "PrimaryAddress" extends keyof C ? C["PrimaryAddress"] : never
-    > extends true
+> = LabelFieldOk<Labels, C, "As"> extends true
+  ? LabelFieldOk<Labels, C, "Active"> extends true
     ? SelectionLabelsOk<
         Labels,
-        "Listen" extends keyof C ? C["Listen"] : never
+        "PrimaryAddress" extends keyof C ? C["PrimaryAddress"] : never
       > extends true
       ? SelectionLabelsOk<
           Labels,
-          "Advertise" extends keyof C ? C["Advertise"] : never
-        >
+          "Listen" extends keyof C ? C["Listen"] : never
+        > extends true
+        ? SelectionLabelsOk<
+            Labels,
+            "Advertise" extends keyof C ? C["Advertise"] : never
+          >
+        : false
       : false
     : false
   : false;
