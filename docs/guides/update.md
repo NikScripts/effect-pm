@@ -185,7 +185,7 @@ keys but you did not schedule.
 | Form | Run |
 |------|-----|
 | Fleet plan dry-run (`coUpdate` inspect) | `pnpm run example:launcher-update-fleet` |
-| Dream redeploy (file-swap + Update) | `pnpm run example:launcher-dream-redeploy` |
+| Dream redeploy (Shape β forward + activate) | `pnpm run example:launcher-dream-redeploy` · [full sources](/docs/launcher-dream-redeploy) |
 | Suite | `pnpm exec vitest run test/update.test.ts` |
 
 Design dock (addresses / Node.make / locality — future):
