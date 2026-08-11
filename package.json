@@ -383,6 +383,7 @@
     "example:node-launch-shutdown": "tsx examples/node/launch-shutdown.ts",
     "example:handoff-ab-live": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/handoff-ab-live.tsx",
     "example:node-verify-connection": "tsx examples/node/verify-connection.ts",
+    "example:node-forward-proxy": "tsx examples/node/forward-proxy/main.ts",
     "example:fleet-telemetry-glass": "tsx examples/fleet/telemetry-glass.ts",
     "example:fleet-health-glass": "tsx examples/fleet/health-glass.ts",
     "example:fleet-shardmap-sessions": "tsx examples/fleet/shardmap-sessions.ts",
