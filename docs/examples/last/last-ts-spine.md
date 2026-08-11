@@ -11,7 +11,7 @@
 
 **Source (Twoslash):** [`examples/last/spine/demo.tsx`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/spine/demo.tsx)  
 **Runnable app:** [`examples/last/spine/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/spine/)  
-**Run:** `pnpm run example:last-spine` → <http://localhost:5230>  
+**Run:** `pnpm run example:last-spine` → `http://localhost:5230`  
 **Handoff:** [`docs/handoffs/last-ts-spine.md`](../../handoffs/last-ts-spine.md) · hub: [Examples → UI](/docs/examples#ui)
 
 ## What this shows
