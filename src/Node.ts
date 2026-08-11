@@ -3,8 +3,8 @@
  *
  * Consume as `import * as Node from "hyperlink-ts/Node"`.
  *
- * - {@link make} — address-list node (`class X extends Node.make(key, Address.http(":8080")).pipe(…) {}`)
- * - {@link resolvedAddressesOf} / {@link resolveNodeAddresses} — Primary/Listen/Advertise sets
+ * - {@link make} — **once** per node identity (`class X extends Node.make(key, Address…).pipe(…) {}`)
+ * - {@link withPolicy} — process-local listen / as / active overlay (same key — never a second make)
  * - {@link forward} / {@link activate} — Proxy Prefer → Active labeled backend
  * - {@link EmptyPrimarySet} / {@link UnknownAddressLabel} — address-policy failures
  * - {@link Service} — declare a named transport endpoint (`class X extends Node.Service()(…) {}`)
@@ -27,12 +27,14 @@
  */
 export {
   make,
+  withPolicy,
   addressesOf,
   nodePolicyOf,
   resolvedAddressesOf,
   resolveNodeAddresses,
   EmptyPrimarySet,
   UnknownAddressLabel,
+  WithPolicyRequiresMake,
 } from "./internal/nodeMake";
 export type {
   NodeMakeDef,

@@ -4,8 +4,9 @@
  * @module internal/nodeMake
  * @internal
  */
-import type { Layer } from "effect";
+import { Data, type Layer } from "effect";
 import type { OnConflict } from "../LookupPolicy";
+import { onConflictOf } from "../LookupPolicy";
 import type * as NodePolicy from "../NodePolicy";
 import * as address from "./address";
 import {
@@ -20,6 +21,7 @@ import {
 } from "./nodeAddressPolicy";
 import {
   assembleNode,
+  type AnyNode,
   type Endpoints,
   type ProtocolKind,
 } from "./nodeCore";
@@ -546,6 +548,62 @@ export const nodePolicyOf = (
     ];
   }
   return undefined;
+};
+
+/**
+ * {@link withPolicy} was called on a node that was not built with {@link make}.
+ *
+ * @internal
+ */
+export class WithPolicyRequiresMake extends Data.TaggedError(
+  "WithPolicyRequiresMake",
+)<{
+  readonly nodeKey: string;
+}> {
+  override get message() {
+    return (
+      `Node.withPolicy requires a Node.make address-list node ` +
+      `(got "${this.nodeKey}").`
+    );
+  }
+}
+
+/**
+ * Process-local NodePolicy overlay on **one** made node — same `nodeKey` and
+ * address list, no second {@link make}.
+ *
+ * Use this for edge vs backend roles (`listen` / `as` / `active`). Never
+ * `Node.make` the same key twice.
+ *
+ * @internal
+ */
+export const withPolicy = (
+  node: AnyNode & { readonly key: string },
+  ...policies: ReadonlyArray<NodePolicyValue>
+): AnyNode & { readonly key: string } => {
+  const addresses = addressesOf(node);
+  if (addresses === undefined) {
+    throw new WithPolicyRequiresMake({ nodeKey: node.key });
+  }
+  let policy: NodePolicyConfig = { ...(nodePolicyOf(node) ?? {}) };
+  for (const fragment of policies) {
+    if (isNodePolicyLayer(fragment)) {
+      policy = mergePolicyConfig(policy, fragment);
+    }
+  }
+  assertKnownPolicyLabels(node.key, addresses, policy);
+  const legacy = stampLegacyFromPolicy(node.key, addresses, policy);
+  // Plain listen view — not a new Tag / not a second make.
+  return {
+    key: node.key,
+    url: legacy.url,
+    path: legacy.path,
+    kind: legacy.kind,
+    endpoints: legacy.endpoints,
+    onConflict: onConflictOf(node) ?? "inherit",
+    [AddressesKey]: addresses,
+    [NodePolicyConfigKey]: Object.freeze({ ...policy }),
+  } as AnyNode & { readonly key: string };
 };
 
 /**

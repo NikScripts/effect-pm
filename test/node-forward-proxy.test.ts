@@ -1,5 +1,5 @@
 /**
- * Dream β slice — primary Http forwards to Active Unix backend via Node.forward.
+ * Dream β — one Node.make; edge/backend roles via Node.withPolicy.
  */
 import { Clock, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
@@ -13,13 +13,14 @@ class Probe extends Hyperlink.Service<Probe>()("test/forward-proxy/Probe", {
   tip: Hyperlink.effect(Schema.String),
 }) {}
 
-describe("Node.forward + Active (Proxy Prefer)", () => {
-  it.effect("primary Http dials Active Unix backend; activate retargets", () =>
+describe("Node.forward + withPolicy (one make)", () => {
+  it.effect("one Worker make; edge forward + backend as/listen overlays", () =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const sockA = `/tmp/hyperlink-forward-a-${String(now)}.sock`;
       const sockB = `/tmp/hyperlink-forward-b-${String(now)}.sock`;
 
+      // ONE make — one node identity, one key.
       class Worker extends Node.make(
         "test/forward-proxy/Worker",
         Address.http(":18765"),
@@ -27,47 +28,40 @@ describe("Node.forward + Active (Proxy Prefer)", () => {
         Address.unix("A", sockA),
         Address.unix("B", sockB),
         NodePolicy.proxy("Prefer"),
-        NodePolicy.active("A"),
-        NodePolicy.listen("Primary"),
-        NodePolicy.advertise("Primary"),
-      ) {}
-
-      class WorkerA extends Node.make(
-        "test/forward-proxy/Worker",
-        Address.http(":18765"),
-      ).pipe(
-        Address.unix("A", sockA),
-        Address.unix("B", sockB),
-        NodePolicy.as("A"),
-        NodePolicy.listen(["A"]),
-        NodePolicy.advertise("Primary"),
-      ) {}
-
-      class WorkerB extends Node.make(
-        "test/forward-proxy/Worker",
-        Address.http(":18765"),
-      ).pipe(
-        Address.unix("A", sockA),
-        Address.unix("B", sockB),
-        NodePolicy.as("B"),
-        NodePolicy.listen(["B"]),
-        NodePolicy.advertise("Primary"),
       ) {}
 
       const worker = Worker as unknown as AnyNode & { readonly key: string };
-      const workerA = WorkerA as unknown as AnyNode & { readonly key: string };
-      const workerB = WorkerB as unknown as AnyNode & { readonly key: string };
       const workerDial = Worker as unknown as AddressedNode<unknown>;
 
-      const backendA = Node.unix(workerA, [
-        Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
-      ], { unlink: true });
+      // Process roles — overlays on the same make, never a second make.
+      const edgeNode = Node.withPolicy(
+        worker,
+        NodePolicy.listen("Primary"),
+        NodePolicy.active("A"),
+        NodePolicy.advertise("Primary"),
+      );
+      const backendA = Node.withPolicy(
+        worker,
+        NodePolicy.as("A"),
+        NodePolicy.listen(["A"]),
+      );
+      const backendB = Node.withPolicy(
+        worker,
+        NodePolicy.as("B"),
+        NodePolicy.listen(["B"]),
+      );
 
-      const backendB = Node.unix(workerB, [
-        Hyperlink.serve(Probe, { tip: Effect.succeed("v2") }),
-      ], { unlink: true });
-
-      const edge = Node.http(worker, [Node.forward(worker, Probe)]);
+      const edge = Node.http(edgeNode, [Node.forward(edgeNode, Probe)]);
+      const a = Node.unix(
+        backendA,
+        [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })],
+        { unlink: true },
+      );
+      const b = Node.unix(
+        backendB,
+        [Hyperlink.serve(Probe, { tip: Effect.succeed("v2") })],
+        { unlink: true },
+      );
 
       const program = Effect.gen(function* () {
         const probe = yield* Probe;
@@ -79,7 +73,7 @@ describe("Node.forward + Active (Proxy Prefer)", () => {
       yield* program.pipe(
         Effect.provide(
           Hyperlink.client(Probe, workerDial).pipe(
-            Layer.provide(Layer.mergeAll(edge, backendA, backendB)),
+            Layer.provide(Layer.mergeAll(edge, a, b)),
           ),
         ),
         Effect.scoped,
@@ -87,21 +81,22 @@ describe("Node.forward + Active (Proxy Prefer)", () => {
     }),
   );
 
-  it("listen set stamps bind dial (WorkerA → Unix, not primary Http)", () => {
-    class WorkerA extends Node.make(
+  it("withPolicy listen stamps bind dial without a second make", () => {
+    class Worker extends Node.make(
       "test/forward-proxy/Stamp",
       Address.http(":18766"),
-    ).pipe(
-      Address.unix("A", "/tmp/forward-stamp-a.sock"),
+    ).pipe(Address.unix("A", "/tmp/forward-stamp-a.sock")) {}
+
+    const backend = Node.withPolicy(
+      Worker as unknown as AnyNode & { readonly key: string },
       NodePolicy.as("A"),
       NodePolicy.listen(["A"]),
-    ) {}
+    );
 
-    expect(
-      (WorkerA as unknown as { readonly kind: string }).kind,
-    ).toBe("IpcSocket");
-    expect(
-      (WorkerA as unknown as { readonly path: string }).path,
-    ).toBe("/tmp/forward-stamp-a.sock");
+    expect(backend.kind).toBe("IpcSocket");
+    expect(backend.path).toBe("/tmp/forward-stamp-a.sock");
+    expect(backend.key).toBe("test/forward-proxy/Stamp");
+    // Same address list identity as the make.
+    expect(Node.addressesOf(backend)).toEqual(Node.addressesOf(Worker));
   });
 });

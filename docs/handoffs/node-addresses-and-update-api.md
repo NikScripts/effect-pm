@@ -214,22 +214,28 @@ NodePolicy.make({
 // LookupPolicy — provide on lookupClient / follow / membership, not on Node.make
 LookupPolicy.make({ Sticky: true, Verify: "reject" })
 
-// ── Node.make + pipe Address.* + pipe NodePolicy.* ─────────────────
+// ── ONE Node.make per identity — never make the same key twice ─────
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
   NodePolicy.proxy("Prefer"),
 ) {}
 
-// Split deploy: this box only runs the A addresses
-class WorkerA extends Node.make("fleet/Worker", [
-  Address.http(":8080"),
-  Address.unix("A", "/var/run/w.a.sock"),
-  Address.unix("B", "/var/run/w.b.sock"),
-]).pipe(
+// Process roles = withPolicy overlays (same key + address list)
+const edge = Node.withPolicy(
+  Worker,
+  NodePolicy.listen("Primary"),
+  NodePolicy.active("A"),
+)
+const backendA = Node.withPolicy(
+  Worker,
   NodePolicy.as("A"),
   NodePolicy.listen(["A"]),
-) {}
+)
+
+Node.http(edge, [Node.forward(edge, Probe)])
+Node.unix(backendA, [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })])
+yield* Node.activate(Worker, "B")
 
 class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
 
