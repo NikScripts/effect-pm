@@ -12,12 +12,15 @@
  *
  * Address.http(":8080")
  * Address.unix("A", "/var/run/w.a.sock")
+ * Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" })
  * Address.ws([4000, 4001])
  * Address.http({ A: 3000, B: 3001 })
  * Address.unixFromKey // sentinel — no ()
  *
- * class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
- *   Address.unix("A", "/var/run/w.a.sock"),
+ * // Public node, then private dials via pipe (HttpApi-shaped)
+ * class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
+ * class WorkerPrivate extends Worker.pipe(
+ *   Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
  * ) {}
  * ```
  *
@@ -116,7 +119,8 @@ export const http: typeof internal.http = internal.http;
 export const ws: typeof internal.ws = internal.ws;
 
 /**
- * Unix address — `unix(path)` unlabeled, or `unix(label, path)` labeled.
+ * Unix address — `unix(path)` unlabeled, `unix(label, path)`, or labeled object
+ * `unix({ A: path, B: path })`.
  *
  * @category constructors
  * @public

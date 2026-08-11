@@ -11,14 +11,14 @@ describe("Node address policy resolve", () => {
     class Worker extends Node.make(
       "test/addr-policy/Worker",
       Address.http(":8080"),
-    ).pipe(
-      Address.unix("A", "/tmp/w.a.sock"),
-      Address.unix("B", "/tmp/w.b.sock"),
+    ) {}
+    class WorkerPrivate extends Worker.pipe(
+      Address.unix({ A: "/tmp/w.a.sock", B: "/tmp/w.b.sock" }),
       NodePolicy.primaryAddress("AllUnlabeled"),
       NodePolicy.advertise("Primary"),
     ) {}
 
-    const resolved = Node.resolvedAddressesOf(Worker);
+    const resolved = Node.resolvedAddressesOf(WorkerPrivate);
     expect(resolved?.primary).toHaveLength(1);
     expect(resolved?.primary[0]?.label).toBeUndefined();
     expect(resolved?.advertise).toHaveLength(1);

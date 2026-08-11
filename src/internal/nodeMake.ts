@@ -487,11 +487,20 @@ const buildDef = <
 };
 
 /**
- * `Node.make(key, Address | Address[], options?)` — class-extends constructable.
+ * `Node.make(key, Address | Address[], options?)` — HttpApi-shaped constructable.
+ *
+ * Address list may be empty (`Node.make(key)`) and accumulated with `.pipe(Address.*)`.
+ * Prefer a **public** make for client-facing dials, then
+ * `class Private extends Public.pipe(Address.unix({ … }))` for private dials —
+ * never a second `make` with the same key.
  *
  * @internal
  */
-export const make = <
+export function make<const Key extends string>(
+  key: Key,
+  options?: NodeMakeOptions,
+): NodeMakeDef<Key, readonly [], never, {}>;
+export function make<
   const Key extends string,
   const Input extends AnyAddress | ReadonlyArray<AnyAddress>,
 >(
@@ -503,9 +512,39 @@ export const make = <
   address.NormalizeAddresses<Input>,
   LabelsOf<address.NormalizeAddresses<Input>>,
   {}
-> => {
+>;
+export function make<
+  const Key extends string,
+  const Input extends AnyAddress | ReadonlyArray<AnyAddress>,
+>(
+  key: Key,
+  inputOrOptions?: Input | NodeMakeOptions,
+  options?: NodeMakeOptions,
+): NodeMakeDef<Key, ReadonlyArray<AnyAddress>, string, {}> {
+  // options-only: Node.make(key) | Node.make(key, { onConflict })
+  const looksLikeOptions =
+    inputOrOptions !== undefined &&
+    typeof inputOrOptions === "object" &&
+    inputOrOptions !== null &&
+    !address.isAddressValue(inputOrOptions) &&
+    !address.isUnixFromKey(inputOrOptions) &&
+    !Array.isArray(inputOrOptions) &&
+    ("onConflict" in inputOrOptions ||
+      Object.keys(inputOrOptions).length === 0);
+
+  if (inputOrOptions === undefined || looksLikeOptions) {
+    const opts = (inputOrOptions ?? options) as NodeMakeOptions | undefined;
+    return buildDef({
+      key,
+      addresses: [] as unknown as ReadonlyArray<AnyAddress>,
+      labels: undefined as unknown as string,
+      policy: {},
+      onConflict: opts?.onConflict ?? "inherit",
+    });
+  }
+
   const addresses = address.toAddressList(
-    input,
+    inputOrOptions as Input,
   ) as address.NormalizeAddresses<Input>;
   return buildDef({
     key,
@@ -516,7 +555,7 @@ export const make = <
     policy: {},
     onConflict: options?.onConflict ?? "inherit",
   });
-};
+}
 
 /** Read stamped address list. @internal */
 export const addressesOf = (

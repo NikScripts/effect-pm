@@ -19,7 +19,7 @@ describe("Address", () => {
     expect(labeled.map((a) => a.label).sort()).toEqual(["A", "B"]);
   });
 
-  it("unix unlabeled vs labeled; unixFromKey is sentinel (no call)", () => {
+  it("unix unlabeled vs labeled; labeled object; unixFromKey sentinel", () => {
     const path = Address.unix("/tmp/w.sock");
     expect(path.label).toBeUndefined();
     expect(path.kind).toBe("IpcSocket");
@@ -27,6 +27,13 @@ describe("Address", () => {
     const a = Address.unix("A", "/var/run/w.a.sock");
     expect(a.label).toBe("A");
     expect(a.dial).toEqual({ _tag: "UnixPath", path: "/var/run/w.a.sock" });
+
+    const bag = Address.unix({
+      A: "/var/run/w.a.sock",
+      B: "/var/run/w.b.sock",
+    });
+    expect(bag.map((x) => x.label).sort()).toEqual(["A", "B"]);
+    expect(bag.every((x) => x.kind === "IpcSocket")).toBe(true);
 
     expect(Address.isUnixFromKey(Address.unixFromKey)).toBe(true);
     expect(Address.unixFromKey.kind).toBe("IpcSocket");

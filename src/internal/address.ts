@@ -250,27 +250,40 @@ export function ws(
   };
 }
 
-/** Unix factory — labeled or unlabeled path. @internal */
+/** Unix factory — unlabeled path, `unix(label, path)`, or labeled object. @internal */
 export function unix(path: string): AddressValue<undefined, "IpcSocket">;
 export function unix<const L extends string>(
   label: L,
   path: string,
 ): AddressValue<L, "IpcSocket">;
+export function unix<const L extends string>(
+  labeled: { readonly [K in L]: string },
+): { readonly [K in L]: AddressValue<K, "IpcSocket"> }[L][];
 export function unix(
-  labelOrPath: string,
+  labelOrPathOrBag: string | Record<string, string>,
   path?: string,
-): AddressValue<string | undefined, "IpcSocket"> {
+):
+  | AddressValue<string | undefined, "IpcSocket">
+  | ReadonlyArray<AddressValue<string, "IpcSocket">> {
+  if (typeof labelOrPathOrBag === "object" && labelOrPathOrBag !== null) {
+    return Object.entries(labelOrPathOrBag).map(([label, dialPath]) => ({
+      _tag: "Address" as const,
+      label,
+      kind: "IpcSocket" as const,
+      dial: { _tag: "UnixPath" as const, path: dialPath },
+    }));
+  }
   if (path === undefined) {
     return {
       _tag: "Address",
       label: undefined,
       kind: "IpcSocket",
-      dial: { _tag: "UnixPath", path: labelOrPath },
+      dial: { _tag: "UnixPath", path: labelOrPathOrBag },
     };
   }
   return {
     _tag: "Address",
-    label: labelOrPath,
+    label: labelOrPathOrBag,
     kind: "IpcSocket",
     dial: { _tag: "UnixPath", path },
   };

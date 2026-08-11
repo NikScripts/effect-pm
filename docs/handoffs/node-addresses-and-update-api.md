@@ -215,27 +215,31 @@ NodePolicy.make({
 LookupPolicy.make({ Sticky: true, Verify: "reject" })
 
 // ── ONE Node.make per identity — never make the same key twice ─────
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
-  Address.unix("A", "/var/run/w.a.sock"),
-  Address.unix("B", "/var/run/w.b.sock"),
+// Public class = client-facing dials only (no A/B on construction).
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
+
+// Private view = Public.pipe(Address…) — same key, HttpApi-shaped.
+class WorkerPrivate extends Worker.pipe(
+  Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
   NodePolicy.proxy("Prefer"),
 ) {}
 
 // Process roles = withPolicy overlays (same key + address list)
 const edge = Node.withPolicy(
-  Worker,
+  WorkerPrivate,
   NodePolicy.listen("Primary"),
   NodePolicy.active("A"),
 )
 const backendA = Node.withPolicy(
-  Worker,
+  WorkerPrivate,
   NodePolicy.as("A"),
   NodePolicy.listen(["A"]),
 )
 
 Node.http(edge, [Node.forward(edge, Probe)])
 Node.unix(backendA, [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })])
-yield* Node.activate(Worker, "B")
+Hyperlink.client(Probe, Worker) // public
+yield* Node.activate(WorkerPrivate, "B")
 
 class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
 
@@ -456,15 +460,16 @@ class WorkerOpts extends Node.make("fleet/Worker", Address.http(":8080"), {
 directly** onto the Node — not wrapped in `Node.withAddresses([…])`:
 
 ```ts
-// SKETCH — preferred pipe (still class extends)
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
-  Address.unix("A", "/var/run/w.a.sock"),
-  Address.unix("B", "/var/run/w.b.sock"),
+// Preferred — public class, then private dials via Public.pipe (HttpApi-shaped)
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
+class WorkerPrivate extends Worker.pipe(
+  Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
 ) {}
 ```
 
-`Address` values are pipeable fragments. A `withAddresses` bag remains optional sugar at
-most — **not** the preferred DX.
+Do **not** put A/B private addresses on the public `Node.make`. `Address` values are
+pipeable fragments. A `withAddresses` bag remains optional sugar at most — **not** the
+preferred DX.
 
 `…rest` args for addresses were considered; owner expects we **still have uses for an
 options arg**, so don’t make the signature rest-only.

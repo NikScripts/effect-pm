@@ -9,13 +9,13 @@ type AssertExtends<A, B> = [A] extends [B] ? true : false;
 type AssertEqual<A, B> =
   [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-const made = Node.make("d/Worker", Address.http(":8080")).pipe(
-  Address.unix("A", "/tmp/a.sock"),
-  Address.unix("B", "/tmp/b.sock"),
+const publicNode = Node.make("d/Worker", Address.http(":8080"));
+const privateNode = publicNode.pipe(
+  Address.unix({ A: "/tmp/a.sock", B: "/tmp/b.sock" }),
   NodePolicy.as("A"),
 );
 
-type Labels = (typeof made)["labels"];
+type Labels = (typeof privateNode)["labels"];
 type AddressList = NonNullable<ReturnType<typeof Node.addressesOf>>;
 
 type _Checks = [
