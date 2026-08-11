@@ -258,8 +258,10 @@ export type ApiConstraint = catalog.ApiConstraint;
 
 /**
  * Named group (`HttpApiGroup.make`). Pass `topLevel: true` so child methods
- * flatten onto the parent URL builder. Dynamic children:
- * `Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub))`.
+ * flatten onto the parent URL builder.
+ *
+ * Context-backed catalogs: `group.fromEffect(Effect.gen(function* () { … }))`
+ * defers until {@link ./RouterBuilder.layer} when the Effect needs services.
  *
  * @public
  */

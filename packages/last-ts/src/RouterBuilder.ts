@@ -92,7 +92,8 @@ export const group: typeof internal.group = internal.group;
 
 /**
  * Register the catalog; requires every group Layer (`HttpApiBuilder.layer`).
- * Resolves `group.from(Service)`, then provides {@link Catalog} + {@link Registry}.
+ * Resolves `group.from` / `fromEffect` / `groupsFromEffect`, then provides
+ * {@link Catalog} + {@link Registry}.
  *
  * @public
  */

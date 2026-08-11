@@ -2,6 +2,7 @@
 
 **Status:** teaching SSOT for the Eng’d stack on `cursor/agent-k-page-route-6d0e`  
 **Acceptance demo (package bar):** [`examples/last/spine`](../../examples/last/spine/) — finish this before growing Last site / Hyperlink  
+**Context `fromEffect` showcase:** [`examples/last/from-effect`](../../examples/last/from-effect/) · [`docs/examples/last/last-ts-from-effect.md`](../examples/last/last-ts-from-effect.md) — Layer-swapped partners/modules (not static `.add`)  
 **Twoslash (docs site):** fences include [`src/`](../../examples/last/spine/src/) · [`docs/examples/last/last-ts-spine.md`](../examples/last/last-ts-spine.md) → `/docs/last-ts-spine`  
 **Later dogfood:** [`docs/last/site`](../last/site/) · Hyperlink [`docs/site`](../site/)
 

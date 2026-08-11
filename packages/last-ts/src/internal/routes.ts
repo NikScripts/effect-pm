@@ -2,8 +2,10 @@
  * Internal impl for {@link ../ui/Route} — HttpApi-shaped catalog + groups,
  * with generics preserved for typed {@link UrlBuilder} (HttpApiClient pattern).
  */
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
@@ -21,6 +23,14 @@ export type { AsRoutesEffect } from "./asRoutesBrand";
 
 export const TypeId = "~last-ts/Route/Api" as const;
 export const GroupTypeId = "~last-ts/Route/Group" as const;
+
+/** True when runSync failed because a Context service was not in scope. */
+const isMissingServiceCause = (cause: Cause.Cause<unknown>): boolean => {
+  const squashed = Cause.squash(cause);
+  const message =
+    squashed instanceof Error ? squashed.message : String(squashed);
+  return message.includes("Service not found");
+};
 
 // =============================================================================
 // Typed models (HttpApi / HttpApiGroup shape + nested groups)
@@ -74,10 +84,11 @@ export interface GroupTop extends Pipeable {
   ): GroupTop;
   /**
    * Merge destinations from an Effect (`HttpRouter.addAll` analogue).
-   * Prefer {@link from} + Layer for service catalogs.
+   * Sync/`R=never` effects materialize immediately; Effects that need Context
+   * defer until {@link resolveApi} / {@link ../RouterBuilder.layer}.
    */
   fromEffect(
-    effect: Effect.Effect<Iterable<RouteLike>, never, never>,
+    effect: Effect.Effect<Iterable<RouteLike>, never, any>,
   ): GroupTop;
   /**
    * Declare destinations from a Context service (type only on the contract).
@@ -132,7 +143,7 @@ export interface Group<
     TopLevel
   >;
   fromEffect(
-    effect: Effect.Effect<Iterable<RouteLike>, never, never>,
+    effect: Effect.Effect<Iterable<RouteLike>, never, any>,
   ): GroupTop;
   /**
    * Destinations from a service — phantom-typed onto the group; resolved in
@@ -214,6 +225,13 @@ export interface Api<
   addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
     api: HttpApi.HttpApi<Id2, ApiGroups>,
   ): Api<Id, MergeApiAdds<Groups, GroupTop>>;
+  /**
+   * Merge top-level groups from an Effect. Sync/`R=never` materializes
+   * immediately; Context-backed Effects defer until {@link resolveApi}.
+   */
+  groupsFromEffect(
+    effect: Effect.Effect<Iterable<GroupTop>, never, any>,
+  ): ApiConstraint;
   prefix(prefix: Path): Api<Id, Groups>;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): Api<Id, Groups>;
   annotateMerge<I>(context: Context.Context<I>): Api<Id, Groups>;
@@ -232,6 +250,9 @@ export interface ApiConstraint {
   addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
     api: HttpApi.HttpApi<Id2, ApiGroups>,
   ): ApiConstraint;
+  groupsFromEffect(
+    effect: Effect.Effect<Iterable<GroupTop>, never, any>,
+  ): ApiConstraint;
   prefix(prefix: Path): ApiConstraint;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): ApiConstraint;
   annotateMerge<I>(context: Context.Context<I>): ApiConstraint;
@@ -245,6 +266,28 @@ export declare namespace Api {
 export type AppConstraint = Api.Constraint;
 
 export type RouteLike = uiRoute.Constraint | GroupTop;
+
+/**
+ * Annotation: destinations from an Effect that needs services at layer bake
+ * (`group.fromEffect` when `runSync` hits missing Context).
+ *
+ * @internal
+ */
+export class FromEffect extends Context.Service<
+  FromEffect,
+  Effect.Effect<Iterable<RouteLike>, never, unknown>
+>()("last-ts/Router/FromEffect") {}
+
+/**
+ * Annotation: top-level groups from an Effect (`Api.groupsFromEffect` when
+ * bake needs Context).
+ *
+ * @internal
+ */
+export class FromGroups extends Context.Service<
+  FromGroups,
+  Effect.Effect<Iterable<GroupTop>, never, unknown>
+>()("last-ts/Router/FromGroups") {}
 
 /** What {@link GroupTop.add} / {@link Api.add} accept (Router + Effect HttpApi). */
 export type GroupAddLike =
@@ -486,10 +529,20 @@ const groupProto = {
   },
   fromEffect(
     this: GroupTop,
-    effect: Effect.Effect<Iterable<RouteLike>, never, never>,
+    effect: Effect.Effect<Iterable<RouteLike>, never, any>,
   ): GroupTop {
-    const items = Array.from(Effect.runSync(effect));
-    return this.add(...items);
+    // Eager when the Effect needs nothing (fileRoot / Group.asRoutes).
+    // Context-backed catalogs defer until resolveApi / RouterBuilder.layer.
+    const exit = Effect.runSyncExit(
+      effect as Effect.Effect<Iterable<RouteLike>>,
+    );
+    if (Exit.isSuccess(exit)) {
+      return this.add(...Array.from(exit.value));
+    }
+    if (isMissingServiceCause(exit.cause)) {
+      return this.annotate(FromEffect, effect);
+    }
+    throw Cause.squash(exit.cause);
   },
   from(
     this: GroupTop,
@@ -583,6 +636,21 @@ const appProto = {
     return this.add(
       ...(Object.values(api.groups) as Array<HttpApiGroup.Top>),
     );
+  },
+  groupsFromEffect(
+    this: ApiConstraint,
+    effect: Effect.Effect<Iterable<GroupTop>, never, any>,
+  ): ApiConstraint {
+    const exit = Effect.runSyncExit(
+      effect as Effect.Effect<Iterable<GroupTop>>,
+    );
+    if (Exit.isSuccess(exit)) {
+      return this.add(...Array.from(exit.value));
+    }
+    if (isMissingServiceCause(exit.cause)) {
+      return this.annotate(FromGroups, effect);
+    }
+    throw Cause.squash(exit.cause);
   },
   prefix(this: ApiConstraint, prefix: Path): ApiConstraint {
     const groups: Record<string, GroupTop> = {};
@@ -1058,10 +1126,22 @@ export const reflect = (
 const stripResolveAnnotations = (
   annotations: Context.Context<never>,
 ): Context.Context<never> =>
-  Context.omit(FromRoutes, GroupPrefix)(annotations) as Context.Context<never>;
+  Context.omit(
+    FromRoutes,
+    FromEffect,
+    GroupPrefix,
+  )(annotations) as Context.Context<never>;
+
+const applyPrefix = (
+  item: RouteLike,
+  prefix: Option.Option<Path>,
+): RouteLike => {
+  if (Option.isNone(prefix)) return item;
+  return item.prefix(prefix.value);
+};
 
 /**
- * Merge `from(Service)` destinations into a group (and nested groups).
+ * Merge `from` / `fromEffect` destinations into a group (and nested groups).
  * Applies accumulated {@link GroupPrefix} to deferred endpoints.
  *
  * @internal
@@ -1076,15 +1156,32 @@ export const resolveGroup = (
     }
 
     let routes = { ...g.routes } as Record<string, uiRoute.Constraint>;
+    let groups = children;
+    const prefix = Context.getOption(g.annotations, GroupPrefix);
+
     const fromTag = Context.getOption(g.annotations, FromRoutes);
     if (Option.isSome(fromTag)) {
       const destinations: ReadonlyArray<uiRoute.Constraint> = yield* fromTag
         .value;
-      const prefix = Context.getOption(g.annotations, GroupPrefix);
       for (const route of destinations) {
-        const next =
-          Option.isSome(prefix) ? route.prefix(prefix.value) : route;
+        const next = applyPrefix(route, prefix) as uiRoute.Constraint;
         routes = { ...routes, [next.identifier]: next };
+      }
+    }
+
+    const fromEffect = Context.getOption(g.annotations, FromEffect);
+    if (Option.isSome(fromEffect)) {
+      const items = Array.from(yield* fromEffect.value);
+      for (const item of items) {
+        const next = applyPrefix(item, prefix);
+        if (isGroup(next)) {
+          groups = {
+            ...groups,
+            [next.identifier]: yield* resolveGroup(next),
+          };
+        } else if (uiRoute.isRoute(next)) {
+          routes = { ...routes, [next.identifier]: next };
+        }
       }
     }
 
@@ -1092,14 +1189,15 @@ export const resolveGroup = (
       identifier: g.identifier,
       topLevel: g.topLevel,
       routes,
-      groups: children,
+      groups,
       annotations: stripResolveAnnotations(g.annotations),
     });
   });
 
 /**
- * Resolve every `group.from(Service)` on a catalog. Requires the destination
- * services in `R`. Result is a concrete catalog for match / UrlBuilder.
+ * Resolve every deferred `from` / `fromEffect` / `groupsFromEffect` on a
+ * catalog. Requires destination services in `R`. Result is a concrete catalog
+ * for match / UrlBuilder.
  *
  * @internal
  */
@@ -1111,9 +1209,24 @@ export const resolveApi = (
     for (const [id, g] of Object.entries(api.groups)) {
       groups[id] = yield* resolveGroup(g);
     }
+
+    const fromGroups = Context.getOption(api.annotations, FromGroups);
+    if (Option.isSome(fromGroups)) {
+      for (const g of yield* fromGroups.value) {
+        groups[g.identifier] = yield* resolveGroup(g);
+      }
+    }
+
     return makeAppProto({
       identifier: api.identifier,
       groups,
-      annotations: api.annotations,
+      annotations: Context.omit(FromGroups)(
+        api.annotations,
+      ) as Context.Context<never>,
     });
   });
+
+/** True when a group still has deferred destinations to resolve. @internal */
+export const hasDeferredDestinations = (g: GroupTop): boolean =>
+  Option.isSome(Context.getOption(g.annotations, FromRoutes)) ||
+  Option.isSome(Context.getOption(g.annotations, FromEffect));

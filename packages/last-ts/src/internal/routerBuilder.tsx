@@ -12,6 +12,7 @@ import { Context, Effect, Layer, Option } from "effect";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Layout from "../Layout";
 import * as Page from "../Page";
+import { Handler } from "../Route";
 import type * as Route from "../Route";
 import * as catalog from "./routes";
 import type { Api, ApiConstraint, GroupTop, Match } from "./routes";
@@ -214,13 +215,10 @@ const registerHandler = (
   identifier: string,
   handler: unknown,
 ): Handlers<any, any> => {
-  // `group.from(Service)` defers destinations until RouterBuilder.layer — skip
-  // the static route-map check (HttpApi has no deferred endpoints).
-  const deferred = Context.getOption(self.group.annotations, catalog.FromRoutes);
-  if (
-    Option.isNone(deferred) &&
-    !Object.hasOwn(self.group.routes, identifier)
-  ) {
+  // `group.from` / `fromEffect` defer destinations until RouterBuilder.layer —
+  // skip the static route-map check (HttpApi has no deferred endpoints).
+  const deferred = catalog.hasDeferredDestinations(self.group);
+  if (!deferred && !Object.hasOwn(self.group.routes, identifier)) {
     throw new Error(
       `Route "${identifier}" not found in Router.Group "${self.group.identifier}"`,
     );
@@ -232,7 +230,7 @@ const registerHandler = (
   }
   const endpoint = self.group.routes[identifier];
   const asPage =
-    Option.isSome(deferred) ||
+    deferred ||
     endpoint === undefined ||
     pageSuccess.isPageEndpoint(endpoint);
 
@@ -364,11 +362,43 @@ type GroupLayoutDebt<G extends { readonly routes: Record<string, unknown> }> =
   GroupNeedsLayout<G> extends true ? Layout.Slot : never;
 
 const groupNeedsLayoutRuntime = (g: GroupTop): boolean => {
-  const deferred = Context.getOption(g.annotations, catalog.FromRoutes);
-  if (Option.isSome(deferred)) return true;
+  if (catalog.hasDeferredDestinations(g)) return true;
   const routes = Object.values(g.routes);
   if (routes.length === 0) return true;
   return routes.some((endpoint) => pageSuccess.isPageEndpoint(endpoint));
+};
+
+/** Prefer builder handlers; else adopt {@link Handler} stamped on the route. */
+const adoptAnnotatedHandlers = (
+  g: GroupTop,
+  handlers: Map<string, HandlerRuntime>,
+): void => {
+  for (const [id, route] of Object.entries(g.routes)) {
+    if (handlers.has(id)) continue;
+    const annotated = Context.getOption(route.annotations, Handler);
+    if (Option.isSome(annotated)) {
+      handlers.set(id, {
+        _tag: "Page",
+        page: annotated.value as React.ComponentType<Route.HandleArgs>,
+      });
+    }
+  }
+};
+
+/** Empty GroupImpl when every route already carries {@link Handler}. */
+const synthesizeGroupFromAnnotations = (
+  g: GroupTop,
+): GroupImpl | undefined => {
+  const handlers = new Map<string, HandlerRuntime>();
+  adoptAnnotatedHandlers(g, handlers);
+  if (handlers.size === 0) return undefined;
+  for (const id of Object.keys(g.routes)) {
+    if (!handlers.has(id)) return undefined;
+  }
+  return {
+    layout: Layout.Passthrough.Component,
+    handlers,
+  };
 };
 
 /**
@@ -428,7 +458,8 @@ export const group = <
 
 /**
  * Register catalog; requires every group Layer (`HttpApiBuilder.layer`).
- * Resolves `group.from(Service)`, then provides {@link Catalog} + {@link Registry}.
+ * Resolves `group.from` / `fromEffect` / `groupsFromEffect`, then provides
+ * {@link Catalog} + {@link Registry}.
  */
 export const layer = <
   Id extends string,
@@ -449,7 +480,10 @@ export const layer = <
       );
       const groups = new Map<string, GroupImpl>();
       for (const g of Object.values(resolved.groups) as Array<GroupTop>) {
-        const impl = services.mapUnsafe.get(g.key) as GroupImpl | undefined;
+        let impl = services.mapUnsafe.get(g.key) as GroupImpl | undefined;
+        if (impl === undefined) {
+          impl = synthesizeGroupFromAnnotations(g);
+        }
         if (impl === undefined) {
           const available =
             availableGroups.length === 0 ? "none" : availableGroups.join(", ");
@@ -457,14 +491,18 @@ export const layer = <
             `Router.Group "${g.identifier}" not found (key: "${g.key}"). Did you forget to provide RouterBuilder.group(api, "${g.identifier}", ...)? Available groups: ${available}`,
           );
         }
+        // Copy — builder maps are shared; adopting annotations must not mutate
+        // the Layer-provided impl for other resolves.
+        const handlers = new Map(impl.handlers);
+        adoptAnnotatedHandlers(g, handlers);
         for (const id of Object.keys(g.routes)) {
-          if (!impl.handlers.has(id)) {
+          if (!handlers.has(id)) {
             return yield* Effect.die(
               `RouterBuilder.layer: group "${g.identifier}" missing handler "${id}"`,
             );
           }
         }
-        groups.set(g.identifier, impl);
+        groups.set(g.identifier, { layout: impl.layout, handlers });
       }
       return Context.make(Catalog, resolved).pipe(
         Context.add(Registry, { api: resolved, groups }),
