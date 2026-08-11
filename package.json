@@ -128,6 +128,10 @@
       "types": "./dist/Identity.d.ts",
       "default": "./dist/Identity.js"
     },
+    "./Address": {
+      "types": "./dist/Address.d.ts",
+      "default": "./dist/Address.js"
+    },
     "./LookupPolicy": {
       "types": "./dist/LookupPolicy.d.ts",
       "default": "./dist/LookupPolicy.js"

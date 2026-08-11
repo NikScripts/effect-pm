@@ -162,6 +162,7 @@ export * as Advice from "./Advice";
 export * as Dialers from "./Dialers";
 export * as Directory from "./Directory";
 export * as Identity from "./Identity";
+export * as Address from "./Address";
 export * as LookupPolicy from "./LookupPolicy";
 export * as NodePolicy from "./NodePolicy";
 export * as PolicyBuilder from "./PolicyBuilder";

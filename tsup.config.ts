@@ -41,6 +41,7 @@ export default defineConfig([
       Advice: "src/Advice.ts",
       Directory: "src/Directory.ts",
       Identity: "src/Identity.ts",
+      Address: "src/Address.ts",
       LookupPolicy: "src/LookupPolicy.ts",
       NodePolicy: "src/NodePolicy.ts",
       PolicyBuilder: "src/PolicyBuilder.ts",

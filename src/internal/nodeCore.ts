@@ -565,7 +565,13 @@ export class MalformedNode extends Data.TaggedError("MalformedNode")<{
  * every caller ({@link Tag}, {@link withProtocol}) stays cast-free. @internal
  */
 
-const assembleNode = <Self, ROut, Addr>(
+/**
+ * Assemble a node tag from resolved address fields — shared by {@link Service},
+ * {@link withProtocol}, and {@link make}.
+ *
+ * @internal
+ */
+export const assembleNode = <Self, ROut, Addr>(
   key: string,
   fields: {
     readonly url: string | undefined;
