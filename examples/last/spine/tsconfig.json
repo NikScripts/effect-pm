@@ -12,5 +12,5 @@
       "last-ts/*": ["../../../packages/last-ts/src/*"]
     }
   },
-  "include": ["src", "demo.tsx", "waku.config.ts"]
+  "include": ["src", "waku.config.ts"]
 }
