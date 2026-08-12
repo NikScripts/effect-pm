@@ -315,9 +315,16 @@ stamping Listen/As/Advertise via `Node.config`.
 **Policy handlers (locked 2026-08-12, in progress):** one **`Context.Service` per
 policy key** (`LookupPolicy.Yield`, `LookupPolicy.Pick`, …) with a **default
 Layer**. Engines `yield* LookupPolicy.Yield` then invoke; apps override via
-`Node.policy` / Layer provide. Boolean / `"first"` sugar installs presets — not a
-second storage shape. Prefer Services over References-of-Effects so handler `R`
-can grow. Call signatures / `Node.policy` install shape still open below.
+`Node.policy` / Layer provide. Prefer Services over References-of-Effects so
+handler `R` can grow.
+
+**One policy, named options (locked):** `yieldAccept` / `yieldRefuse` are
+**options of Yield**, not separate policies and **not** “sugar over booleans.”
+The readable names **are** the API (`Node.policy(Worker, LookupPolicy.yieldRefuse)`).
+`yield(true|false)` is the hard-to-read form — do not treat it as primary.
+Custom handler remains `yield(effect)` / equivalent. Pick: one policy, options
+`"first"` / custom fn (named presets preferred over opaque literals where we
+have them). `Node.policy` install shape still open.
 
 **Not Eng’d yet** — tip still has `Node.withPolicy` + fragment Layers. Rename /
 `Node.config` bag + `Node.policy` + Service handlers land with the config/policy
