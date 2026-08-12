@@ -13,17 +13,18 @@
 **Run:** `pnpm run example:last-from-effect`  
 **Spine:** [last-ts spine](/docs/last-ts-spine)
 
-## Why this needs `fromEffect`
+## Why `fromEffect`
 
-Static `.add(Route.get("acme"), Route.get("nova"))` hardcodes the partner set into
-the catalog module. Here partners and product modules live in **Context services**;
-Layers swap demo vs enterprise data and the route table changes — same catalog code.
+Static `.add(Route.get(…), …)` freezes path grammar in the catalog module. Here a
+**CMS Context service** (Layer-swapped) decides param/query shapes and which
+groups exist — same catalog code, different live routes.
 
-- `group.fromEffect` — flat endpoints inside one group (`PartnerDirectory` → `/p/*`)
-- `groupsFromEffect` — whole flat groups on the catalog (`FeatureModules` → billing / support)
+- `group.fromEffect` — destinations with different params/queries (`product`,
+  `variant`, `article`)
+- `groupsFromEffect` — optional top-level groups (`docs`)
 
-Sync `R=never` Effects still materialize immediately (fileRoot / tooling). Effects
-that `yield*` a service defer until `RouterBuilder.layer`.
+Sync `R=never` Effects still materialize immediately (tooling). Effects that
+`yield*` a service defer until `RouterBuilder.layer`.
 
 {.twoslash include="examples/last/from-effect/main.ts"}
 ``` ts

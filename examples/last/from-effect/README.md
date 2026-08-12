@@ -1,13 +1,21 @@
-# last-ts — groups from Effect (typed links)
+# last-ts — CMS → typed routes (`fromEffect`)
 
 **Run:** `pnpm run example:last-from-effect`
 
-Vision: **groups from Effect** into `Router.make().add` — not Effect→Router.
+A Layer-swappable `Cms` service decides which destinations exist and which
+param/query shapes they use. Those Effects feed a normal catalog:
 
-| API | Role |
-|-----|------|
-| `group.fromEffect` | Flat destinations; **ids typed for `UrlBuilder`** |
-| `groupsFromEffect` | Whole flat groups on the catalog |
-| `RouterBuilder.layer(Site)` | Yields bake `R` (`SiteMode` \| `FeatureModules`) |
+```ts
+Router.make("cms-from-effect")
+  .add(Route.get("home", "/"), content) // content = group.fromEffect(…)
+  .groupsFromEffect(docsGroups);
+```
 
-Layer-swap `layerOrg` / `layerSingle` → different project path grammar + optional `support` group. Handlers stay in `RouterBuilder` (not inside the catalog Effect).
+| API | In this example |
+|-----|-----------------|
+| `group.fromEffect` | `product` (`:sku` + `?ref`), optional `variant` (`:sku/:variant` + `?ref`), `article` (`:locale/:slug` + `?preview`) |
+| `groupsFromEffect` | optional `docs.guide` (`:version/:slug` + `?q`) |
+| `Route.UrlBuilder<typeof Site>` | typed path args + `{ query }` |
+| `RouterBuilder.layer(Site)` | bake `R` includes `Cms` |
+
+Swap `cmsStorefront` vs `cmsDocsPortal` — same catalog module, different live grammar.
