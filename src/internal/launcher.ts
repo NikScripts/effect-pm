@@ -35,7 +35,7 @@ import {
 import * as Hyperlink from "../Hyperlink";
 import * as Identity from "../Identity";
 import * as Lookup from "../Lookup";
-import * as Policy from "../Policy";
+import * as LookupPolicy from "../LookupPolicy";
 import {
   AssumeNotReady,
   AssumeTokenMismatch,
@@ -56,6 +56,7 @@ import {
 import type { NodeStatus } from "./nodeStatus";
 import { mintAssumeToken, type Token } from "./launcherToken";
 import {
+  findTargetEntry,
   planUpdate,
   type PlanUpdateTag,
   type UpdateImpact,
@@ -804,7 +805,7 @@ const probeReady = (
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, node).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     const snap = yield* Effect.gen(function* () {
@@ -1119,7 +1120,7 @@ const probeLookupAnswering = (
   Effect.scoped(
     Effect.gen(function* () {
       const ctx = yield* Layer.build(
-        Lookup.client(node).pipe(Policy.provide(Policy.verifyOff)),
+        Lookup.client(node).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)),
       );
       const id = Context.get(ctx, Identity.Service);
       yield* id
@@ -1338,8 +1339,12 @@ const nodeFromDirectoryEntry = (
 };
 
 /**
- * App-node A→B update: {@link Lookup.planUpdate} → {@link up}(successor) →
+ * Single-step app-node A→B update: {@link planUpdate} → {@link up}(successor) →
  * {@link Advice.prefer}(B) → {@link Node.shutdown}(target).
+ *
+ * Prefer fleet-shaped `Update.plan` → `Update.simulate` → `Update.execute`
+ * (`hyperlink-ts/Update`) for new code — this remains the custody engine each
+ * plan step runs with `skipPlan: true`.
  *
  * Spine α — still exits when done (not a long-lived fleet supervisor). Lookup
  * same-sock ownership moves stay on the follow/handoff recipe; this is Directory
@@ -1405,15 +1410,8 @@ export const restartSuccessor = (
       );
 
       // Capture A's dial before B advertises (same nodeKey dial-replace would hide A).
-      const seed = options.tags[0];
-      if (seed === undefined) {
-        return yield* new UpdateTargetUnknown({ target: options.target });
-      }
-      const rows = yield* Directory.nodesServing(seed);
-      const entry = rows.find((row) => row.nodeKey === options.target);
-      if (entry === undefined) {
-        return yield* new UpdateTargetUnknown({ target: options.target });
-      }
+      // Walk every tag (same as planUpdate) — not only tags[0].
+      const entry = yield* findTargetEntry(options.target, options.tags);
       const outgoing = nodeFromDirectoryEntry(entry);
 
       let impact: UpdateImpact | undefined;

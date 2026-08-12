@@ -1,9 +1,11 @@
 /**
  * Lookup update-impact planner — dry-run before spawn / A→B.
  *
- * Membership + impact query only (Lookup plane). Launcher still executes spawn units;
- * Node owns drain / shutdown / handoff. `clientsAtRisk` reads live {@link Dialers}
- * sessions (Advice-prefer proxy when the census is empty).
+ * Membership + impact query only (Lookup plane). Prefer fleet
+ * `Update.plan` → `simulate` → `execute` for multi-node cutovers; this remains
+ * the per-step impact brain. `clientsAtRisk` reads live {@link Dialers}
+ * sessions (Advice-prefer proxy when the census is empty). `liveTips` records
+ * status `schemaVersion` rows for Update contract `from` audit.
  *
  * @module internal/lookupPlanUpdate
  * @internal
@@ -16,7 +18,6 @@ import {
   Exit,
   Layer,
   Option,
-  Schema,
 } from "effect";
 import * as Advice from "../Advice";
 import * as Dialers from "../Dialers";
@@ -25,11 +26,15 @@ import * as Identity from "../Identity";
 import * as Hyperlink from "../Hyperlink";
 import { isWireSpecLeaf, kindOf, specSym, wireKeySym } from "../Hyperlink";
 import type { FlatSpec } from "../Hyperlink";
-import * as Policy from "../Policy";
+import * as LookupPolicy from "../LookupPolicy";
 import * as Versioned from "../Versioned";
 import { hashContract } from "./contractHash";
 import { Service as NodeTag } from "./nodeCore";
-import { schemaVersionFromTag } from "./versioned";
+import {
+  itemSchemaOf,
+  schemaVersionFromTag,
+  versionInChain,
+} from "./versioned";
 
 /**
  * Minimal tag shape {@link planUpdate} needs — key + flat Spec + F4 hash inputs.
@@ -69,7 +74,10 @@ export interface UpdateImpact {
     readonly serviceKey: string;
     readonly target: string;
   }>;
-  /** Peer status tip with no Versioned path to the successor tip. */
+  /**
+   * Target status tip with no Versioned path to the successor tip.
+   * Co-update peers are not hard-blockers (fleet rolls schedule them as later steps).
+   */
   readonly migrationGaps: ReadonlyArray<{
     readonly serviceKey: string;
     readonly leaf: string;
@@ -84,16 +92,32 @@ export interface UpdateImpact {
     readonly serviceKey: string;
     readonly method: string;
   }>;
-  /** Live status `contractHash` ≠ successor {@link Hyperlink.contractHash}. */
+  /**
+   * Target live status `contractHash` ≠ successor {@link Hyperlink.contractHash}.
+   * Peer drifts are omitted so ordered fleet plans are not fail-closed on later steps.
+   */
   readonly contractDrifts: ReadonlyArray<{
     readonly node: string;
     readonly serviceKey: string;
     readonly expected: string;
     readonly actual: string | undefined;
   }>;
+  /**
+   * Live `schemaVersion` rows from status dial (target + coUpdate peers; empty when
+   * status is off or peers do not answer). Update contract `from` audits the
+   * **target** row only.
+   */
+  readonly liveTips: ReadonlyArray<{
+    readonly node: string;
+    readonly serviceKey: string;
+    readonly schemaVersion: string | undefined;
+  }>;
   /** Target advertises Lookup Identity/Directory/Advice — sequence Lookup A/B first. */
   readonly lookupFirst: boolean;
-  /** True when hard signals are present (gaps, removals, or contract drifts). */
+  /**
+   * True when hard signals are present on the **target** (gaps, removals, or
+   * contract drifts). Peer status never sets this.
+   */
   readonly blocked: boolean;
 }
 
@@ -166,7 +190,11 @@ export class UpdateTargetUnknown extends Data.TaggedError(
   "UpdateTargetUnknown",
 )<{
   readonly target: string;
-}> {}
+}> {
+  override get message() {
+    return `Lookup.planUpdate: target "${this.target}" is not advertised in Directory.`;
+  }
+}
 
 /**
  * Impact has hard blockers and {@link PlanUpdateOptions.force} was not set.
@@ -176,7 +204,11 @@ export class UpdateTargetUnknown extends Data.TaggedError(
  */
 export class UpdateBlocked extends Data.TaggedError("UpdateBlocked")<{
   readonly impact: UpdateImpact;
-}> {}
+}> {
+  override get message() {
+    return `Lookup.planUpdate blocked for target "${this.impact.target}".`;
+  }
+}
 
 // =============================================================================
 // Helpers
@@ -201,7 +233,14 @@ const wireMethodKeys = (tag: PlanUpdateTag): ReadonlySet<string> => {
 const contractHashOf = (tag: PlanUpdateTag): string =>
   hashContract(tag[wireKeySym], kindOf(tag) ?? "hyperlink", tag[specSym]);
 
-const findTargetEntry = (
+/**
+ * Resolve a Directory row for `target` by walking successor tags (any match).
+ * Shared by {@link planUpdate} and {@link Launcher.restartSuccessor} so execute
+ * does not only seed on `tags[0]`.
+ *
+ * @internal
+ */
+export const findTargetEntry = (
   target: string,
   successor: ReadonlyArray<PlanUpdateTag>,
 ): Effect.Effect<
@@ -251,7 +290,7 @@ const dialStatus = (
     );
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, target).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     const snap = yield* Effect.gen(function* () {
@@ -269,28 +308,6 @@ const dialStatus = (
   }).pipe(Effect.scoped, Effect.timeout(Duration.millis(250)));
   return Effect.map(Effect.exit(probe), (exit) =>
     Exit.isSuccess(exit) ? Option.some(exit.value) : Option.none(),
-  );
-};
-
-const workPoolItemSchemaSym = Symbol.for("hyperlink-ts/WorkPool/itemSchema");
-
-const itemSchemaOf = (tag: PlanUpdateTag): unknown => {
-  if (
-    (typeof tag === "object" || typeof tag === "function") &&
-    tag !== null &&
-    workPoolItemSchemaSym in tag
-  ) {
-    return Reflect.get(tag, workPoolItemSchemaSym);
-  }
-  return undefined;
-};
-
-const versionInChain = (schema: unknown, from: string): boolean => {
-  if (!Versioned.isVersioned(schema)) {
-    return Schema.isSchema(schema) && Versioned.schemaVersion(schema) === from;
-  }
-  return schema[Versioned.VersionedTypeId].steps.some(
-    (step) => step.version === from,
   );
 };
 
@@ -339,7 +356,8 @@ const wireRemovalsFor = (
  * Spec method removals need {@link PlanUpdateOptions.incumbent}.
  *
  * Fail-closed: {@link UpdateBlocked} when {@link UpdateImpact.blocked} unless
- * `{ force: true }`. Does **not** spawn — pass the plan to {@link Launcher.up}.
+ * `{ force: true }`. Does **not** spawn — compose with {@link Update.plan} /
+ * {@link Update.execute} (or {@link Launcher.restartSuccessor} for one step).
  *
  * @category constructors
  * @public
@@ -399,15 +417,25 @@ export const planUpdate = (
 
     const migrationGaps: Array<UpdateImpact["migrationGaps"][number]> = [];
     const contractDrifts: Array<UpdateImpact["contractDrifts"][number]> = [];
+    const liveTips: Array<UpdateImpact["liveTips"][number]> = [];
 
     if (dialStatusEnabled) {
       for (const peer of peerEntries.values()) {
         const snapOpt = yield* dialStatus(peer);
         if (Option.isNone(snapOpt)) continue;
         const snap = snapOpt.value;
+        const isTarget = snap.node === target;
         for (const row of snap.services) {
           const next = byKey.get(row.key);
           if (next === undefined) continue;
+          liveTips.push({
+            node: snap.node,
+            serviceKey: row.key,
+            schemaVersion: row.schemaVersion,
+          });
+          // Hard blockers are target-scoped — coUpdate peers stay advisory so
+          // ordered fleet plans (A then B) are not fail-closed on B's old tip.
+          if (!isTarget) continue;
           const expected = contractHashOf(next);
           if (row.contractHash !== expected) {
             contractDrifts.push({
@@ -428,7 +456,7 @@ export const planUpdate = (
       }
     }
 
-    const wireRemovals = [...wireRemovalsFor(options?.incumbent, byKey)];
+    const wireRemovals = wireRemovalsFor(options?.incumbent, byKey);
     const lookupFirst = served.some((key) => LOOKUP_SERVICE_KEYS.has(key));
     const blocked =
       migrationGaps.length > 0 ||
@@ -443,6 +471,7 @@ export const planUpdate = (
       migrationGaps,
       wireRemovals,
       contractDrifts,
+      liveTips,
       lookupFirst,
       blocked,
     } satisfies UpdateImpact;

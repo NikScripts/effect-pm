@@ -16,7 +16,7 @@ import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Directory from "../src/Directory";
 import * as Hyperlink from "../src/Hyperlink";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Node from "../src/Node";
 
 // D5/D6 — node directory on Lookup: advertise / nodesServing / unregister / livenessReplace.
@@ -313,19 +313,19 @@ describe("Node.unix directory wire", () => {
 
 describe("resolveOnConflict", () => {
   it("walks prefs until a concrete policy; hard fallback livenessReplace", () => {
-    expect(Policy.resolveOnConflict("inherit", "askIncumbent")).toBe(
+    expect(LookupPolicy.resolveOnConflict("inherit", "askIncumbent")).toBe(
       "askIncumbent",
     );
-    expect(Policy.resolveOnConflict(undefined, "inherit", "reject")).toBe(
+    expect(LookupPolicy.resolveOnConflict(undefined, "inherit", "reject")).toBe(
       "reject",
     );
-    expect(Policy.resolveOnConflict("livenessReplace", "askIncumbent")).toBe(
+    expect(LookupPolicy.resolveOnConflict("livenessReplace", "askIncumbent")).toBe(
       "livenessReplace",
     );
-    expect(Policy.resolveOnConflict("inherit", undefined)).toBe(
+    expect(LookupPolicy.resolveOnConflict("inherit", undefined)).toBe(
       "livenessReplace",
     );
-    expect(Node.resolveOnConflict).toBe(Policy.resolveOnConflict);
+    expect(Node.resolveOnConflict).toBe(LookupPolicy.resolveOnConflict);
   });
 
   it("Lookup stamps concrete default; Tag defaults inherit", () => {

@@ -201,7 +201,7 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) on the existing Advice tag (no new sugar namespace). `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
 44. **Sibling Tag modules (Eng'd)** — `hyperlink-ts/Advice` / `Directory` / `Identity` are own namespaces (`import * as Advice` → `Advice.Service` / `Advice.prefer` / `Advice.changes`). Banned: `import { Advice } from "…/Lookup"` and `Lookup.Advice.*`. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
 45. **peersLayer D parity (Eng'd)** — directory-mode `peersLayer` matches `lookupClient`: **build-then-swap** peer dials (prior stays until next succeeds); Effect peer RPCs that hit `RpcClientError` **retry once** after rebind. Streams follow dial generations (Policy). Stable `peers[nodeKey]` facade identity across swaps.
-46. **Policy (Eng'd)** — `hyperlink-ts/Policy`: composable Layer fragments for dial (`sticky` / `streamGap` / `coldAmbiguous` / `pick`), verify (`verifyOff` / `verifyStatus` — replaces `Hyperlink.clientVerify`), advertise conflict (`askIncumbent` / `livenessReplace` / `OnConflict` SSOT), and yield (`yieldAccept` / `yieldRefuse`). Helpers: `Policy.provide` / `Policy.layer`. Node/Listen call-site stamps remain overrides. Defaults: sticky + stall + cold fail + verify reject + conflict inherit + yield accept.
+46. **Policy (Eng'd)** — `hyperlink-ts/LookupPolicy`: composable Layer fragments for dial (`sticky` / `streamGap` / `coldAmbiguous` / `pick`), verify (`verifyOff` / `verifyStatus` — replaces `Hyperlink.clientVerify`), advertise conflict (`askIncumbent` / `livenessReplace` / `OnConflict` SSOT), and yield (`yieldAccept` / `yieldRefuse`). Helpers: `LookupPolicy.provide` / `LookupPolicy.layer`. Node/Listen call-site stamps remain overrides. Defaults: sticky + stall + cold fail + verify reject + conflict inherit + yield accept.
 
 **Still open for D:** optional stream resume tokens / seam dedupe. Dual-serve sticky + `Advice.prefer` + Dialers census shipped (`restartSuccessor` stamps prefer by default).
 
@@ -267,7 +267,7 @@ Owner locked #22–26; Eng on tip:
 36. **Lookup-node handoff — re-opened (high priority; owner 2026-08-03).**
     - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
     - **Launcher ensure-Lookup-first (locked):** if Lookup not running → spawn Lookup-only first (operator address, else safe default when supported); if already running → use it. No Soft-bake onto app nodes under Launcher. No address + no default → fail closed.
-    - **Already up ≠ always hand off** — custody handoff only for spawned children; migration `{ handoff }` opt-in; Directory conflicts via `Policy.onConflict` / `askIncumbent`; Lookup replace only when orchestrating A→B.
+    - **Already up ≠ always hand off** — custody handoff only for spawned children; migration `{ handoff }` opt-in; Directory conflicts via `Policy.Conflict` / `askIncumbent`; Lookup replace only when orchestrating A→B.
     - **Single address lock:** one Lookup endpoint; A/B = successive owners; `Lookup.follow` + Policy for the gap (**follow + handoff + `ensureLookup` Eng'd**).
     - Eng order: ~~`Lookup.follow` + gap~~ → ~~orchestrated handoff~~ → ~~Launcher ensure-Lookup-first~~.
     - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked).

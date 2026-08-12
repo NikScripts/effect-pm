@@ -3,6 +3,7 @@
  *
  * Consume as `import * as Node from "hyperlink-ts/Node"`.
  *
+ * - {@link make} — address-list node (`class X extends Node.make(key, Address.http(":8080")).pipe(…) {}`)
  * - {@link Service} — declare a named transport endpoint (`class X extends Node.Service()(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link asLookup} — brand a Tag node as the Lookup-server (`isLookupNode: true`)
@@ -21,6 +22,8 @@
  *
  * @module Node
  */
+export { make, addressesOf, nodePolicyOf } from "./internal/nodeMake";
+export type { NodeMakeDef, NodeMakeOptions } from "./internal/nodeMake";
 export {
   Service,
   withProtocol,
@@ -60,8 +63,8 @@ export type {
   WsListenArg,
   IpcListenArg,
 } from "./internal/nodeCore"
-export type { OnConflict, OnConflictResolved } from "./Policy"
-export { resolveOnConflict } from "./Policy"
+export type { OnConflict, OnConflictResolved } from "./LookupPolicy"
+export { resolveOnConflict } from "./LookupPolicy"
 export { listen } from "./internal/nodeListen"
 export { unix } from "./internal/nodeUnix"
 export { http } from "./internal/nodeHttp"

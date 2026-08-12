@@ -2,7 +2,7 @@
  * @module examples/node/policy-lookup-cutover
  *
  * **Policy + lookupClient cutover** — warm sticky dual-serve, Advice prefer early-move,
- * typed `Policy.make({ … })` via `Policy.provide`. Dialers keep one `lookupClient`
+ * typed `LookupPolicy.make({ … })` via `LookupPolicy.provide`. Dialers keep one `lookupClient`
  * facade across A→B.
  *
  * ```bash
@@ -28,7 +28,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Directory from "../../src/Directory";
 import * as Advice from "../../src/Advice";
-import * as Policy from "../../src/Policy";
+import * as LookupPolicy from "../../src/LookupPolicy";
 import * as Node from "../../src/Node";
 
 const tmpSock = (label: string) =>
@@ -90,14 +90,14 @@ const program = Effect.gen(function* () {
     ]).pipe(Layer.provide(lookupClient)),
   );
 
-  // Typed Policy — pipe layer to expand config (also Policy.layer(a, b, c)).
-  const cutover = Policy.make({ Sticky: true, ColdAmbiguous: "fail" }).pipe(
-    Policy.layer(Policy.streamGap("stall")),
-    Policy.layer(Policy.verifyReject),
+  // Typed Policy — pipe layer to expand config (also LookupPolicy.layer(a, b, c)).
+  const cutover = LookupPolicy.make({ Sticky: true, ColdAmbiguous: "fail" }).pipe(
+    LookupPolicy.layer(LookupPolicy.streamGap("stall")),
+    LookupPolicy.layer(LookupPolicy.verifyReject),
   );
   const clientCtx = yield* Layer.build(
     Hyperlink.lookupClient(Jobs).pipe(
-      Policy.provide(cutover),
+      LookupPolicy.provide(cutover),
       Layer.provide(lookupClient),
     ),
   );
@@ -123,7 +123,7 @@ const program = Effect.gen(function* () {
 
   // Warm sticky: stay on A while both are Directory-visible and Advice is clear.
   yield* Effect.sleep(Duration.millis(80));
-  yield* step("4) Still on A (Policy.sticky)", yield* readJobs, 5);
+  yield* step("4) Still on A (LookupPolicy.sticky)", yield* readJobs, 5);
 
   yield* Effect.logInfo("5) Advice.prefer(B) — early move before A leaves");
   yield* Advice.prefer(Jobs, WorkerB.key).pipe(Effect.provide(lookupCtx));

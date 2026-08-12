@@ -50,7 +50,7 @@
  * Lookup / cutover (living docs under `docs/guides/`):
  * - {@link identity} + pipe `Lookup.client` / `Lookup.layer` on listens — Directory advertise
  * - `Lookup.follow` — hot dialer for one Lookup address across A→B ownership replace (gap Policy)
- * - {@link lookupClient} — dial without a named Node; compose `hyperlink-ts/Policy` for sticky /
+ * - {@link lookupClient} — dial without a named Node; compose `hyperlink-ts/LookupPolicy` for sticky /
  *   stream gap / cold ambiguous
  * - Directory-mode {@link peersLayer} — same hot-rebind parity as `lookupClient`
  * - {@link serve}`(…, { handoff })` + `Node.shutdown` — opt-in per-service migration (WorkPool
@@ -112,7 +112,7 @@ import {
 // Type-only — avoids a runtime Hyperlink↔Lookup-family cycle; claim path dynamic-imports.
 import type { Service as LookupAdvice } from "./Advice";
 import type { Service as LookupDirectory } from "./Directory";
-import * as Policy from "./Policy";
+import * as LookupPolicy from "./LookupPolicy";
 import type { Service as LookupIdentity } from "./Identity";
 import {
   AddressedNode,
@@ -385,7 +385,7 @@ export class MissingClientProtocol extends Data.TaggedError("MissingClientProtoc
 
 /**
  * Errors default-on / deep client verify may surface on addressed client Layers.
- * Mode lives on {@link Policy.Verify} (`Policy.verifyOff` / `verifyStatus` / `verifyReject`).
+ * Mode lives on {@link LookupPolicy.Verify} (`LookupPolicy.verifyOff` / `verifyStatus` / `verifyReject`).
  *
  * @category models
  * @public
@@ -3041,17 +3041,17 @@ export class LookupClientError extends Data.TaggedError("LookupClientError")<{
 
 /**
  * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4) and no live
- * Advice prefer matches a row. Prefer {@link Policy.pick} — this call-site field
+ * Advice prefer matches a row. Prefer {@link LookupPolicy.Pick} — this call-site field
  * remains for back-compat (wins over the Policy reference when set).
  *
  * @category models
  * @public
  */
-export type LookupClientPick = Policy.Pick;
+export type LookupClientPick = LookupPolicy.Pick;
 
 /**
  * Options for {@link lookupClient}. Prefer composable {@link Policy} fragments
- * (`Policy.provide` / `Policy.pick`); `pick` here is call-site sugar.
+ * (`LookupPolicy.provide` / `LookupPolicy.pick`); `pick` here is call-site sugar.
  *
  * @category models
  * @public
@@ -4314,7 +4314,7 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
   // Opt out of default-on verify: this helper runs inside Layer.unwrap (identity
   // claim / lookupClient), and nested deep verify deadlocks on the peer dial.
   return clientLayer(tag, node).pipe(
-    Policy.provide(Policy.verifyOff),
+    LookupPolicy.provide(LookupPolicy.verifyOff),
   ) as any;
 };
 
@@ -5700,7 +5700,7 @@ const probeEndpointDeep = (
     // Skip default-on verify on this nested status client (we *are* the verify probe).
     const ctx = yield* Layer.build(
       clientLayer(NodeStatusTag, dialTarget).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     const snap = yield* Effect.gen(function* () {
@@ -5865,7 +5865,7 @@ type ClientVerifyProbeOptions = VerifyConnectionOptions & {
 };
 
 /**
- * Default-on client verify (§8.6) — `"reject"` unless {@link Policy.Verify} overrides.
+ * Default-on client verify (§8.6) — `"reject"` unless {@link LookupPolicy.Verify} overrides.
  * When `serviceKey` + `contractHash` are set (tag-aware clients), escalates to deep F3/F4.
  * @internal
  */
@@ -5874,7 +5874,7 @@ const applyClientVerify = (
   options?: ClientVerifyProbeOptions,
 ): Effect.Effect<void, ClientVerifyError> =>
   Effect.gen(function* () {
-    const mode = yield* Policy.Verify;
+    const mode = yield* LookupPolicy.Verify;
     if (mode === false) {
       return;
     }
@@ -6353,32 +6353,32 @@ const makeLivePeerService = <Self, S extends Spec>(
  * (via {@link Lookup.nodesServing} / the Directory tag as a Context key).
  *
  * **Resolve order:** Identity `resolve` (ignores Policy / Advice / pick) → Directory
- * rows → live Advice prefer → warm {@link Policy.sticky} keep-current →
- * {@link Policy.pick} / call-site `{ pick }` → {@link Policy.coldAmbiguous}
+ * rows → live Advice prefer → warm {@link LookupPolicy.sticky} keep-current →
+ * {@link LookupPolicy.Pick} / call-site `{ pick }` → {@link LookupPolicy.ColdAmbiguous}
  * (`"fail"` default → {@link LookupClientError} `ambiguous`).
  *
  * **Hot-rebind:** watches Directory / Advice `changes`; prior dial stays until the
  * next dial builds successfully. Effect RPCs retry **once** on `RpcClientError`.
  * Streams / `ref.changes` stay one outer Stream across dial swaps
- * ({@link Policy.streamGap}, default `"stall"`).
+ * ({@link LookupPolicy.StreamGap}, default `"stall"`).
  *
- * **Policy:** composable Layers — `import * as Policy from "hyperlink-ts/Policy"`.
- * Defaults apply with zero provide; override via `Policy.provide(...)`.
+ * **Policy:** composable Layers — `import * as LookupPolicy from "hyperlink-ts/LookupPolicy"`.
+ * Defaults apply with zero provide; override via `LookupPolicy.provide(...)`.
  *
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
  * import * as Advice from "hyperlink-ts/Advice"
- * import * as Policy from "hyperlink-ts/Policy"
+ * import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
  *
  * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(Policy.sticky, Policy.streamGap("stall")),
+ *   LookupPolicy.provide(LookupPolicy.sticky, LookupPolicy.streamGap("stall")),
  *   Layer.provide(Lookup.layer),
  * )
  *
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
- * Hyperlink.lookupClient(Mail, { pick: "first" }) // or Policy.pick("first")
+ * Hyperlink.lookupClient(Mail, { pick: "first" }) // or LookupPolicy.pick("first")
  * Hyperlink.client(Mail, East)
  * ```
  *
@@ -6403,10 +6403,10 @@ export const lookupClient = <Self, S extends Spec>(
       const directory = yield* Directory.Service;
       const advice = yield* Advice.Service;
       const serviceKey = tag[wireKeySym];
-      const stickyOn = yield* Policy.Sticky;
-      const streamGap = yield* Policy.StreamGap;
-      const coldAmbiguous = yield* Policy.ColdAmbiguous;
-      const policyPick = yield* Policy.Pick;
+      const stickyOn = yield* LookupPolicy.Sticky;
+      const streamGap = yield* LookupPolicy.StreamGap;
+      const coldAmbiguous = yield* LookupPolicy.ColdAmbiguous;
+      const policyPick = yield* LookupPolicy.Pick;
 
       let clientScope: Scope.Closeable | undefined;
       const holder: { current: ServiceOf<S, Self> } = {
@@ -7214,7 +7214,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                 const installGen = yield* SubscriptionRef.make(0);
                 const gate = yield* Semaphore.make(1);
                 const dialerId = yield* Dialers.mintId;
-                const streamGap = yield* Policy.StreamGap;
+                const streamGap = yield* LookupPolicy.StreamGap;
                 const facade = makeLivePeerService(
                   tag,
                   holder,
@@ -7538,7 +7538,7 @@ function clientLayer<Self, S extends Spec>(
   // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
   // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
   // Default-on verify (reject): peer down / wrong-or-stale contract fails Layer build —
-  // opt out via {@link Policy.verifyOff}. Reserved node-status is auto-served and absent from
+  // opt out via {@link LookupPolicy.verifyOff}. Reserved node-status is auto-served and absent from
   // `status.services`, so it stays tier-1 (reachability only).
   if (isAddressedNode(nodeKey as AnyNode)) {
     const addressed = nodeKey as AddressedNode<unknown>;

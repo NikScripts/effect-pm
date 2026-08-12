@@ -39,7 +39,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Launcher from "../../src/Launcher";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
-import * as Policy from "../../src/Policy";
+import * as LookupPolicy from "../../src/LookupPolicy";
 import * as Update from "../../src/Update";
 import {
   Jobs,
@@ -93,7 +93,7 @@ const program = Effect.gen(function* () {
   const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
   const lookupCtx = Context.merge(lookupServer, lookupClient);
 
-  const cutover = Policy.make({
+  const cutover = LookupPolicy.make({
     Sticky: true,
     ColdAmbiguous: "fail",
     StreamGap: "stall",
@@ -129,7 +129,7 @@ const program = Effect.gen(function* () {
 
     const stickyClient = yield* Layer.build(
       Hyperlink.lookupClient(Probe).pipe(
-        Policy.provide(cutover),
+        LookupPolicy.provide(cutover),
         Layer.provide(Lookup.client(lookupNode)),
       ),
     );

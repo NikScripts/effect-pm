@@ -100,7 +100,7 @@ multiple rows. Sibling module: `import * as Advice from "hyperlink-ts/Advice"` â
 ## Policy
 
 Composable Layer fragments for dial sticky / stream gap / cold pick, client verify, advertise
-conflict, and yield. `import * as Policy from "hyperlink-ts/Policy"`. Guide: [Policy](/docs/policy).
+conflict, and yield. `import * as LookupPolicy from "hyperlink-ts/LookupPolicy"`. Guide: [Policy](/docs/policy).
 
 ## Launcher
 

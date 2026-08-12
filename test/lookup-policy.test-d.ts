@@ -1,5 +1,5 @@
 /**
- * Policy public types — real Policy values; layer dual expands configs (pipe + data-first).
+ * Policy public types — camelCase Layer helpers; layer dual expands configs.
  */
 import { Effect, type Layer } from "effect";
 import type {
@@ -12,15 +12,15 @@ import type {
   Policy,
   MergePolicyList,
   ConfigOf,
-} from "../src/Policy";
-import * as PolicyMod from "../src/Policy";
+} from "../src/LookupPolicy";
+import * as PolicyMod from "../src/LookupPolicy";
 import type { LookupClientPick } from "../src/Hyperlink";
 
 type AssertExtends<A, B> = [A] extends [B] ? true : false;
 type AssertEqual<A, B> =
   [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-const _stickyFragOk: AssertExtends<
+const _stickyOk: AssertExtends<
   typeof PolicyMod.sticky,
   Policy<{ Sticky: true }>
 > = true;
@@ -61,6 +61,12 @@ const cutover = PolicyMod.make({
   ColdAmbiguous: "fail",
   Verify: "reject",
 });
+const cutoverLayers = PolicyMod.layer(
+  PolicyMod.sticky,
+  PolicyMod.streamGap("stall"),
+  PolicyMod.coldAmbiguous("fail"),
+  PolicyMod.verify("reject"),
+);
 const _asLayer: Layer.Layer<never> = cutover;
 const _cutoverOk: AssertExtends<
   typeof cutover,
@@ -71,8 +77,17 @@ const _cutoverOk: AssertExtends<
     Verify: "reject";
   }>
 > = true;
+const _cutoverLayersOk: AssertExtends<
+  typeof cutoverLayers,
+  Policy<{
+    Sticky: true;
+    StreamGap: "stall";
+    ColdAmbiguous: "fail";
+    Verify: "reject";
+  }>
+> = true;
 
-// pipe(Policy.layer(...)) expands config — last write wins
+// pipe(LookupPolicy.layer(...)) expands config — last write wins
 const piped = cutover.pipe(
   PolicyMod.layer(PolicyMod.verifyOff),
   PolicyMod.layer(PolicyMod.streamGap("buffer")),
@@ -89,7 +104,6 @@ const _pipedOk: AssertExtends<
 type _PipedCfg = ConfigOf<typeof piped>;
 const _pipedGap: AssertEqual<_PipedCfg["StreamGap"], "buffer"> = true;
 
-// data-first layer also expands
 const expanded = PolicyMod.layer(
   cutover,
   PolicyMod.verifyOff,
@@ -131,10 +145,14 @@ const _yieldEffectCfg: Config = { Yield: Effect.succeed(false) };
 // @ts-expect-error — StreamGap closed union in make
 PolicyMod.make({ StreamGap: "restart" });
 
-// @ts-expect-error — StreamGap closed union on fragment
+// @ts-expect-error — StreamGap closed union on helper
 PolicyMod.streamGap("restart");
 
-void _stickyFragOk;
+// @ts-expect-error — two-arg succeed removed
+PolicyMod.succeed("Sticky", true);
+
+void _stickyOk;
+void _cutoverLayersOk;
 void _gapFn;
 void _coldFn;
 void _verifyFn;

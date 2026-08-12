@@ -8,8 +8,8 @@
 
 Addressed clients should not hang on a dead peer or silently talk past a stale contract.
 `Hyperlink.verifyConnection` is the probe; addressed `Hyperlink.client` (and `Hyperlink.ws`)
-run it **by default**. Mode is a `hyperlink-ts/Policy` fragment (`Policy.verifyOff` /
-`verifyStatus` / `verifyReject`) — compose with `Policy.provide`. Nodeless
+run it **by default**. Mode is a `hyperlink-ts/LookupPolicy` fragment (`LookupPolicy.verifyOff` /
+`verifyStatus` / `verifyReject`) — compose with `LookupPolicy.provide`. Nodeless
 `Hyperlink.connect(tag, protocol)` does not probe — call verify yourself when you want
 fail-fast there.
 
@@ -23,22 +23,22 @@ Building an addressed client Layer probes the peer before the handle is usable:
 
 | Fragment | Mode | Behavior |
 |----------|------|----------|
-| `Policy.verifyReject` | `"reject"` (**default**) | Probe fails → Layer fails (`NodeUnreachable`, or deep errors below) |
-| `Policy.verifyStatus` | `"status"` | Probe runs; failure is ignored (connect proceeds) |
-| `Policy.verifyOff` | `false` | Skip verify |
+| `LookupPolicy.verifyReject` | `"reject"` (**default**) | Probe fails → Layer fails (`NodeUnreachable`, or deep errors below) |
+| `LookupPolicy.verifyStatus` | `"status"` | Probe runs; failure is ignored (connect proceeds) |
+| `LookupPolicy.verifyOff` | `false` | Skip verify |
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import * as Policy from "hyperlink-ts/Policy"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 
 // Opt out for a nested/bootstrap client (Lookup.client / identity ping do this internally):
-Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyOff))
+Hyperlink.client(Emails, WorkerNode).pipe(LookupPolicy.provide(LookupPolicy.verifyOff))
 
 // Soft: probe but don't fail the Layer
-Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyStatus))
+Hyperlink.client(Emails, WorkerNode).pipe(LookupPolicy.provide(LookupPolicy.verifyStatus))
 
 // Explicit reject (same as default — useful in a named bundle)
-Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyReject))
+Hyperlink.client(Emails, WorkerNode).pipe(LookupPolicy.provide(LookupPolicy.verifyReject))
 ```
 
 Tag-aware addressed clients escalate to **deep** verify (node-handle status RPC + service readiness +
@@ -77,7 +77,7 @@ Catch via `Exit` / `_tag` — remediation messages name the fix.
 
 | Form | Run |
 |------|-----|
-| Tiers + `Policy.verify*` | `pnpm run example:node-verify-connection` |
+| Tiers + `LookupPolicy.verify*` | `pnpm run example:node-verify-connection` |
 | Docs page | [Node — verifyConnection](/docs/node-verify-connection) |
 
 ## See also

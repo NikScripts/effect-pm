@@ -184,7 +184,7 @@ yield* Launcher.up(workerSpec).pipe(Effect.provide(Launcher.alreadyUpAdopt))
 
 Bare skip without a Ready probe is rejected. Adopt never means migration-handoff or
 Directory steal. Custody `Handle.handoff` is only for children **this** Launcher spawned.
-Directory conflicts use `Policy.onConflict` / `askIncumbent`. Intentional Lookup A→B is an
+Directory conflicts use `Policy.Conflict` / `askIncumbent`. Intentional Lookup A→B is an
 orchestrated same-address ownership move (Launcher/orchestrator as middleman).
 
 **Who owns what:** Lookup = membership + dial truth (+ `Lookup.planUpdate`);
@@ -199,7 +199,9 @@ fail-closed on migration gaps / wire removals / contract drifts. Ambient Layers:
 (plan → `up(B)` → `Advice.prefer(B)` → shutdown `A`; captures A's Directory dial
 **before** `up` so same-`nodeKey` dial-replace does not hide the outgoing node).
 Prefer is on by default (`prefer: false` to skip) — sticky dual-serve while A is
-still up. Live dial census for impact is `hyperlink-ts/Dialers`
+still up. A's `Node.shutdown` keeps that stamp when B already replaced the
+Directory dial (same-identity) or when prefer points at a different `nodeKey`.
+Live dial census for impact is `hyperlink-ts/Dialers`
 (`planUpdate.clientsAtRisk`).
 
 ```ts
@@ -212,7 +214,7 @@ yield* Launcher.restartSuccessor({
 })
 ```
 
-**Binary update (file-swap dream):** prefer **`Update.plan` → `simulate` → `execute`**
+**Binary / fleet update:** prefer **`Update.plan` → `simulate` → `execute`**
 ([Update](/docs/update)) over options-bag `restartSuccessor`. Walkthrough:
 [dream redeploy](/docs/launcher-dream-redeploy) ·
 `pnpm run example:launcher-dream-redeploy`. Address / proxy design still open:

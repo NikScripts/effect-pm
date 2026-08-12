@@ -412,19 +412,41 @@ export const payloadWireSchema = (payload: Schema.Top): Schema.Top =>
 const workPoolItemSchemaSym = Symbol.for("hyperlink-ts/WorkPool/itemSchema");
 
 /**
- * Tip `schemaVersion` for a served tag when it carries a WorkPool item schema.
+ * WorkPool `itemSchema` stamped on a served tag, when present.
  *
  * @internal
  */
-export const schemaVersionFromTag = (tag: unknown): string | undefined => {
+export const itemSchemaOf = (tag: unknown): unknown => {
   if (
     (typeof tag === "object" || typeof tag === "function") &&
     tag !== null &&
     workPoolItemSchemaSym in tag
   ) {
-    const item = (tag as Record<symbol, unknown>)[workPoolItemSchemaSym];
-    if (Schema.isSchema(item)) return schemaVersion(item);
+    return Reflect.get(tag, workPoolItemSchemaSym);
   }
+  return undefined;
+};
+
+/**
+ * Whether `from` is the tip or an intermediate step of a Versioned (or plain) schema.
+ *
+ * @internal
+ */
+export const versionInChain = (schema: unknown, from: string): boolean => {
+  if (!isVersioned(schema)) {
+    return Schema.isSchema(schema) && schemaVersion(schema) === from;
+  }
+  return schema[VersionedTypeId].steps.some((step) => step.version === from);
+};
+
+/**
+ * Tip `schemaVersion` for a served tag when it carries a WorkPool item schema.
+ *
+ * @internal
+ */
+export const schemaVersionFromTag = (tag: unknown): string | undefined => {
+  const item = itemSchemaOf(tag);
+  if (Schema.isSchema(item)) return schemaVersion(item);
   return undefined;
 };
 

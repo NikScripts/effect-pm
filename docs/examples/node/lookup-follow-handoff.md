@@ -26,7 +26,7 @@ Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 not Launcher custody `Handle.handoff`.
 
 1. Lookup A binds `lookup.sock`
-2. Dialers use `Lookup.follow` + `Policy.streamGap` (same path before & after)
+2. Dialers use `Lookup.follow` + `Policy.StreamGap` (same path before & after)
 3. Orchestrator forks B bind-with-retry, then releases A
 4. B binds; follow reinstalls; Identity works on a **cold** registry
 

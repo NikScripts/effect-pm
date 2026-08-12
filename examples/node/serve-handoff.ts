@@ -21,7 +21,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Clock, Effect, Layer, Predicate, Ref, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
-import * as Policy from "../../src/Policy";
+import * as LookupPolicy from "../../src/LookupPolicy";
 import * as Node from "../../src/Node";
 
 const tmpSock = (label: string) =>
@@ -85,7 +85,7 @@ const program = Effect.gen(function* () {
         },
       ),
     ]).pipe(
-      Policy.provide(Policy.verifyOff),
+      LookupPolicy.provide(LookupPolicy.verifyOff),
       Layer.provide(lookupClient),
     ),
   );
@@ -111,7 +111,7 @@ const program = Effect.gen(function* () {
   // Node stayed up — Jobs store still has work after a failed take? take emptied then
   // deferred before give; restore check: phase is running again via status.
   const nodeCtx = yield* Layer.build(
-    Node.connect(Worker).pipe(Policy.provide(Policy.verifyOff)),
+    Node.connect(Worker).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)),
   );
   const snap = yield* Effect.gen(function* () {
     const node = yield* Worker;

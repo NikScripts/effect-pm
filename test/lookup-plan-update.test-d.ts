@@ -32,6 +32,11 @@ function typeLock(
     readonly serviceKey: string;
     readonly target: string;
   } = impact.clientsAtRisk[0]!;
+  const _liveTip: {
+    readonly node: string;
+    readonly serviceKey: string;
+    readonly schemaVersion: string | undefined;
+  } = impact.liveTips[0]!;
 
   void _hasBlocked;
   void _hasUnknown;
@@ -41,6 +46,7 @@ function typeLock(
   void _blockedFlag;
   void _lookupFirst;
   void _risk;
+  void _liveTip;
   void tag;
 }
 

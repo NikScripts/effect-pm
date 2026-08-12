@@ -24,7 +24,7 @@ import {
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Directory from "../../src/Directory";
-import * as Policy from "../../src/Policy";
+import * as LookupPolicy from "../../src/LookupPolicy";
 import * as Node from "../../src/Node";
 
 const tmpSock = (label: string) =>
@@ -61,7 +61,7 @@ const program = Effect.gen(function* () {
       Node.unix(Worker, [
         Hyperlink.serve(Jobs, { ping: Effect.succeed("ok") }),
       ]).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
         Layer.provide(lookupClient),
       ),
     ),

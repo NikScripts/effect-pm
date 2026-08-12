@@ -19,7 +19,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
 import * as Advice from "../src/Advice";
 import * as Directory from "../src/Directory";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
@@ -148,7 +148,7 @@ describe("Policy + lookupClient", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
   );
 
-  it.live("Policy.pick + provide: cold pickFirst via fragment", () =>
+  it.live("LookupPolicy.pick + provide: cold pickFirst via fragment", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("pick-lookup");
       const workerAPath = yield* tmpSock("pick-a");
@@ -188,7 +188,7 @@ describe("Policy + lookupClient", () => {
 
       const clientCtx = yield* Layer.build(
         Hyperlink.lookupClient(Jobs).pipe(
-          Policy.provide(Policy.coldAmbiguous("pickFirst")),
+          LookupPolicy.provide(LookupPolicy.coldAmbiguous("pickFirst")),
           Layer.provide(lookupClientLayer),
         ),
       );
@@ -248,7 +248,7 @@ describe("Policy + lookupClient", () => {
 
       const clientCtx = yield* Layer.build(
         Hyperlink.lookupClient(Jobs).pipe(
-          Policy.provide(Policy.streamGap("stall")),
+          LookupPolicy.provide(LookupPolicy.streamGap("stall")),
           Layer.provide(lookupClientLayer),
         ),
       );

@@ -44,7 +44,7 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Launcher from "hyperlink-ts/Launcher"
 import * as Lookup from "hyperlink-ts/Lookup"
 import * as Node from "hyperlink-ts/Node"
-import * as Policy from "hyperlink-ts/Policy"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 ```
@@ -130,7 +130,7 @@ const child = (port: number) =>
 ### 4. Sticky `lookupClient` (build after Directory has a row)
 
 ```ts
-const cutover = Policy.make({
+const cutover = LookupPolicy.make({
   Sticky: true,
   ColdAmbiguous: "fail",
   StreamGap: "stall",
@@ -144,7 +144,7 @@ yield* waitUntil(Directory.nodesServing(Jobs), (rows) =>
 
 const stickyClient = yield* Layer.build(
   Hyperlink.lookupClient(Probe).pipe(
-    Policy.provide(cutover),
+    LookupPolicy.provide(cutover),
     Layer.provide(Lookup.client(lookupNode)),
   ),
 )
@@ -157,7 +157,7 @@ const tipA = yield* Effect.gen(function* () {
 ```
 
 While A is still up, a file-swap alone does **not** move the tip — sticky keeps the
-warm dial. Tip moves after `restartSuccessor` stamps `Advice.prefer(B)` and/or A dies.
+warm dial. Tip moves after `Update.execute` stamps `Advice.prefer(B)` and/or A dies.
 
 ### 5. Enqueue pending on addressed A
 
@@ -168,29 +168,34 @@ yield* Effect.gen(function* () {
 }).pipe(Effect.provide(Hyperlink.client(Jobs, nodeA)), Effect.scoped)
 ```
 
-### 6. `Launcher.restartSuccessor` — the update API
+### 6. `Update.plan` → `simulate` → `execute`
 
 ```ts
-const impact = yield* Launcher.restartSuccessor({
-  target: WORKER_NODE_KEY, // Directory nodeKey of A
-  successor: {
-    node: nodeB,           // new dial, same key
-    process: child(portB), // spawns active path → now v2 on disk
-    ready: { timeout: "25 seconds" },
-  },
-  tags: [Jobs, Probe],     // what B will serve → Lookup.planUpdate
-  // prefer: true (default) — Advice.prefer(B) after up(B), before shutdown(A)
-  // incumbent?: [Jobs, Probe] — enables wireRemovals in the plan
-  // skipPlan?: true         — ops escape hatch
+import * as Update from "hyperlink-ts/Update"
+
+const plan = yield* Update.plan({
+  steps: [
+    {
+      target: WORKER_NODE_KEY, // Directory nodeKey of A
+      successor: {
+        node: nodeB,           // new dial, same key
+        process: child(portB), // spawns active path → now v2 on disk
+        ready: { timeout: "25 seconds" },
+      },
+      tags: [Jobs, Probe],     // what B will serve → Lookup.planUpdate
+    },
+  ],
 })
+yield* Update.simulate(plan) // validate — no spawn
+yield* Update.execute(plan)  // ordered restartSuccessor (skipPlan)
 ```
 
-Sequence inside `restartSuccessor`:
+Guide: [Update](/docs/update). Sequence inside each executed step:
 
 1. Capture A's Directory dial **before** `up` (same-`nodeKey` would hide A)
-2. `Lookup.planUpdate(target, tags)` — fail-closed unless forced / skipped
+2. (Planning already done — execute uses `skipPlan: true`)
 3. `Launcher.up(B)` — OS loads swapped v2 file
-4. `Advice.prefer(B)` per tag (unless `prefer: false`)
+4. `Advice.prefer(B)` per tag (unless step `prefer: false`)
 5. `Node.shutdown(A)` — WorkPool baked `releaseEnqueueHandoff` moves pending
 
 Provide at the edge:
@@ -198,10 +203,9 @@ Provide at the edge:
 ```ts
 program.pipe(
   Effect.scoped,
-  Effect.provide(Launcher.layer),
-  Effect.provide(Lookup.planStatusOff), // or planFailClosed / planForce
-  Effect.provide(lookupCtx),            // Lookup server + client
+  Effect.provide(Layer.merge(Launcher.layer, NodeFileSystem.layer)),
 )
+// Lookup server+client + planStatusOff composed inside the program scope
 ```
 
 ### 7. Prove the dial + tip + payloads
@@ -238,7 +242,7 @@ const released = yield* Effect.gen(function* () {
 |---------|-----|
 | Membership / dial truth / dry-run | `Lookup` + `Directory` + `Lookup.planUpdate` |
 | Custody / spawn / exclusive bind | `Launcher.up` / `Launcher.restartSuccessor` |
-| Sticky dual-serve + stream seam | `Policy.make({ Sticky, StreamGap, … })` on `lookupClient` |
+| Sticky dual-serve + stream seam | `LookupPolicy.make({ Sticky, StreamGap, … })` on `lookupClient` |
 | Early move while A still up | `Advice.prefer(B)` (default inside `restartSuccessor`) |
 | Pending WorkPool migration | baked `releaseEnqueueHandoff` on `Node.shutdown(A)` |
 | Live dial census / at-risk clients | `Dialers` (`planUpdate.clientsAtRisk`) |

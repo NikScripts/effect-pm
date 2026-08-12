@@ -286,6 +286,11 @@ Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first
 `examples/launcher/plan-update.ts` · `pnpm run example:launcher-plan-update` — dry-run impact Layers, then `restartSuccessor` blocked before spawn  
 Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
 
+### Update fleet plan (dry-run)
+
+`examples/launcher/update-fleet.ts` · `pnpm run example:launcher-update-fleet` — multi-step `Update.plan` + `simulate`, inspect `coUpdate` / `uncoveredCoUpdate` (no spawn)  
+Guide: [Update](/docs/update)
+
 ### [restartSuccessor live A→B](/docs/launcher-restart-successor)
 
 `examples/launcher/restart-successor.ts` · `pnpm run example:launcher-restart-successor` — OS A→B; Directory dial moves; B answers  

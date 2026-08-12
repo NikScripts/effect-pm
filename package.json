@@ -128,9 +128,21 @@
       "types": "./dist/Identity.d.ts",
       "default": "./dist/Identity.js"
     },
-    "./Policy": {
-      "types": "./dist/Policy.d.ts",
-      "default": "./dist/Policy.js"
+    "./Address": {
+      "types": "./dist/Address.d.ts",
+      "default": "./dist/Address.js"
+    },
+    "./LookupPolicy": {
+      "types": "./dist/LookupPolicy.d.ts",
+      "default": "./dist/LookupPolicy.js"
+    },
+    "./NodePolicy": {
+      "types": "./dist/NodePolicy.d.ts",
+      "default": "./dist/NodePolicy.js"
+    },
+    "./PolicyBuilder": {
+      "types": "./dist/PolicyBuilder.d.ts",
+      "default": "./dist/PolicyBuilder.js"
     },
     "./Lifecycle": {
       "types": "./dist/Lifecycle.d.ts",
@@ -380,6 +392,7 @@
     "example:launcher-lookup-membership": "tsx examples/launcher/lookup-membership.ts",
     "example:launcher-ensure-lookup": "tsx examples/launcher/ensure-lookup.ts",
     "example:launcher-plan-update": "tsx examples/launcher/plan-update.ts",
+    "example:launcher-update-fleet": "tsx examples/launcher/update-fleet.ts",
     "example:launcher-restart-successor": "tsx examples/launcher/restart-successor.ts",
     "example:launcher-dream-redeploy": "tsx examples/launcher/dream-redeploy.ts",
     "example:launcher-minimal-up": "tsx examples/launcher/minimal-up.ts",

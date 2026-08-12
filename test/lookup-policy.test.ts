@@ -15,7 +15,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
 import * as Advice from "../src/Advice";
 import * as Directory from "../src/Directory";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
@@ -34,13 +34,13 @@ const jobsImpl = { jobs: Effect.succeed(1) };
 /** Read ambient Policy refs after providing fragments. */
 const readPolicy = Effect.gen(function* () {
   return {
-    sticky: yield* Policy.Sticky,
-    streamGap: yield* Policy.StreamGap,
-    cold: yield* Policy.ColdAmbiguous,
-    pick: yield* Policy.Pick,
-    verify: yield* Policy.Verify,
-    conflict: yield* Policy.Conflict,
-    yield: yield* Policy.Yield,
+    sticky: yield* LookupPolicy.Sticky,
+    streamGap: yield* LookupPolicy.StreamGap,
+    cold: yield* LookupPolicy.ColdAmbiguous,
+    pick: yield* LookupPolicy.Pick,
+    verify: yield* LookupPolicy.Verify,
+    conflict: yield* LookupPolicy.Conflict,
+    yield: yield* LookupPolicy.Yield,
   };
 });
 
@@ -60,7 +60,7 @@ describe("Policy defaults + compose", () => {
 
   it.effect("make sets refs from object form + stamps runtime config", () =>
     Effect.gen(function* () {
-      const bundle = Policy.make({
+      const bundle = LookupPolicy.make({
         Sticky: false,
         StreamGap: "buffer",
         ColdAmbiguous: "pickFirst",
@@ -69,8 +69,8 @@ describe("Policy defaults + compose", () => {
         Conflict: "askIncumbent",
         Yield: false,
       });
-      expect(Policy.isPolicy(bundle)).toBe(true);
-      expect(Policy.config(bundle)).toEqual({
+      expect(LookupPolicy.isPolicy(bundle)).toBe(true);
+      expect(LookupPolicy.config(bundle)).toEqual({
         Sticky: false,
         StreamGap: "buffer",
         ColdAmbiguous: "pickFirst",
@@ -90,35 +90,67 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
+  it.effect("camelCase helpers + fromConfig/toConfig/isFragment match bag stamps", () =>
+    Effect.gen(function* () {
+      const fromHandles = LookupPolicy.layer(
+        LookupPolicy.unsticky,
+        LookupPolicy.streamGap("buffer"),
+        LookupPolicy.verify(false),
+      );
+      expect(LookupPolicy.config(fromHandles)).toEqual({
+        Sticky: false,
+        StreamGap: "buffer",
+        Verify: false,
+      });
+      const tagged = LookupPolicy.streamGap("drop");
+      expect(LookupPolicy.config(tagged)).toEqual({ StreamGap: "drop" });
+      expect(
+        LookupPolicy.isFragment("StreamGap")({ _tag: "StreamGap", value: "drop" }),
+      ).toBe(true);
+      expect(LookupPolicy.toConfig(LookupPolicy.fromConfig({ Sticky: true }))).toEqual({
+        Sticky: true,
+      });
+      const d = yield* readPolicy.pipe(
+        Effect.provide(
+          LookupPolicy.layer(fromHandles, tagged, LookupPolicy.yieldRefuse),
+        ),
+      );
+      expect(d.sticky).toBe(false);
+      expect(d.streamGap).toBe("drop");
+      expect(d.verify).toBe(false);
+      expect(yield* d.yield).toBe(false);
+    }),
+  );
+
   it.effect("layer pipe + data-first expand config (last write wins)", () =>
     Effect.gen(function* () {
-      const piped = Policy.make({
+      const piped = LookupPolicy.make({
         StreamGap: "stall",
         Verify: "reject",
         Sticky: true,
       }).pipe(
-        Policy.layer(Policy.streamGap("buffer")),
-        Policy.layer(Policy.verifyOff),
-        Policy.layer(Policy.livenessReplace),
+        LookupPolicy.layer(LookupPolicy.streamGap("buffer")),
+        LookupPolicy.layer(LookupPolicy.verifyOff),
+        LookupPolicy.layer(LookupPolicy.livenessReplace),
       );
-      expect(Policy.config(piped)).toEqual({
+      expect(LookupPolicy.config(piped)).toEqual({
         StreamGap: "buffer",
         Verify: false,
         Sticky: true,
         Conflict: "livenessReplace",
       });
 
-      const dataFirst = Policy.layer(
-        Policy.make({
+      const dataFirst = LookupPolicy.layer(
+        LookupPolicy.make({
           StreamGap: "stall",
           Verify: "reject",
           Sticky: true,
         }),
-        Policy.streamGap("buffer"),
-        Policy.verifyOff,
-        Policy.livenessReplace,
+        LookupPolicy.streamGap("buffer"),
+        LookupPolicy.verifyOff,
+        LookupPolicy.livenessReplace,
       );
-      expect(Policy.config(dataFirst)).toEqual(Policy.config(piped));
+      expect(LookupPolicy.config(dataFirst)).toEqual(LookupPolicy.config(piped));
 
       const d = yield* readPolicy.pipe(Effect.provide(piped));
       expect(d.sticky).toBe(true);
@@ -130,17 +162,17 @@ describe("Policy defaults + compose", () => {
 
   it.effect("layer + provide: last fragment wins per reference", () =>
     Effect.gen(function* () {
-      const bundle = Policy.layer(
-        Policy.sticky,
-        Policy.unsticky,
-        Policy.streamGap("drop"),
-        Policy.streamGap("buffer"),
-        Policy.verifyReject,
-        Policy.verifyOff,
-        Policy.askIncumbent,
-        Policy.livenessReplace,
-        Policy.yieldAccept,
-        Policy.yieldRefuse,
+      const bundle = LookupPolicy.layer(
+        LookupPolicy.sticky,
+        LookupPolicy.unsticky,
+        LookupPolicy.streamGap("drop"),
+        LookupPolicy.streamGap("buffer"),
+        LookupPolicy.verifyReject,
+        LookupPolicy.verifyOff,
+        LookupPolicy.askIncumbent,
+        LookupPolicy.livenessReplace,
+        LookupPolicy.yieldAccept,
+        LookupPolicy.yieldRefuse,
       );
       const d = yield* readPolicy.pipe(Effect.provide(bundle));
       expect(d.sticky).toBe(false);
@@ -151,12 +183,12 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
-  it.effect("Policy.provide accepts a Policy.layer bundle + more fragments", () =>
+  it.effect("LookupPolicy.provide accepts a LookupPolicy.layer bundle + more fragments", () =>
     Effect.gen(function* () {
-      const cutover = Policy.layer(Policy.unsticky, Policy.verifyOff);
+      const cutover = LookupPolicy.layer(LookupPolicy.unsticky, LookupPolicy.verifyOff);
       const d = yield* readPolicy.pipe(
         Effect.provide(
-          Policy.layer(cutover, Policy.streamGap("drop"), Policy.coldAmbiguous("pickFirst")),
+          LookupPolicy.layer(cutover, LookupPolicy.streamGap("drop"), LookupPolicy.coldAmbiguous("pickFirst")),
         ),
       );
       expect(d.sticky).toBe(false);
@@ -167,14 +199,14 @@ describe("Policy defaults + compose", () => {
   );
 
   it("resolveOnConflict + onConflictOf stay on Policy (Node re-exports same fn)", () => {
-    expect(Node.resolveOnConflict).toBe(Policy.resolveOnConflict);
-    expect(Lookup.resolveOnConflict).toBe(Policy.resolveOnConflict);
+    expect(Node.resolveOnConflict).toBe(LookupPolicy.resolveOnConflict);
+    expect(Lookup.resolveOnConflict).toBe(LookupPolicy.resolveOnConflict);
     class Worker extends Node.Service<Worker>()("policy-unit/stamp", {
       path: "/tmp/policy-unit-stamp.sock",
       onConflict: "reject",
     }) {}
-    expect(Policy.onConflictOf(Worker)).toBe("reject");
-    expect(Policy.onConflictOf({})).toBeUndefined();
+    expect(LookupPolicy.onConflictOf(Worker)).toBe("reject");
+    expect(LookupPolicy.onConflictOf({})).toBeUndefined();
   });
 });
 
@@ -208,7 +240,7 @@ describe("Policy dial: unsticky + waitAdvice", () => {
 
       const clientCtx = yield* Layer.build(
         Hyperlink.lookupClient(Jobs).pipe(
-          Policy.provide(Policy.unsticky, Policy.pick("first")),
+          LookupPolicy.provide(LookupPolicy.unsticky, LookupPolicy.pick("first")),
           Layer.provide(lookupClientLayer),
         ),
       );
@@ -268,7 +300,7 @@ describe("Policy dial: unsticky + waitAdvice", () => {
       const fiber = yield* Effect.forkChild(
         Layer.build(
           Hyperlink.lookupClient(Jobs).pipe(
-            Policy.provide(Policy.coldAmbiguous("waitAdvice")),
+            LookupPolicy.provide(LookupPolicy.coldAmbiguous("waitAdvice")),
             Layer.provide(lookupClientLayer),
           ),
         ),
@@ -289,7 +321,7 @@ describe("Policy dial: unsticky + waitAdvice", () => {
 });
 
 describe("Policy yield + conflict ambient", () => {
-  it.effect("Policy.yieldRefuse on listen → askIncumbent newcomer gets IncumbentAlive", () =>
+  it.effect("LookupPolicy.yieldRefuse on listen → askIncumbent newcomer gets IncumbentAlive", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("yield-refuse-lookup");
       const workerPath = yield* tmpSock("yield-refuse-worker");
@@ -309,7 +341,7 @@ describe("Policy yield + conflict ambient", () => {
 
       const workerCtx = yield* Layer.build(
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(
-          Policy.provide(Policy.yieldRefuse),
+          LookupPolicy.provide(LookupPolicy.yieldRefuse),
           Layer.provide(Lookup.client(lookupNode)),
         ),
       );
@@ -340,7 +372,7 @@ describe("Policy yield + conflict ambient", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("Policy.askIncumbent ambient on advertise (call-site inherit)", () =>
+  it.effect("LookupPolicy.askIncumbent ambient on advertise (call-site inherit)", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("ambient-ask-lookup");
       const workerPath = yield* tmpSock("ambient-ask-worker");
@@ -362,7 +394,7 @@ describe("Policy yield + conflict ambient", () => {
       // Incumbent accepts yield (default). Ambient askIncumbent on first listen.
       yield* Layer.build(
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(
-          Policy.provide(Policy.askIncumbent, Policy.yieldAccept),
+          LookupPolicy.provide(LookupPolicy.askIncumbent, LookupPolicy.yieldAccept),
           Layer.provide(Lookup.client(lookupNode)),
         ),
       );
@@ -390,7 +422,7 @@ describe("Policy yield + conflict ambient", () => {
   );
 });
 
-describe("Policy.verifyOff on addressed client", () => {
+describe("LookupPolicy.verifyOff on addressed client", () => {
   it.live("dead peer + verifyOff builds; verifyReject fails", () =>
     Effect.gen(function* () {
       class Ghost extends Node.Service<Ghost>()("policy-unit/Ghost", {
@@ -399,7 +431,7 @@ describe("Policy.verifyOff on addressed client", () => {
 
       const offExit = yield* Effect.exit(
         Layer.build(
-          Hyperlink.client(Jobs, Ghost).pipe(Policy.provide(Policy.verifyOff)),
+          Hyperlink.client(Jobs, Ghost).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)),
         ),
       );
       expect(offExit._tag).toBe("Success");
@@ -407,7 +439,7 @@ describe("Policy.verifyOff on addressed client", () => {
       const rejectExit = yield* Effect.exit(
         Layer.build(
           Hyperlink.client(Jobs, Ghost).pipe(
-            Policy.provide(Policy.verifyReject),
+            LookupPolicy.provide(LookupPolicy.verifyReject),
           ),
         ),
       );

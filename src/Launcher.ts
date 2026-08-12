@@ -10,7 +10,9 @@
  * Lookup or spawns a Lookup-only child before app units — never Soft-bakes onto apps.
  * App already-up: ambient {@link AlreadyUpRef} (default fail → {@link NodeAlreadyUp});
  * {@link alreadyUpAdopt} or per-call `"adopt"` skips spawn (Ready-proved; no Handle).
- * Updates: {@link restartSuccessor} = plan → up B → Advice.prefer(B) → shutdown A.
+ * Single-step cutover: {@link restartSuccessor} = plan → up B → Advice.prefer(B) →
+ * shutdown A. Prefer fleet-shaped `Update.plan` → `simulate` → `execute`
+ * (`hyperlink-ts/Update`) for new apps.
  * Node-platform only (`ChildProcessSpawner` + `Scope` at the app edge — provide {@link layer}).
  *
  * Observability: phases log under spans `launcher.spawn` / `launcher.awaitReady` /

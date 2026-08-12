@@ -5,7 +5,7 @@
  */
 import { Effect, Layer, Predicate } from "effect";
 import * as Hyperlink from "../Hyperlink";
-import * as Policy from "../Policy";
+import * as LookupPolicy from "../LookupPolicy";
 import {
   isAddressedNode,
   NodeUnreachable,
@@ -14,7 +14,8 @@ import {
 } from "./nodeCore";
 
 /**
- * Compose Track C leave on `node`: drain → Advice clear → Directory unregister →
+ * Compose Track C leave on `node`: drain → Directory unregister → Advice clear
+ * (only when the dial-matched row was removed and prefer still points here) →
  * close the listen scope (socket unlink / Layer.launch exits). Idempotent.
  *
  * Prefer this over chaining {@link Node.drain} + manual Lookup calls. Does **not** use
@@ -48,7 +49,7 @@ export const shutdown = (
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, node).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     yield* Effect.gen(function* () {
