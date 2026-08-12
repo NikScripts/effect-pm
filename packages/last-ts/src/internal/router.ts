@@ -7,6 +7,7 @@
 import { Option } from "effect";
 import * as Route from "../Route";
 import type { ApiConstraint } from "./routes";
+import { materializeSync } from "./routes";
 import type { GroupImpl } from "./routerBuilder";
 
 // =============================================================================
@@ -111,7 +112,10 @@ export const makeService = <A extends ApiConstraint>(
   api: A,
   engine: "Memory" | "History",
 ): Service<A> => {
-  const urls = Route.urlBuilder(api);
+  // Materialize deferred fromEffect / groupsFromEffect when R = never.
+  // Context-backed catalogs are already resolved via RouterBuilder.Catalog.
+  const concrete = materializeSync(api);
+  const urls = Route.urlBuilder(concrete);
   const initial =
     engine === "History" ? locationHref() : { pathname: "/", search: "" };
   let pathname = initial.pathname;
@@ -154,7 +158,7 @@ export const makeService = <A extends ApiConstraint>(
   };
 
   return {
-    api,
+    api: concrete,
     _tag: engine,
     urls,
     get pathname() {
@@ -167,7 +171,7 @@ export const makeService = <A extends ApiConstraint>(
       return joinHref(pathname, search);
     },
     get match() {
-      return Option.getOrUndefined(Route.match(api, pathname));
+      return Option.getOrUndefined(Route.match(concrete, pathname));
     },
     go: (next, options) =>
       setHref(next, options?.replace === true ? "replace" : "push"),

@@ -134,10 +134,14 @@ describe("group.fromEffect + groupsFromEffect (Context)", () => {
     }
   });
 
-  it("keeps eager fromEffect (R=never) for sync lists", () => {
-    const g = Route.group("sync").fromEffect(
-      Effect.succeed([Route.get("one", "/one"), Route.get("two", "/two")]),
+  it("materializes R=never fromEffect for sync urlBuilder / match", () => {
+    const site = Route.make("sync").add(
+      Route.group("sync", { topLevel: true }).fromEffect(
+        Effect.succeed([Route.get("one", "/one"), Route.get("two", "/two")]),
+      ),
     );
-    expect(Object.keys(g.routes).sort()).toEqual(["one", "two"]);
+    const urls = Route.urlBuilder(site);
+    expect(urls.one()).toBe("/one");
+    expect(urls.two()).toBe("/two");
   });
 });

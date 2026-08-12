@@ -2,4 +2,4 @@
 "last-ts": minor
 ---
 
-Defer Context-backed `group.fromEffect` and add catalog `groupsFromEffect` (resolved in `RouterBuilder.layer`). Sync/`R=never` Effects still materialize immediately.
+`group.fromEffect` / `groupsFromEffect` always defer; item types stay on the catalog for UrlBuilder (including path-arg arity); bake `R` unions onto `Api` and `RouterBuilder.layer`. Materialize with `resolveApi` / layer (sync helpers only when `R = never`).

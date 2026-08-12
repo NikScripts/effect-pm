@@ -343,7 +343,9 @@ const makeHandlers = <G extends GroupTop>(
 // group / layer (HttpApiBuilder.group / .layer)
 // =============================================================================
 
-type ApiIdOf<A> = A extends Api<infer Id, any> ? Id : string;
+type ApiIdOf<A> = A extends
+  Api<infer Id, infer _Groups, infer _R, infer _Deferred> ? Id
+  : string;
 
 type RouteIsPage<E> = pageSuccess.IsPageEndpoint<E> extends true ? true : false;
 
@@ -464,16 +466,20 @@ export const group = <
 export const layer = <
   Id extends string,
   Groups extends catalog.GroupTop,
+  R = never,
+  DeferredGroups extends catalog.GroupTop = never,
 >(
-  api: Api<Id, Groups> | ApiConstraint,
+  api: Api<Id, Groups, R, DeferredGroups> | ApiConstraint,
 ): Layer.Layer<
   Catalog | Registry,
   never,
-  catalog.Group.ToService<Id, Groups>
+  catalog.Group.ToService<Id, Groups> | R
 > =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const resolved = yield* catalog.resolveApi(api);
+      const resolved = yield* catalog.resolveApi(
+        api as Api<Id, Groups, R, DeferredGroups>,
+      );
       const services = yield* Effect.context<never>();
       const availableGroups = Array.from(services.mapUnsafe.keys()).filter(
         (key) => key.startsWith(GROUP_KEY_PREFIX),
@@ -511,7 +517,7 @@ export const layer = <
   ) as Layer.Layer<
     Catalog | Registry,
     never,
-    catalog.Group.ToService<Id, Groups>
+    catalog.Group.ToService<Id, Groups> | R
   >;
 
 /**

@@ -1,15 +1,13 @@
-# last-ts — Context `fromEffect` / `groupsFromEffect`
+# last-ts — groups from Effect (typed links)
 
 **Run:** `pnpm run example:last-from-effect`
 
-Shows why those APIs exist: the **set of destinations** (and whole flat groups)
-comes from Context services provided at Layer bake. Swap `layerDemo` ↔
-`layerEnterprise` — same catalog definition, different live route table.
+Vision: **groups from Effect** into `Router.make().add` — not Effect→Router.
 
-| API | What it derives |
-|-----|-----------------|
-| `group.fromEffect` | Flat partner endpoints under `/p/*` from `PartnerDirectory` |
-| `groupsFromEffect` | Optional `billing` / `support` groups from `FeatureModules` |
+| API | Role |
+|-----|------|
+| `group.fromEffect` | Flat destinations; **ids typed for `UrlBuilder`** |
+| `groupsFromEffect` | Whole flat groups on the catalog |
+| `RouterBuilder.layer(Site)` | Yields bake `R` (`SiteMode` \| `FeatureModules`) |
 
-Not a static `.add` list. Not `Group.asRoutes`. Not a single `:slug` page with an
-internal switch — each partner is its own destination + page component.
+Layer-swap `layerOrg` / `layerSingle` → different project path grammar + optional `support` group. Handlers stay in `RouterBuilder` (not inside the catalog Effect).

@@ -1,17 +1,16 @@
 /**
  * @module examples/last/from-effect
  *
- * NEW showcase: Context-backed `group.fromEffect` + catalog `groupsFromEffect`.
+ * Groups from Effect into a normal Router catalog — typed for links.
  *
- * Why this cannot be static `.add`:
- * - Partner ids/slugs/components come from {@link PartnerDirectory} (Layer-swapped).
- * - Entire billing/support **groups** appear only when {@link FeatureModules} says so.
- * A hand-written `.add(Route.get("acme"), …)` couples the catalog to one Layer’s data.
+ * - `group.fromEffect` — destinations (ids stay on UrlBuilder)
+ * - `groupsFromEffect` — whole flat groups
+ * - Bake `R` (SiteMode | FeatureModules) shows on `RouterBuilder.layer`
  *
  * Run: `pnpm run example:last-from-effect`
  */
 
-import { Context, Effect, Layer, ManagedRuntime, pipe } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Schema, pipe } from "effect";
 import * as React from "react";
 import * as Last from "last-ts/Last";
 import * as Layout from "last-ts/Layout";
@@ -21,154 +20,113 @@ import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
 
 // =============================================================================
-// Domain services (unknown at catalog authoring time)
+// Domain SSOT — Layer-swappable (not a list of Route.get)
 // =============================================================================
 
-export type Partner = {
-  readonly id: string;
-  readonly slug: string;
-  readonly title: string;
-  /** Distinct page per partner — not one shared `:slug` switch. */
-  readonly Page: React.FC;
-};
-
-export class PartnerDirectory extends Context.Service<
-  PartnerDirectory,
-  { readonly partners: ReadonlyArray<Partner> }
->()("@example/last/from-effect/PartnerDirectory") {}
+export class SiteMode extends Context.Service<
+  SiteMode,
+  { readonly tenancy: "org" | "single" }
+>()("hyperlink-ts/examples/last/from-effect/main/SiteMode") {}
 
 export class FeatureModules extends Context.Service<
   FeatureModules,
   { readonly billing: boolean; readonly support: boolean }
->()("@example/last/from-effect/FeatureModules") {}
+>()("hyperlink-ts/examples/last/from-effect/main/FeatureModules") {}
 
-const page = (label: string, testId: string): React.FC => {
-  const Comp: React.FC = () =>
-    React.createElement("section", { "data-page": testId }, label);
-  Comp.displayName = label;
-  return Comp;
-};
-
-/** Demo tenants — two partners, billing only. */
-export const layerDemo = Layer.mergeAll(
-  Layer.succeed(PartnerDirectory, {
-    partners: [
-      {
-        id: "acme",
-        slug: "acme",
-        title: "Acme",
-        Page: page("Acme microsite", "acme"),
-      },
-      {
-        id: "nova",
-        slug: "nova",
-        title: "Nova",
-        Page: page("Nova microsite", "nova"),
-      },
-    ],
-  }),
+export const layerOrg = Layer.mergeAll(
+  Layer.succeed(SiteMode, { tenancy: "org" }),
   Layer.succeed(FeatureModules, { billing: true, support: false }),
 );
 
-/** Enterprise — third partner + support group unlocked. */
-export const layerEnterprise = Layer.mergeAll(
-  Layer.succeed(PartnerDirectory, {
-    partners: [
-      {
-        id: "acme",
-        slug: "acme",
-        title: "Acme",
-        Page: page("Acme microsite", "acme"),
-      },
-      {
-        id: "globex",
-        slug: "globex",
-        title: "Globex",
-        Page: page("Globex microsite", "globex"),
-      },
-      {
-        id: "initech",
-        slug: "initech",
-        title: "Initech",
-        Page: page("Initech microsite", "initech"),
-      },
-    ],
-  }),
+export const layerSingle = Layer.mergeAll(
+  Layer.succeed(SiteMode, { tenancy: "single" }),
   Layer.succeed(FeatureModules, { billing: true, support: true }),
 );
 
 // =============================================================================
-// Catalog — fromEffect / groupsFromEffect (flat groups only)
+// Groups FROM Effect → Router.make().add (catalog only — no handlers here)
 // =============================================================================
 
-const partnersGroup = Route.group("partners")
-  .prefix("/p")
-  .fromEffect(
-    Effect.gen(function* () {
-      const { partners } = yield* PartnerDirectory;
-      return partners.map((p) =>
-        Route.get(p.id, `/${p.slug}`).pipe(Route.handle(() =>
-          React.createElement(p.Page),
-        )),
-      );
-    }),
-  );
+/** Org-scoped project — 2 params, nested placement. */
+const projectOrg = Route.get("project", "/o/:org/projects/:id", {
+  params: { org: Schema.String, id: Schema.String },
+});
+
+/** Single-tenant project — 1 param. */
+const projectSingle = Route.get("project", "/projects/:id", {
+  params: { id: Schema.String },
+});
 
 /**
- * Soft-nav catalog. Partner endpoints and optional product groups are Effect
- * derived — the same definition serves demo vs enterprise Layers.
+ * One group: path grammar extrapolated from SiteMode.
+ * Both branches keep identifier `project` for UrlBuilder; runtime shape follows Layer.
  */
+const app = Route.group("app").fromEffect(
+  Effect.gen(function* () {
+    const mode = yield* SiteMode;
+    return mode.tenancy === "org"
+      ? ([projectOrg] as const)
+      : ([projectSingle] as const);
+  }),
+);
+
+const featureGroups = Effect.gen(function* () {
+  const mods = yield* FeatureModules;
+  const groups = [];
+  if (mods.billing) {
+    // Handle on the destination — these groups are not on Site.groups until
+    // resolve, so RouterBuilder.group(Site, "billing") cannot run at define time.
+    groups.push(
+      Route.group("billing").add(
+        Route.get("plans", "/billing/plans").pipe(
+          Route.handle(() =>
+            React.createElement("h1", { "data-page": "plans" }, "Plans"),
+          ),
+        ),
+        Route.get("invoice", "/billing/invoices/:id", {
+          params: { id: Schema.String },
+        }).pipe(
+          Route.handle(() =>
+            React.createElement("h1", { "data-page": "invoice" }, "Invoice"),
+          ),
+        ),
+      ),
+    );
+  }
+  if (mods.support) {
+    groups.push(
+      Route.group("support").add(
+        Route.get("tickets", "/support/tickets").pipe(
+          Route.handle(() =>
+            React.createElement("h1", { "data-page": "tickets" }, "Tickets"),
+          ),
+        ),
+        Route.get("ticket", "/support/tickets/:id", {
+          params: { id: Schema.String },
+        }).pipe(
+          Route.handle(() =>
+            React.createElement("h1", { "data-page": "ticket" }, "Ticket"),
+          ),
+        ),
+      ),
+    );
+  }
+  return groups;
+});
+
+/** Catalog value — groups from Effect, not Effect→Router. */
 export const Site = Router.make("from-effect-demo")
-  .add(Route.get("home", "/"), partnersGroup)
-  .groupsFromEffect(
-    Effect.gen(function* () {
-      const mods = yield* FeatureModules;
-      const groups: Array<Route.GroupTop> = [];
-      if (mods.billing) {
-        groups.push(
-          Route.group("billing")
-            .add(
-              Route.get("plans", "/plans").pipe(
-                Route.handle(() =>
-                  React.createElement("h1", { "data-page": "plans" }, "Plans"),
-                ),
-              ),
-              Route.get("invoices", "/invoices").pipe(
-                Route.handle(() =>
-                  React.createElement(
-                    "h1",
-                    { "data-page": "invoices" },
-                    "Invoices",
-                  ),
-                ),
-              ),
-            )
-            .prefix("/billing"),
-        );
-      }
-      if (mods.support) {
-        groups.push(
-          Route.group("support")
-            .add(
-              Route.get("tickets", "/tickets").pipe(
-                Route.handle(() =>
-                  React.createElement(
-                    "h1",
-                    { "data-page": "tickets" },
-                    "Tickets",
-                  ),
-                ),
-              ),
-            )
-            .prefix("/support"),
-        );
-      }
-      return groups;
-    }),
-  );
+  .add(Route.get("home", "/"), app)
+  .groupsFromEffect(featureGroups);
+
+/**
+ * Typed link surface — identifiers from fromEffect / groupsFromEffect Items.
+ * Runtime hrefs: `router.urls` after Layer bake (needs SiteMode in scope).
+ */
+export type Urls = Route.UrlBuilder<typeof Site>;
 
 // =============================================================================
-// Builder + layout + Memory + Last.provider
+// Builder — handlers + layout (separate from catalog Effects)
 // =============================================================================
 
 const home = pipe(
@@ -180,88 +138,85 @@ const home = pipe(
   Layout.provide(Layout.Passthrough),
 );
 
-/** Empty builder bag — partner handlers ride on `Route.handle` inside fromEffect. */
-const partners = pipe(
-  RouterBuilder.group(Site, "partners", (h) => h),
+const appHandlers = pipe(
+  RouterBuilder.group(Site, "app", (h) =>
+    h.handle("project", () =>
+      React.createElement("h1", { "data-page": "project" }, "Project"),
+    ),
+  ),
   Layout.provide(Layout.Passthrough),
 );
 
 export const routesFor = (
-  domain: Layer.Layer<PartnerDirectory | FeatureModules>,
+  domain: Layer.Layer<SiteMode | FeatureModules>,
 ) =>
   pipe(
-    RouterBuilder.layer(Site),
-    Layer.provide(Layer.mergeAll(home, partners)),
-    Layer.provide(domain),
+    RouterBuilder.layer(Site), // R includes SiteMode | FeatureModules
+    Layer.provide(Layer.mergeAll(home, appHandlers, domain)),
   );
 
 export const appLayer = (
-  domain: Layer.Layer<PartnerDirectory | FeatureModules>,
+  domain: Layer.Layer<SiteMode | FeatureModules>,
 ) => pipe(Memory.layer, Layer.provide(routesFor(domain)));
 
-/** Full provider bake (demo domain) — same shape as spine `Last.provider`. */
-export const Provider = Last.provider(appLayer(layerDemo));
+export const Provider = Last.provider(appLayer(layerOrg));
 
 // =============================================================================
-// CLI: prove Layer swap changes the live route table
+// CLI — Layer swap changes live grammar + which groups exist
 // =============================================================================
-
-const describe = (router: Router.Service) => {
-  const groups = Object.keys(router.api.groups).sort();
-  const partnerRoutes = Object.keys(
-    router.api.groups["partners"]?.routes ?? {},
-  ).sort();
-  return { groups, partnerRoutes, match: router.match?.route.identifier };
-};
 
 const exercise = (label: string) =>
   Effect.gen(function* () {
     const router = yield* Router.Router;
+    const urls = router.urls as Urls;
+    const projectPath =
+      router.api.groups["app"]?.routes["project"]?.path ?? "";
     yield* Effect.logInfo(`── ${label} ──`);
-    yield* Effect.logInfo(`groups: ${describe(router).groups.join(", ")}`);
     yield* Effect.logInfo(
-      `partners: ${describe(router).partnerRoutes.join(", ") || "(none)"}`,
+      `groups: ${Object.keys(router.api.groups).sort().join(", ")}`,
     );
+    yield* Effect.logInfo(`project path: ${projectPath}`);
 
-    router.go("/p/acme");
-    yield* Effect.logInfo(`go /p/acme → ${describe(router).match}`);
+    if (projectPath.includes(":org")) {
+      const href = urls.app.project("acme", "42");
+      router.go(href);
+      yield* Effect.logInfo(
+        `urls.app.project("acme","42") → ${href} → ${router.match?.route.identifier}`,
+      );
+    } else {
+      const href = urls.app.project("42");
+      router.go(href);
+      yield* Effect.logInfo(
+        `urls.app.project("42") → ${href} → ${router.match?.route.identifier}`,
+      );
+    }
 
-    router.go("/billing/plans");
-    yield* Effect.logInfo(`go /billing/plans → ${describe(router).match}`);
+    router.go(urls.billing.plans());
+    yield* Effect.logInfo(
+      `urls.billing.plans() → ${router.match?.route.identifier}`,
+    );
 
     router.go("/support/tickets");
     yield* Effect.logInfo(
-      `go /support/tickets → ${describe(router).match ?? "no match"}`,
+      `go /support/tickets → ${router.match?.route.identifier ?? "no match"}`,
     );
   });
 
-const runDomain = async (
-  label: string,
-  domain: Layer.Layer<PartnerDirectory | FeatureModules>,
-): Promise<void> => {
-  const rt = ManagedRuntime.make(appLayer(domain));
-  try {
-    await rt.runPromise(exercise(label));
-  } finally {
-    await rt.dispose();
-  }
-};
+const runDomain = (label: string, domain: Layer.Layer<SiteMode | FeatureModules>) =>
+  Effect.gen(function* () {
+    const rt = ManagedRuntime.make(appLayer(domain));
+    yield* Effect.promise(() => rt.runPromise(exercise(label)));
+    yield* Effect.promise(() => rt.dispose());
+  });
 
-void (async () => {
-  await Effect.runPromise(
-    Effect.logInfo(
-      "example:last-from-effect — Context-backed fromEffect / groupsFromEffect",
-    ),
-  );
-  await runDomain("demo (acme,nova · billing)", layerDemo);
-  await runDomain(
-    "enterprise (acme,globex,initech · billing+support)",
-    layerEnterprise,
-  );
-  await Effect.runPromise(
-    Effect.logInfo("Provider bake ok: " + typeof Provider),
-  );
-  await Effect.runPromise(
-    Effect.logInfo("example:last-from-effect finished OK"),
-  );
-})();
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.logInfo(
+      "example:last-from-effect — groups from Effect, typed urls, Layer R",
+    );
+    yield* runDomain("org + billing", layerOrg);
+    yield* runDomain("single + billing + support", layerSingle);
+    yield* Effect.logInfo("Provider bake ok: " + typeof Provider);
+    yield* Effect.logInfo("example:last-from-effect finished OK");
+  }),
+);

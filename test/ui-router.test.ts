@@ -178,9 +178,11 @@ describe("Group.asRoutes + fromEffect", () => {
     const site = Route.make("hub").add(
       Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
     );
-    const tree = (site.groups as Record<string, Route.GroupTop | undefined>)[
-      "tree"
-    ];
+    // fromEffect defers — materialize via router install (R = never)
+    const router = Router.unsafeService(site, "Memory");
+    const tree = (
+      router.api.groups as Record<string, Route.GroupTop | undefined>
+    )["tree"];
     const nwsl = tree?.groups["Nwsl"];
     if (nwsl === undefined) {
       throw new Error("expected Nwsl group");

@@ -240,6 +240,7 @@ export const compilePath: typeof endpoint.compilePath = endpoint.compilePath;
 
 /**
  * Nested group of destinations — `HttpApiGroup` analogue (+ nested groups).
+ * `R` = bake requirements from `from` / `fromEffect`.
  *
  * @public
  */
@@ -248,7 +249,8 @@ export type Group<
   Routes extends Constraint = never,
   Groups extends catalog.GroupTop = never,
   TopLevel extends boolean = boolean,
-> = catalog.Group<Id, Routes, Groups, TopLevel>;
+  R = never,
+> = catalog.Group<Id, Routes, Groups, TopLevel, R>;
 
 /** Erased group constraint (nested catalogs / `fromEffect`). @public */
 export type GroupTop = catalog.GroupTop;
@@ -260,8 +262,8 @@ export type ApiConstraint = catalog.ApiConstraint;
  * Named group (`HttpApiGroup.make`). Pass `topLevel: true` so child methods
  * flatten onto the parent URL builder.
  *
- * Context-backed catalogs: `group.fromEffect(Effect.gen(function* () { … }))`
- * defers until {@link ./RouterBuilder.layer} when the Effect needs services.
+ * `group.fromEffect(Effect.gen(…))` always defers; destinations + `R` surface
+ * on {@link ./RouterBuilder.layer}. Item types stay for {@link urlBuilder}.
  *
  * @public
  */
@@ -276,13 +278,23 @@ export const isGroup: (u: unknown) => u is catalog.GroupTop = catalog.isGroup;
 
 /**
  * Route catalog — `HttpApi` analogue. Generics preserved through `.add`.
+ * `R` = bake requirements (`fromEffect` / `groupsFromEffect` / `from`).
  *
  * @public
  */
 export type Api<
   Id extends string = string,
   Groups extends catalog.GroupTop = never,
-> = catalog.Api<Id, Groups>;
+  R = never,
+  DeferredGroups extends catalog.GroupTop = never,
+> = catalog.Api<Id, Groups, R, DeferredGroups>;
+
+export declare namespace Api {
+  /** Bake requirements for a catalog (`RouterBuilder.layer` `R`). */
+  export type Context<A> = catalog.Api.Context<A>;
+  /** Groups from {@link catalog.Api.groupsFromEffect} only. */
+  export type DeferredGroups<A> = catalog.Api.DeferredGroups<A>;
+}
 
 /** Destination or group — what `.add` accepts. @public */
 export type RouteLike = catalog.RouteLike;

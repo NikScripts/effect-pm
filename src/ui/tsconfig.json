@@ -101,6 +101,7 @@
     "../../test/ui-routes.test.ts",
     "../../test/ui-routes.test-d.ts",
     "../../test/ui-routes-from-effect.test-d.ts",
+    "../../test/ui-from-effect-typed.test-d.ts",
     "../../test/route-from-effect.test-d.ts",
     "../../test/page-make.test-d.ts",
     "../../test/ui-router.test.ts",

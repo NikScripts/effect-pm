@@ -2,10 +2,8 @@
  * Internal impl for {@link ../ui/Route} — HttpApi-shaped catalog + groups,
  * with generics preserved for typed {@link UrlBuilder} (HttpApiClient pattern).
  */
-import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
@@ -15,7 +13,10 @@ import {
   HttpApiEndpoint,
   HttpApiGroup,
 } from "effect/unstable/httpapi";
-import type { AsRoutesEffect } from "./asRoutesBrand";
+import {
+  AsRoutesTypeId,
+  type AsRoutesEffect,
+} from "./asRoutesBrand";
 import * as uiRoute from "./route";
 import type { Path } from "./route";
 
@@ -23,14 +24,6 @@ export type { AsRoutesEffect } from "./asRoutesBrand";
 
 export const TypeId = "~last-ts/Route/Api" as const;
 export const GroupTypeId = "~last-ts/Route/Group" as const;
-
-/** True when runSync failed because a Context service was not in scope. */
-const isMissingServiceCause = (cause: Cause.Cause<unknown>): boolean => {
-  const squashed = Cause.squash(cause);
-  const message =
-    squashed instanceof Error ? squashed.message : String(squashed);
-  return message.includes("Service not found");
-};
 
 // =============================================================================
 // Typed models (HttpApi / HttpApiGroup shape + nested groups)
@@ -83,20 +76,14 @@ export interface GroupTop extends Pipeable {
     >
   ): GroupTop;
   /**
-   * Merge destinations from an Effect (`HttpRouter.addAll` analogue).
-   * Sync/`R=never` effects materialize immediately; Effects that need Context
-   * defer until {@link resolveApi} / {@link ../RouterBuilder.layer}.
-   */
-  fromEffect(
-    effect: Effect.Effect<Iterable<RouteLike>, never, any>,
-  ): GroupTop;
-  /**
    * Declare destinations from a Context service (type only on the contract).
    * Provide the service via Layer before {@link ../RouterBuilder.layer}.
    */
   from(
     service: Context.Service<any, ReadonlyArray<uiRoute.Constraint>>,
   ): GroupTop;
+  // `fromEffect` is only on {@link Group} (typed Items + R). Runtime proto still
+  // implements it for erased {@link GroupTop} values.
   prefix(prefix: Path): GroupTop;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupTop;
   annotateMerge<I>(annotations: Context.Context<I>): GroupTop;
@@ -106,13 +93,37 @@ export interface GroupTop extends Pipeable {
 }
 
 /**
+ * Success array element type of an Effect (or AsRoutes brand).
+ * Must key on {@link AsRoutesTypeId} — bare `extends AsRoutesEffect<infer _>`
+ * can match the Effect half of the intersection and bind `Items = never`.
+ */
+type FromEffectItems<Eff> = Eff extends {
+  readonly [AsRoutesTypeId]: unknown;
+} ? Eff extends AsRoutesEffect<infer Items> ? Items
+: never
+  : Eff extends Effect.Effect<infer A, any, any>
+    ? A extends ReadonlyArray<infer Item> ? Item
+    : never
+  : never;
+
+type FromEffectRoutes<Eff> = Extract<FromEffectItems<Eff>, uiRoute.Constraint>;
+type FromEffectGroups<Eff> = Extract<FromEffectItems<Eff>, GroupTop>;
+
+type EffectContext<Eff> = Eff extends Effect.Effect<any, any, infer RX> ? RX
+  : never;
+
+/**
  * Nested group of destinations — `HttpApiGroup` analogue, plus nested groups.
+ *
+ * `R` = Context services needed to materialize deferred `from` / `fromEffect`
+ * destinations (union’d onto {@link Api} and {@link ../RouterBuilder.layer}).
  */
 export interface Group<
   out Id extends string = string,
   in out Routes extends uiRoute.Constraint = never,
   in out Groups extends GroupTop = never,
   out TopLevel extends boolean = boolean,
+  out R = never,
 > extends GroupTop {
   readonly identifier: Id;
   readonly topLevel: TopLevel;
@@ -128,45 +139,48 @@ export interface Group<
     Id,
     Routes | ExtractRouteLikes<A[number]>,
     Groups | Extract<A[number], GroupTop>,
-    TopLevel
+    TopLevel,
+    | R
+    | (A[number] extends Group<string, any, any, any, infer RX> ? RX : never)
   >;
   /**
-   * Merge destinations from {@link ../Group.asRoutes} (or any {@link AsRoutesEffect}).
-   * Preserves item identifiers for {@link UrlBuilder}.
+   * Destinations from an Effect (or branded {@link AsRoutesEffect}).
+   *
+   * Infer from `Eff` — do **not** overload `AsRoutesEffect` ahead of plain
+   * `Effect` (the Effect half of that intersection matches and binds
+   * `Items = never`, wiping UrlBuilder + bake `R`).
    */
-  fromEffect<Items extends RouteLike>(
-    effect: AsRoutesEffect<Items>,
+  fromEffect<Eff extends Effect.Effect<any, never, any>>(
+    effect: Eff,
   ): Group<
     Id,
-    Routes | Extract<Items, uiRoute.Constraint>,
-    Groups | Extract<Items, GroupTop>,
-    TopLevel
+    Routes | FromEffectRoutes<Eff>,
+    Groups | FromEffectGroups<Eff>,
+    TopLevel,
+    R | EffectContext<Eff>
   >;
-  fromEffect(
-    effect: Effect.Effect<Iterable<RouteLike>, never, any>,
-  ): GroupTop;
   /**
    * Destinations from a service — phantom-typed onto the group; resolved in
    * {@link ../RouterBuilder.layer}.
    */
   from<I, E extends uiRoute.Constraint>(
     service: Context.Service<I, ReadonlyArray<E>>,
-  ): Group<Id, Routes | E, Groups, TopLevel>;
-  prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel>;
+  ): Group<Id, Routes | E, Groups, TopLevel, R | I>;
+  prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel, R>;
   annotate<I, S>(
     tag: Context.Key<I, S>,
     value: S,
-  ): Group<Id, Routes, Groups, TopLevel>;
+  ): Group<Id, Routes, Groups, TopLevel, R>;
   annotateMerge<I>(
     annotations: Context.Context<I>,
-  ): Group<Id, Routes, Groups, TopLevel>;
+  ): Group<Id, Routes, Groups, TopLevel, R>;
   annotateEndpoints<I, S>(
     tag: Context.Key<I, S>,
     value: S,
-  ): Group<Id, Routes, Groups, TopLevel>;
+  ): Group<Id, Routes, Groups, TopLevel, R>;
   annotateEndpointsMerge<I>(
     annotations: Context.Context<I>,
-  ): Group<Id, Routes, Groups, TopLevel>;
+  ): Group<Id, Routes, Groups, TopLevel, R>;
 }
 
 export declare namespace Group {
@@ -201,11 +215,34 @@ export declare namespace Group {
 export type GroupConstraint = Group.Constraint;
 
 /**
+ * Bake requirements carried by a {@link Group} (`from` / `fromEffect`).
+ *
+ * Infer every {@link Group} slot — `Routes` / nested `Groups` are `in out`;
+ * `any` in those positions fails the `extends` check and drops `RX`.
+ *
+ * @internal
+ */
+export type ItemRequirements<Item> = Item extends Group<
+  infer _Id,
+  infer _Routes,
+  infer _Groups,
+  infer _Top,
+  infer RX
+> ? RX
+  : never;
+
+/**
  * Route catalog — `HttpApi` analogue.
+ *
+ * - `R` — services to materialize deferred Effects (`RouterBuilder.layer`)
+ * - `DeferredGroups` — groups from {@link Api.groupsFromEffect} (UrlBuilder /
+ *   match only; **not** in {@link Group.ToService} — no define-time builder)
  */
 export interface Api<
   out Id extends string = string,
   in out Groups extends GroupTop = never,
+  out R = never,
+  out DeferredGroups extends GroupTop = never,
 > extends Pipeable {
   new(_: never): {};
   readonly [TypeId]: typeof TypeId;
@@ -221,20 +258,38 @@ export interface Api<
     >
   >(
     ...items: A
-  ): Api<Id, MergeApiAddsFromTuple<Groups, MapApiAddTuple<A>>>;
+  ): Api<
+    Id,
+    MergeApiAddsFromTuple<Groups, MapApiAddTuple<A>>,
+    R | ItemRequirements<A[number]>,
+    DeferredGroups
+  >;
   addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
     api: HttpApi.HttpApi<Id2, ApiGroups>,
-  ): Api<Id, MergeApiAdds<Groups, GroupTop>>;
+  ): Api<Id, MergeApiAdds<Groups, GroupTop>, R, DeferredGroups>;
   /**
-   * Merge top-level groups from an Effect. Sync/`R=never` materializes
-   * immediately; Context-backed Effects defer until {@link resolveApi}.
+   * Top-level groups from an Effect. Typed for {@link UrlBuilder}; bake `R`
+   * unions the Effect context. Not added to {@link Group.ToService} (handlers
+   * via destination {@link ../Route.handle} or a later builder API).
    */
-  groupsFromEffect(
-    effect: Effect.Effect<Iterable<GroupTop>, never, any>,
-  ): ApiConstraint;
-  prefix(prefix: Path): Api<Id, Groups>;
-  annotate<I, S>(tag: Context.Key<I, S>, value: S): Api<Id, Groups>;
-  annotateMerge<I>(context: Context.Context<I>): Api<Id, Groups>;
+  groupsFromEffect<
+    Eff extends Effect.Effect<ReadonlyArray<GroupTop>, never, any>,
+  >(
+    effect: Eff,
+  ): Api<
+    Id,
+    Groups,
+    R | EffectContext<Eff>,
+    DeferredGroups | FromEffectGroups<Eff>
+  >;
+  prefix(prefix: Path): Api<Id, Groups, R, DeferredGroups>;
+  annotate<I, S>(
+    tag: Context.Key<I, S>,
+    value: S,
+  ): Api<Id, Groups, R, DeferredGroups>;
+  annotateMerge<I>(
+    context: Context.Context<I>,
+  ): Api<Id, Groups, R, DeferredGroups>;
 }
 
 /**
@@ -251,7 +306,7 @@ export interface ApiConstraint {
     api: HttpApi.HttpApi<Id2, ApiGroups>,
   ): ApiConstraint;
   groupsFromEffect(
-    effect: Effect.Effect<Iterable<GroupTop>, never, any>,
+    effect: Effect.Effect<Iterable<GroupTop>, never, unknown>,
   ): ApiConstraint;
   prefix(prefix: Path): ApiConstraint;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): ApiConstraint;
@@ -260,6 +315,19 @@ export interface ApiConstraint {
 
 export declare namespace Api {
   export type Constraint = ApiConstraint;
+  /**
+   * Bake requirements (`fromEffect` / `groupsFromEffect` / `from`).
+   *
+   * Infer every slot — `Groups` is `in out`; using `any` there makes the
+   * `extends Api<…>` check fail and collapses `R` to `never`.
+   */
+  export type Context<A> = A extends
+    Api<infer _Id, infer _Groups, infer R, infer _Deferred> ? R
+    : never;
+  /** Groups contributed only via {@link Api.groupsFromEffect}. */
+  export type DeferredGroups<A> = A extends
+    Api<infer _Id, infer _Groups, infer _R, infer D> ? D
+    : never;
 }
 
 /** @deprecated Use {@link Api.Constraint} */
@@ -268,26 +336,25 @@ export type AppConstraint = Api.Constraint;
 export type RouteLike = uiRoute.Constraint | GroupTop;
 
 /**
- * Annotation: destinations from an Effect that needs services at layer bake
- * (`group.fromEffect` when `runSync` hits missing Context).
+ * Annotation: destinations from {@link GroupTop.fromEffect} (materialized in
+ * {@link resolveApi} / {@link ../RouterBuilder.layer}).
  *
  * @internal
  */
 export class FromEffect extends Context.Service<
   FromEffect,
   Effect.Effect<Iterable<RouteLike>, never, unknown>
->()("last-ts/Router/FromEffect") {}
+>()("last-ts/internal/routes/FromEffect") {}
 
 /**
- * Annotation: top-level groups from an Effect (`Api.groupsFromEffect` when
- * bake needs Context).
+ * Annotation: top-level groups from {@link Api.groupsFromEffect}.
  *
  * @internal
  */
 export class FromGroups extends Context.Service<
   FromGroups,
   Effect.Effect<Iterable<GroupTop>, never, unknown>
->()("last-ts/Router/FromGroups") {}
+>()("last-ts/internal/routes/FromGroups") {}
 
 /** What {@link GroupTop.add} / {@link Api.add} accept (Router + Effect HttpApi). */
 export type GroupAddLike =
@@ -529,20 +596,10 @@ const groupProto = {
   },
   fromEffect(
     this: GroupTop,
-    effect: Effect.Effect<Iterable<RouteLike>, never, any>,
+    effect: Effect.Effect<Iterable<RouteLike>, never, unknown>,
   ): GroupTop {
-    // Eager when the Effect needs nothing (fileRoot / Group.asRoutes).
-    // Context-backed catalogs defer until resolveApi / RouterBuilder.layer.
-    const exit = Effect.runSyncExit(
-      effect as Effect.Effect<Iterable<RouteLike>>,
-    );
-    if (Exit.isSuccess(exit)) {
-      return this.add(...Array.from(exit.value));
-    }
-    if (isMissingServiceCause(exit.cause)) {
-      return this.annotate(FromEffect, effect);
-    }
-    throw Cause.squash(exit.cause);
+    // Always defer — interpret in resolveApi / RouterBuilder.layer (Effect R).
+    return this.annotate(FromEffect, effect);
   },
   from(
     this: GroupTop,
@@ -639,18 +696,9 @@ const appProto = {
   },
   groupsFromEffect(
     this: ApiConstraint,
-    effect: Effect.Effect<Iterable<GroupTop>, never, any>,
+    effect: Effect.Effect<Iterable<GroupTop>, never, unknown>,
   ): ApiConstraint {
-    const exit = Effect.runSyncExit(
-      effect as Effect.Effect<Iterable<GroupTop>>,
-    );
-    if (Exit.isSuccess(exit)) {
-      return this.add(...Array.from(exit.value));
-    }
-    if (isMissingServiceCause(exit.cause)) {
-      return this.annotate(FromGroups, effect);
-    }
-    throw Cause.squash(exit.cause);
+    return this.annotate(FromGroups, effect);
   },
   prefix(this: ApiConstraint, prefix: Path): ApiConstraint {
     const groups: Record<string, GroupTop> = {};
@@ -867,10 +915,15 @@ type PathArgTuple<Keys extends readonly string[]> = {
   [I in keyof Keys]: string;
 };
 
-/** Call args: positional path segments, optional `{ query }` last. */
+/**
+ * Call args: positional path segments, optional `{ query }` last.
+ *
+ * Use a trailing optional — not `[] | [options]` — so zero-arg calls typecheck
+ * (TS rejects empty calls against that rest-union).
+ */
 type UrlMethodArgs<Keys extends readonly string[]> = Keys extends readonly []
-  ? [] | [options: UrlQueryOptions]
-  : PathArgTuple<Keys> | [...PathArgTuple<Keys>, options: UrlQueryOptions];
+  ? [options?: UrlQueryOptions]
+  : [...PathArgTuple<Keys>, options?: UrlQueryOptions];
 
 /** One bag → positional literals in path-key order (distributive over unions). */
 type PathArgTupleFromBag<
@@ -884,18 +937,20 @@ type PathArgTupleFromBag<
 type UrlMethodArgsFromBags<
   Bags extends { readonly [key: string]: string },
   Keys extends readonly string[],
-> = Keys extends readonly [] ? [] | [options: UrlQueryOptions]
+> = Keys extends readonly [] ? [options?: UrlQueryOptions]
   : Bags extends unknown
-    ?
-      | PathArgTupleFromBag<Bags, Keys>
-      | [...PathArgTupleFromBag<Bags, Keys>, options: UrlQueryOptions]
+    ? [...PathArgTupleFromBag<Bags, Keys>, options?: UrlQueryOptions]
   : never;
 
 type UrlMethod<E extends uiRoute.Constraint> = E extends
   { readonly "~ParamBags": infer Bags extends { readonly [key: string]: string } }
   ? (...args: UrlMethodArgsFromBags<Bags, PathKeys<E["path"]>>) => string
-  : E extends uiRoute.Route<string, infer PathType, infer _Params>
-    ? (...args: UrlMethodArgs<PathKeys<PathType>>) => string
+  // Prefer literal `path` — Effect codecs in the Params slot mean concrete
+  // endpoints often no longer `extends uiRoute.Route<…>`. Widened
+  // `path: string` (e.g. after `Route.params`) stays {@link UrlMethodLoose}.
+  : E extends { readonly path: infer PathType extends string }
+    ? string extends PathType ? UrlMethodLoose
+    : (...args: UrlMethodArgs<PathKeys<PathType>>) => string
   : UrlMethodLoose;
 
 const isUrlQueryOptions = (value: unknown): value is UrlQueryOptions =>
@@ -921,12 +976,12 @@ type EndpointMethods<Routes extends uiRoute.Constraint> = {
   readonly [E in Routes as E["identifier"]]: UrlMethod<E>;
 };
 
-type EndpointsOfGroup<G> = G extends Group<string, infer Routes, infer _N, infer _T>
-  ? Routes
+type EndpointsOfGroup<G> = G extends
+  Group<string, infer Routes, infer _N, infer _T, infer _RX> ? Routes
   : never;
 
-type NestedOfGroup<G> = G extends Group<string, infer _R, infer Nested, infer _T>
-  ? Nested
+type NestedOfGroup<G> = G extends
+  Group<string, infer _R, infer Nested, infer _T, infer _RX> ? Nested
   : never;
 
 /** Nested group builders (finite depth — dashboards nest a few levels). */
@@ -971,17 +1026,32 @@ type TopLevelMethods<Groups extends GroupTop> = EndpointMethods<
  * Path params are **positional** (`urls.node("x")`); pass `{ query }` last.
  */
 export type UrlBuilder<A extends ApiConstraint = ApiConstraint> = A extends
-  Api<infer _Id, infer Groups> ? Simplify<
-    TopLevelMethods<Extract<Groups, { readonly topLevel: true }>> &
-      NestedBuilders<Groups>
+  Api<infer _Id, infer Groups, infer _R, infer Deferred> ? Simplify<
+    TopLevelMethods<Extract<Groups | Deferred, { readonly topLevel: true }>> &
+      NestedBuilders<Groups | Deferred>
   >
   : UrlBuilderLoose;
+
+/**
+ * Materialize deferred `from` / `fromEffect` / `groupsFromEffect` with
+ * `R = never` (sync). Context-backed catalogs must go through
+ * {@link ../RouterBuilder.layer} instead.
+ *
+ * @internal
+ */
+export const materializeSync = <A extends ApiConstraint>(
+  api: A,
+): A =>
+  Effect.runSync(
+    resolveApi(api) as Effect.Effect<A, never, never>,
+  );
 
 /** Nested URL builder — positional path args + optional `{ query }`. */
 export const urlBuilder = <A extends ApiConstraint>(
   self: A,
   options?: { readonly baseUrl?: URL | string | undefined },
 ): UrlBuilder<A> => {
+  const api = materializeSync(self);
   const root: UrlBuilderLoose = {};
   const withBase = (url: string): string => {
     if (options?.baseUrl === undefined) return url;
@@ -1064,7 +1134,7 @@ export const urlBuilder = <A extends ApiConstraint>(
     setCallable(cursor, leafId, method);
   };
 
-  for (const entry of flatten(self)) {
+  for (const entry of flatten(api)) {
     place(entry.identifiers, entry.path);
   }
 
@@ -1196,14 +1266,16 @@ export const resolveGroup = (
 
 /**
  * Resolve every deferred `from` / `fromEffect` / `groupsFromEffect` on a
- * catalog. Requires destination services in `R`. Result is a concrete catalog
- * for match / UrlBuilder.
+ * catalog. `R` is the catalog’s bake requirements.
  *
  * @internal
  */
-export const resolveApi = (
-  api: ApiConstraint,
-): Effect.Effect<ApiConstraint, never, unknown> =>
+export const resolveApi = <
+  A extends ApiConstraint,
+  R = A extends Api<infer _Id, infer _G, infer RX, infer _D> ? RX : unknown,
+>(
+  api: A,
+): Effect.Effect<A, never, R> =>
   Effect.gen(function* () {
     const groups: Record<string, GroupTop> = {};
     for (const [id, g] of Object.entries(api.groups)) {
@@ -1223,8 +1295,8 @@ export const resolveApi = (
       annotations: Context.omit(FromGroups)(
         api.annotations,
       ) as Context.Context<never>,
-    });
-  });
+    }) as unknown as A;
+  }) as Effect.Effect<A, never, R>;
 
 /** True when a group still has deferred destinations to resolve. @internal */
 export const hasDeferredDestinations = (g: GroupTop): boolean =>

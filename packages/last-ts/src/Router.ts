@@ -43,7 +43,14 @@ import * as Route from "./Route";
 export type Api<
   Id extends string = string,
   Groups extends catalog.GroupTop = never,
-> = catalog.Api<Id, Groups>;
+  R = never,
+  DeferredGroups extends catalog.GroupTop = never,
+> = catalog.Api<Id, Groups, R, DeferredGroups>;
+
+export declare namespace Api {
+  export type Context<A> = catalog.Api.Context<A>;
+  export type DeferredGroups<A> = catalog.Api.DeferredGroups<A>;
+}
 
 /** @public */
 export type Group<
@@ -51,7 +58,8 @@ export type Group<
   Routes extends Route.Constraint = never,
   Groups extends catalog.GroupTop = never,
   TopLevel extends boolean = boolean,
-> = catalog.Group<Id, Routes, Groups, TopLevel>;
+  R = never,
+> = catalog.Group<Id, Routes, Groups, TopLevel, R>;
 
 /** @public */
 export type GroupTop = catalog.GroupTop;
