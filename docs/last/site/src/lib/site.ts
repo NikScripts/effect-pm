@@ -11,6 +11,7 @@ import { DocsPath } from "../pages/docs/[...path]";
 import { Chapter } from "../pages/guides/[slug]";
 import { Home } from "../pages/index";
 import { ViewPage } from "../pages/view";
+import * as Frame from "./Frame";
 
 export class Site extends Router.make("last-ts").add(
   Route.get("index", "/"),
@@ -35,7 +36,7 @@ const app = pipe(
       .handle("view", ViewPage)
       .handle("docs_path", DocsPath),
   ),
-  Layout.provide(Layout.Passthrough),
+  Layout.provide(Frame.App),
 );
 
 export const routes = pipe(RouterBuilder.layer(Site), Layer.provide(app));

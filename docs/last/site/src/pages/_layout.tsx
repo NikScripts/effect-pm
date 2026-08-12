@@ -1,16 +1,13 @@
 /**
- * Temporary body shell — not product `Layout.make` (host-engine leftover).
+ * Host shim — same tree as {@link ../lib/Frame.App}, with RSC `children`
+ * instead of {@link Layout.Outlet}. Product SSOT is `Frame.App` +
+ * `Layout.provide`; retire this when soft-nav hosts the body layout.
  */
 import type { ReactNode } from "react";
-import { Nav } from "../islands/Nav";
+import * as Frame from "../lib/Frame";
 
 export default function Layout(props: {
   readonly children: ReactNode;
 }) {
-  return (
-    <div className="shell">
-      <Nav />
-      <main className="main">{props.children}</main>
-    </div>
-  );
+  return <Frame.Tree>{props.children}</Frame.Tree>;
 }
