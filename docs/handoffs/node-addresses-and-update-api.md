@@ -229,17 +229,12 @@ class WorkerPrivate extends Worker.pipe(
   NodePolicy.proxy("Prefer"),
 ) {}
 
-// Process roles = withPolicy overlays (same key + address list)
-const edge = Node.withPolicy(
-  WorkerPrivate,
-  NodePolicy.listen("Primary"),
-  NodePolicy.active("A"),
-)
-const backendA = Node.withPolicy(
-  WorkerPrivate,
-  NodePolicy.as("A"),
-  NodePolicy.listen(["A"]),
-)
+// Process roles = Node.config overlays (same key + address list)
+const edge = Node.config(WorkerPrivate, {
+  Listen: "Primary",
+  Active: "A",
+})
+const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
 
 Node.http(edge, [Node.forward(edge, Probe)])
 Node.unix(backendA, [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })])
@@ -291,24 +286,35 @@ Config = Schema’d dials the engine branches on.
 `yield*`, Layer overrides). **Not** a product options-bag on `lookupClient` /
 `Node.make`. Call-site stamps stay rare overrides that win over ambient.
 
-**Post-`Node.make` config (locked 2026-08-12):** creating a node must **not**
-freeze Node config or the address list. Apps must be able to **change** values
-and **add** to list-shaped pieces afterward — same identity (`nodeKey`), no
-second `make`.
+**Post-`Node.make` config / policy (locked 2026-08-12):** creating a node must
+**not** freeze Node config or the address list. Apps must be able to **change**
+values and **add** to list-shaped pieces afterward — same identity (`nodeKey`),
+no second `make`.
 
 | Path | When | Semantics (target) |
 |------|------|--------------------|
-| **`.pipe(Address.* / NodeConfig.*)`** | Class hierarchy / type widen after `make` | Addresses **append**; config keys **last-write** merge |
-| **`Node.withConfig(node, …)`** (today `withPolicy`) | Process roles after the class exists (edge / A / B) | Same merge; overlay shell — not a new Tag/make |
+| **`.pipe(Address.*)`** | Class hierarchy / type widen after `make` | Addresses **append** |
+| **`Node.config(MyNode, { …partial })`** | Process roles / knobs after the class exists | Partial `NodeConfig` bag — last-write merge; overlay shell (not a new Tag/make). **Reject** `withConfig` / `withPolicy` as the name |
+| **`Node.policy(MyNode, …)`** | Handler-shaped Lookup/Node policy overlays on a node | Same overlay shell; **policy** only (Yield / Pick / …) — not mode dials |
 | **`LookupConfig.provide` on layers** | Client / peers / serve composition | Layer override of ambient Lookup config — not stamped into the Node forever |
 
-`Node.activate` remains the live flip for Active (runtime retarget), separate from
-stamping Listen/As/Advertise on a role overlay.
+```ts
+// Target DX (not Eng’d)
+const edge = Node.config(WorkerPrivate, {
+  Listen: "Primary",
+  Active: "A",
+  Advertise: "Primary",
+})
+const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
+// Node.policy(MyNode, LookupPolicy.yield(…)) — handlers only
+```
 
-**Not Eng’d yet** — tip still ships the merged `LookupPolicy` / `NodePolicy` bags
-(+ `withPolicy` name). Rename / split is the next Policy Eng when owner says go.
-Until then treat this section as the vocabulary lock; §3.3.2 builder notes below
-describe *current* Eng’d substrate (to be re-homed).
+`Node.activate` remains the live flip for Active (runtime retarget), separate from
+stamping Listen/As/Advertise via `Node.config`.
+
+**Not Eng’d yet** — tip still has `Node.withPolicy` + fragment Layers. Rename /
+`Node.config` bag + `Node.policy` land with the config/policy Eng when owner says
+go. §3.3.2 below describes *current* Eng’d substrate (to be re-homed).
 
 ### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
 
