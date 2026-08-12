@@ -275,11 +275,34 @@ labeled address side is this process?* → `NodePolicy.as("A")`.
 **Why no Dial on NodePolicy:** participants dial what Directory advertises; soft-pick /
 sticky / wait-advice stay on **`LookupPolicy`**. One dial story, not two.
 
-### 3.3.1 PolicyBuilder — shared architecture (locked)
+### 3.3.1 Policy vs config (locked 2026-08-12)
 
-Both policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**.
+**Owner:** things that don’t need handlers are **not** policies — they are **config**.
+Policy = pluggable behavior (handler Effect/fn + default Layer), HttpApi-ish.
+Config = Schema’d dials the engine branches on.
 
-**Defaults:** Policies **are** `Context.Reference`s. Ambient defaults are Reference
+| Kind | Module (target names) | Members |
+|------|------------------------|---------|
+| **Lookup config** | `LookupConfig` (today still on `LookupPolicy`) | Sticky, StreamGap, ColdAmbiguous, Verify, Conflict *modes* |
+| **Node config** | `NodeConfig` (today `NodePolicy`) | PrimaryAddress, Listen, Advertise, Proxy, As, Active |
+| **Lookup policy** | `LookupPolicy` (shrunk) | Yield, Pick (fn) — real handlers + defaults; `"first"` / `true` = sugar over defaults |
+
+**Where config lives:** ambient `Context.Reference`s with `defaultValue` (same DX:
+`yield*`, Layer overrides). **Not** a product options-bag on `lookupClient` /
+`Node.make`. Call-site stamps stay rare overrides that win over ambient.
+
+**Not Eng’d yet** — tip still ships the merged `LookupPolicy` / `NodePolicy` bags.
+Rename / split is the next Policy Eng when owner says go. Until then treat this
+section as the vocabulary lock; §3.3.1 builder notes below describe *current*
+Eng’d substrate (to be re-homed).
+
+### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
+
+Both *current* policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**.
+Under the §3.3.1 lock, config keys move off “Policy” naming; the builder may stay
+for config References and/or shrink to handler-shaped policies only.
+
+**Defaults:** Keys **are** `Context.Reference`s. Ambient defaults are Reference
 `defaultValue` — same system as before PolicyBuilder (`yield* LookupPolicy.Sticky` with no
 Layer → `true`). Builder `.key(…, { defaultValue })` **is** that Reference option,
 not a second defaults mechanism. Fragments / `make` override via Layer. Call-site /
