@@ -217,8 +217,8 @@ yield* Launcher.restartSuccessor({
 **Binary / fleet update:** prefer **`Update.plan` → `simulate` → `execute`**
 ([Update](/docs/update)) over options-bag `restartSuccessor`. Walkthrough:
 [dream redeploy](/docs/launcher-dream-redeploy) ·
-`pnpm run example:launcher-dream-redeploy` (Shape β — forward + activate; full sources
-on the page). Address / proxy design still open:
+`pnpm run example:launcher-dream-redeploy` (**owner-rejected draft** — not SSOT;
+prefer [forward-proxy](/docs/node-forward-proxy)). Address / proxy design still open:
 [`node-addresses-and-update-api.md`](../handoffs/node-addresses-and-update-api.md).
 
 **Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
