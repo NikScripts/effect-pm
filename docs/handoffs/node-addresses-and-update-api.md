@@ -272,8 +272,8 @@ Owned mode strings are PascalCase. Overlap = same concrete dial → reject.
 **Why not `Role`:** “role” reads like RBAC / job title. The question is only: *which
 labeled address side is this process?* → `NodePolicy.as("A")`.
 
-**Why no Dial on NodePolicy:** participants dial what Directory advertises; soft-pick /
-sticky / wait-advice stay on **`LookupPolicy`**. One dial story, not two.
+**Why no Dial on Node config:** participants dial what Directory advertises; soft-pick /
+sticky / wait-advice stay on **Lookup config / policy** (§3.3.1). One dial story, not two.
 
 ### 3.3.1 Policy vs config (locked 2026-08-12)
 
