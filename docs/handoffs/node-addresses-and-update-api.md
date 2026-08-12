@@ -306,30 +306,26 @@ const edge = Node.config(WorkerPrivate, {
   Advertise: "Primary",
 })
 const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
-// Node.policy(MyNode, LookupPolicy.yield(…)) — handlers only
+Node.policy(MyNode, LookupPolicy.yield("Refuse"))
+Node.policy(MyNode, LookupPolicy.yield("Accept"))
 ```
 
 `Node.activate` remains the live flip for Active (runtime retarget), separate from
 stamping Listen/As/Advertise via `Node.config`.
 
-**Policy handlers (locked 2026-08-12, in progress):** one **`Context.Service` per
-policy key** (`LookupPolicy.Yield`, `LookupPolicy.Pick`, …) with a **default
-Layer**. Engines `yield* LookupPolicy.Yield` then invoke; apps override via
-`Node.policy` / Layer provide. Prefer Services over References-of-Effects so
-handler `R` can grow.
+**Policy handlers (locked 2026-08-12):** one policy helper, **string options** —
+same family as `streamGap("stall")`. Not separate `yieldAccept` / `yieldRefuse`
+exports, not `yield(true|false)`.
 
-**One policy, named options (locked):** `yieldAccept` / `yieldRefuse` are
-**options of Yield**, not separate policies and **not** “sugar over booleans.”
-The readable names **are** the API (`Node.policy(Worker, LookupPolicy.yieldRefuse)`).
-`yield(true|false)` is the hard-to-read form — do not treat it as primary.
-Custom handler remains `yield(effect)` / equivalent. Pick: one policy, options
-`"first"` / custom fn (named presets preferred over opaque literals where we
-have them). `Node.policy` install shape still open.
+```ts
+LookupPolicy.yield("Accept" | "Refuse" | Effect<boolean>)
+LookupPolicy.pick("First" | fn)   // same idea when we touch Pick
+Node.policy(MyNode, LookupPolicy.yield("Refuse"))
+```
 
-**Not Eng’d yet** — tip still has `Node.withPolicy` + fragment Layers. Rename /
-`Node.config` bag + `Node.policy` + Service handlers land with the config/policy
-Eng when owner says go. §3.3.2 below describes *current* Eng’d substrate (to be
-re-homed).
+Backing: `Context.Service` per policy + default Layer. Engines `yield*` then
+invoke. Tip still has flat `yieldAccept` / `withPolicy` — rename + option strings
+when owner says Eng.
 
 ### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
 
