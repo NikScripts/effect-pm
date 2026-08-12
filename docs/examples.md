@@ -301,12 +301,12 @@ Guide: [Update](/docs/update)
 `examples/launcher/restart-successor.ts` · `pnpm run example:launcher-restart-successor` — OS A→B; Directory dial moves; B answers  
 Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
 
-### [dream redeploy (Shape β forward + activate)](/docs/launcher-dream-redeploy)
+### [dream redeploy (rejected draft — rewrite pending)](/docs/launcher-dream-redeploy)
 
 `examples/launcher/dream-redeploy*.ts` · `pnpm run example:launcher-dream-redeploy` —
-stable public Http edge + Unix A/B + file-swap + `Node.activate`. Full sources on the
-page (shared / orchestrator / worker v1 / worker v2).  
-Guide: [Launcher](/docs/launcher) · [addresses dock](./handoffs/node-addresses-and-update-api.md) · twin [forward-proxy](/docs/node-forward-proxy)
+**owner-rejected** Shape β script (manual queue move, duplicated workers). Not SSOT.
+Use [forward-proxy](/docs/node-forward-proxy) until rewritten. Dock:
+[addresses](./handoffs/node-addresses-and-update-api.md)
 
 ### [minimal up](/docs/launcher-minimal-up)
 

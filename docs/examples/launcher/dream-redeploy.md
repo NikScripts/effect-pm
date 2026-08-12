@@ -7,9 +7,11 @@
 # Launcher — dream redeploy (Shape β)
 
 {.draft}
-**Draft** — stable public Http + Unix A/B backends + `Node.activate`. File-swap
-proves the OS loaded v2. Update.plan / dual-port cutover is **not** this recipe
-(Update API parked). Address dock:
+**Rejected draft (owner 2026-08-12)** — this recipe is **not** the dream API.
+It duplicates forward-proxy, scripts a manual A→B queue move instead of baked
+WorkPool handoff, and is far from an easy compose surface. Kept only until
+rewritten. Prefer [forward-proxy](/docs/node-forward-proxy) for Shape β
+substrate. Dock:
 [`node-addresses-and-update-api.md`](../../handoffs/node-addresses-and-update-api.md).
 
 **Sources (all below):**

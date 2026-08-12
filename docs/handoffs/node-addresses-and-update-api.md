@@ -332,10 +332,20 @@ References stay PascalCase.
 + `Address` factories + `Node.make` pipe + listen-set bind + advertise-set
 Directory row + `Node.forward` / `NodePolicy.active` / `Node.activate` (Proxy
 Prefer → labeled backend). Apps import singular modules / `Address`, not the
-builder. **Update plan API parked.** Dream-redeploy rewritten onto Shape β
-(`examples/launcher/dream-redeploy*` — `forwardAll` + activate). **Next:**
-stream/ref forward + verify; `unixFromKey` bind Config; multi-row Directory
-(S14); locality Host/Machine.
+builder. **Update plan API parked.**
+
+**Owner 2026-08-12 — dream-redeploy β rejected.** The rewrite onto
+`forward`/`activate` is **not** the product API: duplicated v1/v2 workers +
+runtime `makeDreamNodes`, manual A→B `release`/`add` instead of baked
+WorkPool handoff, `verifyOff` / direct-Unix plumbing, twin of forward-proxy
+rather than an easy compose recipe. Keep **forward-proxy** as the thin
+Shape β substrate demo. **Do not** treat `examples/launcher/dream-redeploy*`
+as SSOT until rewritten around: one public/private identity, Launcher
+custody handoff, WorkPool `releaseEnqueueHandoff` (not a scripted queue
+copy), and `Node.activate` — composition that reads like the §3.2 sketch.
+Open design: how shutdown handoff finds peer B when Advertise is Primary-only
+(S14 multi-row vs explicit peer vs edge-mediated). **Next after lock:** that
+rewrite; stream/ref forward + verify; `unixFromKey`; locality Host/Machine.
 
 #### `_tag` — key vs value (Eng’d: **key**)
 
