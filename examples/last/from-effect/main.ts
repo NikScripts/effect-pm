@@ -1,147 +1,125 @@
 /**
  * @module examples/last/from-effect
  *
- * Fancy CMS types → `fromEffect` / `groupsFromEffect` catalog.
- *
- * The type show is {@link ./cms} (`SiteUrls`, recursive `UrlsOf`, conditional
- * `SiteTree`). This file wires const trees into a Router and prints typed links.
+ * Show the value of `group.fromEffect`:
+ * - {@link ./Catalog} **class** owns URL grammar (Acme vs Globex Layers)
+ * - One {@link ./Catalog.Site} — no hard-coded `.add(Route.get…)` per tenant
+ * - {@link Catalog.Urls} — wrong locale / arity / branch is a **compile error**
+ *   (see `test/ui-from-effect-typed.test-d.ts`)
  *
  * Run: `pnpm run example:last-from-effect`
  */
 
-import { Context, Effect, Layer, ManagedRuntime, pipe } from "effect";
-import * as React from "react";
-import * as Layout from "last-ts/Layout";
+import { Effect, Layer, ManagedRuntime, pipe } from "effect";
 import * as Memory from "last-ts/Memory";
-import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
-import * as RouterBuilder from "last-ts/RouterBuilder";
 import {
-  type SiteUrls,
-  contentRoutes,
-  docsGroups,
-  docsPortalFeatures,
-  docsTree,
-  storefrontFeatures,
-} from "./cms";
+  type AcmeUrls,
+  type GlobexUrls,
+  Catalog,
+  Site,
+  layerAcme,
+  layerGlobex,
+  routesFor,
+} from "./Catalog";
+
+// Re-export the class API — this *is* the example surface.
+export {
+  Acme,
+  Catalog,
+  Globex,
+  Site,
+  layerAcme,
+  layerGlobex,
+  routesFor,
+  type AcmeUrls,
+  type GlobexUrls,
+} from "./Catalog";
+
+/**
+ * App-facing links for Acme — checked against {@link AcmeUrls}.
+ * (Phantom `urls` is type-only; runtime hrefs mirror the same grammar.)
+ */
+export type AcmeNav = {
+  readonly home: ReturnType<AcmeUrls["home"]>;
+  readonly pdp: ReturnType<AcmeUrls["content"]["product"]>;
+  readonly variant: ReturnType<AcmeUrls["content"]["variant"]>;
+  readonly article: ReturnType<AcmeUrls["content"]["article"]>;
+};
+
+/** App-facing links for Globex — includes nested `docs.api.symbol`. */
+export type GlobexNav = {
+  readonly home: ReturnType<GlobexUrls["home"]>;
+  readonly pdp: ReturnType<GlobexUrls["content"]["product"]>;
+  readonly guide: ReturnType<GlobexUrls["docs"]["guide"]>;
+  readonly symbol: ReturnType<GlobexUrls["docs"]["api"]["symbol"]>;
+};
+
+const acmeNav = {
+  home: "/",
+  pdp: "/products/sku_1?ref=hero",
+  variant: "/products/sku_1/v/red?ref=grid",
+  article: "/de/blog/launch?preview=1",
+} as const satisfies AcmeNav;
+
+const globexNav = {
+  home: "/",
+  pdp: "/products/sku_1?ref=nav",
+  guide: "/docs/v2/routing?q=layer",
+  symbol: "/docs/v1/api/effect/Effect?src=twoslash",
+} as const satisfies GlobexNav;
 
 // =============================================================================
-// Which CMS tree is live — Layer-swapped
+// Runtime — same Site, different Catalog Layer
 // =============================================================================
 
-export class CmsEdition extends Context.Service<
-  CmsEdition,
-  "storefront" | "docsPortal"
->()("hyperlink-ts/examples/last/from-effect/main/CmsEdition") {}
+const appLayer = (catalog: Layer.Layer<Catalog>) =>
+  pipe(Memory.layer, Layer.provide(routesFor(catalog)));
 
-export const layerStorefront = Layer.succeed(CmsEdition, "storefront");
-export const layerDocsPortal = Layer.succeed(CmsEdition, "docsPortal");
-
-// =============================================================================
-// Catalog — trees from Effect (not Effect→Router)
-// =============================================================================
-
-const content = Route.group("content").fromEffect(
-  Effect.gen(function* () {
-    const edition = yield* CmsEdition;
-    return contentRoutes(edition);
-  }),
-);
-
-const Site = Router.make("cms-types-from-effect")
-  .add(Route.get("home", "/"), content)
-  .groupsFromEffect(
-    Effect.gen(function* () {
-      const edition = yield* CmsEdition;
-      if (edition !== "docsPortal") return [] as const;
-      return docsGroups(docsTree);
-    }),
-  );
-
-/** Compile-time storefront URL surface — see `test/ui-from-effect-typed.test-d.ts`. */
-export type StorefrontUrls = SiteUrls<typeof storefrontFeatures>;
-
-/** Docs portal — nested `docs.api.symbol`. */
-export type DocsPortalUrls = SiteUrls<typeof docsPortalFeatures>;
-
-export { docsPortalFeatures, storefrontFeatures };
-
-// =============================================================================
-// Builder
-// =============================================================================
-
-const home = pipe(
-  RouterBuilder.group(Site, "__top", (h) =>
-    h.handle("home", () =>
-      React.createElement("h1", { "data-page": "home" }, "Home"),
-    ),
-  ),
-  Layout.provide(Layout.Passthrough),
-);
-
-const contentHandlers = pipe(
-  RouterBuilder.group(Site, "content", (h) =>
-    h
-      .handle("product", () =>
-        React.createElement("span", { "data-page": "product" }, "product"),
-      )
-      .handle("variant", () =>
-        React.createElement("span", { "data-page": "variant" }, "variant"),
-      )
-      .handle("article", () =>
-        React.createElement("span", { "data-page": "article" }, "article"),
-      ),
-  ),
-  Layout.provide(Layout.Passthrough),
-);
-
-export const appLayer = (edition: Layer.Layer<CmsEdition>) =>
-  pipe(
-    Memory.layer,
-    Layer.provide(
-      pipe(
-        RouterBuilder.layer(Site),
-        Layer.provide(Layer.mergeAll(home, contentHandlers)),
-        Layer.provide(edition),
-      ),
-    ),
-  );
-
-// =============================================================================
-// Demo — live soft-nav (fancy URL types live in the `.test-d.ts`)
-// =============================================================================
-
-const demo = (label: string) =>
+const demo = (label: string, hrefs: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const router = yield* Router.Router;
-    const hrefs = Object.values(router.api.groups).flatMap((g) =>
-      Object.values(g.routes).map(
-        (r) => `${g.identifier}.${r.identifier}  ${r.path}`,
-      ),
-    );
+    const paths = Object.values(router.api.groups)
+      .flatMap((g) =>
+        Object.values(g.routes).map((r) => `${g.identifier}.${r.identifier}`),
+      )
+      .sort();
     yield* Effect.logInfo(`── ${label} ──`);
-    for (const line of hrefs.sort()) {
-      yield* Effect.logInfo(line);
+    yield* Effect.logInfo(`routes: ${paths.join(", ")}`);
+    for (const href of hrefs) {
+      router.go(href);
+      yield* Effect.logInfo(
+        `  ${href} → ${router.match?.route.identifier ?? "miss"}`,
+      );
     }
-    router.go("/products/sku_1?ref=hero");
-    yield* Effect.logInfo(`go product → ${router.match?.route.identifier}`);
-    router.go("/docs/v2/api/effect/Effect?src=twoslash");
-    yield* Effect.logInfo(
-      `go symbol → ${router.match?.route.identifier ?? "no match"}`,
-    );
   });
 
-const run = (label: string, edition: Layer.Layer<CmsEdition>) =>
+const run = (
+  label: string,
+  catalog: Layer.Layer<Catalog>,
+  hrefs: ReadonlyArray<string>,
+) =>
   Effect.gen(function* () {
-    const rt = ManagedRuntime.make(appLayer(edition));
-    yield* Effect.promise(() => rt.runPromise(demo(label)));
+    const rt = ManagedRuntime.make(appLayer(catalog));
+    yield* Effect.promise(() => rt.runPromise(demo(label, hrefs)));
     yield* Effect.promise(() => rt.dispose());
   });
 
 void Effect.runPromise(
   Effect.gen(function* () {
-    yield* Effect.logInfo("CMS tree types → fromEffect catalog");
-    yield* run("storefront", layerStorefront);
-    yield* run("docs portal", layerDocsPortal);
+    yield* Effect.logInfo(
+      "Catalog class → fromEffect Site (Acme vs Globex Layers)",
+    );
+    yield* Effect.logInfo(`Site id: ${Site.identifier}`);
+    yield* run("Acme storefront", layerAcme, [
+      acmeNav.pdp,
+      acmeNav.variant,
+      acmeNav.article,
+    ]);
+    yield* run("Globex docs", layerGlobex, [
+      globexNav.pdp,
+      globexNav.guide,
+      globexNav.symbol,
+    ]);
   }),
 );

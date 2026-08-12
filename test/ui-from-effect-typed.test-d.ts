@@ -1,124 +1,57 @@
 /**
- * CMS tree types — recursion, conditionals, narrow param bags — plus fromEffect R.
+ * Catalog class + fromEffect — typed links per Spec; bake R includes Catalog.
  */
 import { expectTypeOf } from "vitest";
-import { Context, Effect, Layer, pipe } from "effect";
+import { Layer, pipe } from "effect";
 import * as Layout from "last-ts/Layout";
-import * as Route from "last-ts/Route";
-import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
-// Layer used for RouterBuilder.layer R assert
-import type { SiteTree, SiteUrls, UrlsOf } from "../examples/last/from-effect/cms";
 import {
-  contentRoutes,
-  docsGroups,
-  docsPortalFeatures,
-  docsTree,
-  storefrontFeatures,
-} from "../examples/last/from-effect/cms";
+  type AcmeUrls,
+  type GlobexUrls,
+  Catalog,
+  Site,
+} from "../examples/last/from-effect/Catalog";
 
-type StorefrontUrls = SiteUrls<typeof storefrontFeatures>;
-type DocsPortalUrls = SiteUrls<typeof docsPortalFeatures>;
+declare const acme: AcmeUrls;
+declare const globex: GlobexUrls;
 
-// =============================================================================
-// Conditional SiteTree — variants / docs flip the shape
-// =============================================================================
-
-type StorefrontTree = SiteTree<typeof storefrontFeatures>;
-type DocsTree = SiteTree<typeof docsPortalFeatures>;
-
-type StorefrontIds = StorefrontTree["id"];
-expectTypeOf<StorefrontIds>().toEqualTypeOf<"content">();
-
-type DocsIds = DocsTree["id"];
-expectTypeOf<DocsIds>().toEqualTypeOf<"content" | "docs">();
-
-// =============================================================================
-// Recursive UrlsOf — nested docs.api.symbol + narrow literals
-// =============================================================================
-
-declare const storefront: StorefrontUrls;
-declare const docsPortal: DocsPortalUrls;
-
+// Acme — variants + locales; no docs branch
 expectTypeOf(
-  storefront.content.product("sku_1", { query: { ref: "hero" } }),
+  acme.content.product("sku_1", { query: { ref: "hero" } }),
 ).toEqualTypeOf<string>();
 expectTypeOf(
-  storefront.content.variant("sku_1", "red", { query: { ref: "grid" } }),
+  acme.content.variant("sku_1", "red", { query: { ref: "grid" } }),
 ).toEqualTypeOf<string>();
 expectTypeOf(
-  storefront.content.article("en", "launch", { query: { preview: "1" } }),
+  acme.content.article("en", "launch", { query: { preview: "1" } }),
 ).toEqualTypeOf<string>();
 
-// @ts-expect-error storefront has no docs branch
-storefront.docs;
+// @ts-expect-error Acme has no docs portal
+acme.docs;
 
-// @ts-expect-error locale must be en | de
-storefront.content.article("fr", "launch");
+// @ts-expect-error locale is "en" | "de"
+acme.content.article("fr", "launch");
 
-// @ts-expect-error variant needs sku + variant
-storefront.content.variant("sku_1");
+// @ts-expect-error variant needs two path args
+acme.content.variant("sku_1");
 
+// Globex — nested docs.api.symbol; no variant
 expectTypeOf(
-  docsPortal.docs.guide("v2", "routing", { query: { q: "layer" } }),
+  globex.docs.guide("v2", "routing", { query: { q: "layer" } }),
 ).toEqualTypeOf<string>();
 expectTypeOf(
-  docsPortal.docs.api.symbol("v1", "effect", "Effect", {
+  globex.docs.api.symbol("v1", "effect", "Effect", {
     query: { src: "twoslash" },
   }),
 ).toEqualTypeOf<string>();
 
-// @ts-expect-error docs portal has no variant leaf
-docsPortal.content.variant;
+// @ts-expect-error Globex has no variant PDP
+globex.content.variant;
 
-// @ts-expect-error version must be v1 | v2
-docsPortal.docs.guide("v3", "routing");
+// @ts-expect-error version is "v1" | "v2"
+globex.docs.guide("v3", "routing");
 
-type ApiUrls = UrlsOf<typeof docsTree>["api"];
-expectTypeOf<keyof ApiUrls>().toEqualTypeOf<"symbol">();
-
-type _SiteUrlsAlias = SiteUrls<typeof storefrontFeatures>;
-expectTypeOf<StorefrontUrls>().toEqualTypeOf<_SiteUrlsAlias>();
-
-// =============================================================================
-// fromEffect — bake R + runtime catalog from the same trees
-// =============================================================================
-
-class CmsEdition extends Context.Service<
-  CmsEdition,
-  "storefront" | "docsPortal"
->()("hyperlink-ts/test/ui-from-effect-typed.test-d/CmsEdition") {}
-
-const content = Route.group("content").fromEffect(
-  Effect.gen(function* () {
-    const edition = yield* CmsEdition;
-    return contentRoutes(edition);
-  }),
-);
-
-type ContentR = typeof content extends Route.Group<
-  infer _Id,
-  infer _Routes,
-  infer _Groups,
-  infer _Top,
-  infer R
-> ? R
-  : never;
-expectTypeOf<ContentR>().toEqualTypeOf<CmsEdition>();
-
-const Site = Router.make("typed-cms-tree")
-  .add(Route.get("home", "/"), content)
-  .groupsFromEffect(
-    Effect.gen(function* () {
-      const edition = yield* CmsEdition;
-      if (edition !== "docsPortal") return [] as const;
-      return docsGroups(docsTree);
-    }),
-  );
-
-type SiteR = Router.Api.Context<typeof Site>;
-expectTypeOf<SiteR>().toEqualTypeOf<CmsEdition>();
-
+// RouterBuilder.layer(Site) requires Catalog in R
 const home = pipe(
   RouterBuilder.group(Site, "__top", (h) =>
     h.handle("home", () => null),
@@ -143,5 +76,6 @@ const routes = pipe(
 
 type LayerR = typeof routes extends Layer.Layer<any, any, infer R> ? R
   : never;
-type _HasEdition = [CmsEdition] extends [LayerR] ? true : false;
-expectTypeOf<true>().toEqualTypeOf<_HasEdition>();
+expectTypeOf<true>().toEqualTypeOf<
+  [Catalog] extends [LayerR] ? true : false
+>();

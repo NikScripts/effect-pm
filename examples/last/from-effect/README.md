@@ -1,14 +1,25 @@
-# last-ts — CMS tree types → `fromEffect`
+# Catalog class → `fromEffect` routes
 
 **Run:** `pnpm run example:last-from-effect`
 
-The show is **`cms.ts`**: a const CMS AST with
+## Value
 
-- **conditional** `SiteTree<Features>` (`variants` / `docs` flip leaves + branches)
-- **recursive** `UrlsOf` (`docs.api.symbol`)
-- **narrow** path params (`locale: "en" | "de"`, `version: "v1" | "v2"`) + query bags
+One `Site` catalog. A **`Catalog` service class** owns URL grammar (params, query,
+which branches exist). Provide `layerAcme` or `layerGlobex` — the live route table
+changes. App links use `Catalog.Urls<Spec>` so wrong locale / arity / branch is a
+compile error.
 
-`main.ts` walks those trees inside `group.fromEffect` / `groupsFromEffect` and
-plugs them into `Router.make().add`. Bake `R` is `CmsEdition`.
+| Piece | File |
+|-------|------|
+| `Catalog` class + `Site` + Layers | [`Catalog.ts`](./Catalog.ts) |
+| Runner | [`main.ts`](./main.ts) |
+| Type proof | `test/ui-from-effect-typed.test-d.ts` |
 
-Type fireworks: `test/ui-from-effect-typed.test-d.ts`.
+```ts
+import { Catalog, Site, layerAcme, type AcmeUrls } from "./Catalog";
+
+// fromEffect / groupsFromEffect read Catalog inside Site
+declare const urls: AcmeUrls;
+urls.content.variant("sku", "red", { query: { ref: "grid" } });
+// urls.docs — compile error (Acme has no docs)
+```
