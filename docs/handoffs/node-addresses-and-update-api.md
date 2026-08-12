@@ -312,9 +312,17 @@ const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
 `Node.activate` remains the live flip for Active (runtime retarget), separate from
 stamping Listen/As/Advertise via `Node.config`.
 
+**Policy handlers (locked 2026-08-12, in progress):** one **`Context.Service` per
+policy key** (`LookupPolicy.Yield`, `LookupPolicy.Pick`, …) with a **default
+Layer**. Engines `yield* LookupPolicy.Yield` then invoke; apps override via
+`Node.policy` / Layer provide. Boolean / `"first"` sugar installs presets — not a
+second storage shape. Prefer Services over References-of-Effects so handler `R`
+can grow. Call signatures / `Node.policy` install shape still open below.
+
 **Not Eng’d yet** — tip still has `Node.withPolicy` + fragment Layers. Rename /
-`Node.config` bag + `Node.policy` land with the config/policy Eng when owner says
-go. §3.3.2 below describes *current* Eng’d substrate (to be re-homed).
+`Node.config` bag + `Node.policy` + Service handlers land with the config/policy
+Eng when owner says go. §3.3.2 below describes *current* Eng’d substrate (to be
+re-homed).
 
 ### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
 
