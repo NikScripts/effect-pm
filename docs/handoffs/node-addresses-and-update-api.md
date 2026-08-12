@@ -291,10 +291,24 @@ Config = Schema’d dials the engine branches on.
 `yield*`, Layer overrides). **Not** a product options-bag on `lookupClient` /
 `Node.make`. Call-site stamps stay rare overrides that win over ambient.
 
-**Not Eng’d yet** — tip still ships the merged `LookupPolicy` / `NodePolicy` bags.
-Rename / split is the next Policy Eng when owner says go. Until then treat this
-section as the vocabulary lock; §3.3.1 builder notes below describe *current*
-Eng’d substrate (to be re-homed).
+**Post-`Node.make` config (locked 2026-08-12):** creating a node must **not**
+freeze Node config or the address list. Apps must be able to **change** values
+and **add** to list-shaped pieces afterward — same identity (`nodeKey`), no
+second `make`.
+
+| Path | When | Semantics (target) |
+|------|------|--------------------|
+| **`.pipe(Address.* / NodeConfig.*)`** | Class hierarchy / type widen after `make` | Addresses **append**; config keys **last-write** merge |
+| **`Node.withConfig(node, …)`** (today `withPolicy`) | Process roles after the class exists (edge / A / B) | Same merge; overlay shell — not a new Tag/make |
+| **`LookupConfig.provide` on layers** | Client / peers / serve composition | Layer override of ambient Lookup config — not stamped into the Node forever |
+
+`Node.activate` remains the live flip for Active (runtime retarget), separate from
+stamping Listen/As/Advertise on a role overlay.
+
+**Not Eng’d yet** — tip still ships the merged `LookupPolicy` / `NodePolicy` bags
+(+ `withPolicy` name). Rename / split is the next Policy Eng when owner says go.
+Until then treat this section as the vocabulary lock; §3.3.2 builder notes below
+describe *current* Eng’d substrate (to be re-homed).
 
 ### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
 
