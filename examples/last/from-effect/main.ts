@@ -1,113 +1,73 @@
 /**
  * @module examples/last/from-effect
  *
- * CMS → typed routes (params + query) via `group.fromEffect` /
- * `groupsFromEffect`, then `Router.make().add`.
+ * Fancy CMS types → `fromEffect` / `groupsFromEffect` catalog.
+ *
+ * The type show is {@link ./cms} (`SiteUrls`, recursive `UrlsOf`, conditional
+ * `SiteTree`). This file wires const trees into a Router and prints typed links.
  *
  * Run: `pnpm run example:last-from-effect`
  */
 
-import { Context, Effect, Layer, ManagedRuntime, Schema, pipe } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, pipe } from "effect";
 import * as React from "react";
 import * as Layout from "last-ts/Layout";
 import * as Memory from "last-ts/Memory";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
+import {
+  type SiteUrls,
+  contentRoutes,
+  docsGroups,
+  docsPortalFeatures,
+  docsTree,
+  storefrontFeatures,
+} from "./cms";
 
 // =============================================================================
-// CMS — Layer-swappable source (not a bag of Route.get)
+// Which CMS tree is live — Layer-swapped
 // =============================================================================
 
-/**
- * What the CMS enabled for this site. Route *shapes* are decided in
- * {@link content} / {@link docsGroups}; Layers only swap the flags.
- */
-export class Cms extends Context.Service<
-  Cms,
-  {
-    /** PDP includes a variant segment. */
-    readonly variants: boolean;
-    /** Ship the versioned docs group. */
-    readonly docs: boolean;
-  }
->()("hyperlink-ts/examples/last/from-effect/main/Cms") {}
+export class CmsEdition extends Context.Service<
+  CmsEdition,
+  "storefront" | "docsPortal"
+>()("hyperlink-ts/examples/last/from-effect/main/CmsEdition") {}
 
-/** Storefront CMS: variants on, no docs portal. */
-export const cmsStorefront = Layer.succeed(Cms, {
-  variants: true,
-  docs: false,
-});
-
-/** Docs-heavy CMS: simple PDP, versioned guides. */
-export const cmsDocsPortal = Layer.succeed(Cms, {
-  variants: false,
-  docs: true,
-});
+export const layerStorefront = Layer.succeed(CmsEdition, "storefront");
+export const layerDocsPortal = Layer.succeed(CmsEdition, "docsPortal");
 
 // =============================================================================
-// Routes FROM the CMS Effect → catalog
+// Catalog — trees from Effect (not Effect→Router)
 // =============================================================================
 
-const product = Route.get("product", "/products/:sku", {
-  params: { sku: Schema.String },
-  query: { ref: Schema.optionalKey(Schema.String) },
-});
-
-const variant = Route.get("variant", "/products/:sku/v/:variant", {
-  params: { sku: Schema.String, variant: Schema.String },
-  query: { ref: Schema.optionalKey(Schema.String) },
-});
-
-const article = Route.get("article", "/:locale/blog/:slug", {
-  params: {
-    locale: Schema.Literals(["en", "de"]),
-    slug: Schema.String,
-  },
-  query: { preview: Schema.optionalKey(Schema.String) },
-});
-
-/**
- * Content destinations — param/query grammar depends on {@link Cms}.
- * Identifiers stay stable for {@link Route.UrlBuilder}.
- */
 const content = Route.group("content").fromEffect(
   Effect.gen(function* () {
-    const cms = yield* Cms;
-    return cms.variants
-      ? ([product, variant, article] as const)
-      : ([product, article] as const);
+    const edition = yield* CmsEdition;
+    return contentRoutes(edition);
   }),
 );
 
-/** Optional top-level group — only when the CMS publishes docs. */
-const docsGroups = Effect.gen(function* () {
-  const cms = yield* Cms;
-  if (!cms.docs) return [] as const;
-  return [
-    Route.group("docs").add(
-      Route.get("guide", "/docs/:version/:slug", {
-        params: { version: Schema.String, slug: Schema.String },
-        query: { q: Schema.optionalKey(Schema.String) },
-      }).pipe(
-        Route.handle(() =>
-          React.createElement("article", { "data-page": "guide" }, "Guide"),
-        ),
-      ),
-    ),
-  ] as const;
-});
-
-/** Catalog — groups from Effect, not Effect→Router. */
-export const Site = Router.make("cms-from-effect")
+const Site = Router.make("cms-types-from-effect")
   .add(Route.get("home", "/"), content)
-  .groupsFromEffect(docsGroups);
+  .groupsFromEffect(
+    Effect.gen(function* () {
+      const edition = yield* CmsEdition;
+      if (edition !== "docsPortal") return [] as const;
+      return docsGroups(docsTree);
+    }),
+  );
 
-/** Typed links — ids + path arity + query options from the Effect items. */
-export type Urls = Route.UrlBuilder<typeof Site>;
+/** Compile-time storefront URL surface — see `test/ui-from-effect-typed.test-d.ts`. */
+export type StorefrontUrls = SiteUrls<typeof storefrontFeatures>;
+
+/** Docs portal — nested `docs.api.symbol`. */
+export type DocsPortalUrls = SiteUrls<typeof docsPortalFeatures>;
+
+export { docsPortalFeatures, storefrontFeatures };
 
 // =============================================================================
-// Builder — handlers for catalog-known groups
+// Builder
 // =============================================================================
 
 const home = pipe(
@@ -123,80 +83,65 @@ const contentHandlers = pipe(
   RouterBuilder.group(Site, "content", (h) =>
     h
       .handle("product", () =>
-        React.createElement("h1", { "data-page": "product" }, "Product"),
+        React.createElement("span", { "data-page": "product" }, "product"),
       )
       .handle("variant", () =>
-        React.createElement("h1", { "data-page": "variant" }, "Variant"),
+        React.createElement("span", { "data-page": "variant" }, "variant"),
       )
       .handle("article", () =>
-        React.createElement("h1", { "data-page": "article" }, "Article"),
+        React.createElement("span", { "data-page": "article" }, "article"),
       ),
   ),
   Layout.provide(Layout.Passthrough),
 );
 
-export const appLayer = (cms: Layer.Layer<Cms>) =>
+export const appLayer = (edition: Layer.Layer<CmsEdition>) =>
   pipe(
     Memory.layer,
     Layer.provide(
       pipe(
         RouterBuilder.layer(Site),
         Layer.provide(Layer.mergeAll(home, contentHandlers)),
-        Layer.provide(cms),
+        Layer.provide(edition),
       ),
     ),
   );
 
 // =============================================================================
-// Demo — build typed hrefs, soft-nav, show what matched
+// Demo — live soft-nav (fancy URL types live in the `.test-d.ts`)
 // =============================================================================
 
 const demo = (label: string) =>
   Effect.gen(function* () {
     const router = yield* Router.Router;
-    const urls = router.urls as Urls;
-
-    const lines = [
-      `── ${label} ──`,
-      `groups: ${Object.keys(router.api.groups).sort().join(", ")}`,
-      `home          ${urls.home()}`,
-      `product       ${urls.content.product("sku_1", { query: { ref: "hero" } })}`,
-      `article       ${urls.content.article("en", "launch", { query: { preview: "1" } })}`,
-    ];
-
-    if (router.api.groups["content"]?.routes["variant"] !== undefined) {
-      lines.push(
-        `variant       ${urls.content.variant("sku_1", "red", { query: { ref: "grid" } })}`,
-      );
-    }
-    if (router.api.groups["docs"] !== undefined) {
-      lines.push(
-        `docs.guide    ${urls.docs.guide("v2", "routing", { query: { q: "layer" } })}`,
-      );
-    }
-
-    for (const line of lines) {
+    const hrefs = Object.values(router.api.groups).flatMap((g) =>
+      Object.values(g.routes).map(
+        (r) => `${g.identifier}.${r.identifier}  ${r.path}`,
+      ),
+    );
+    yield* Effect.logInfo(`── ${label} ──`);
+    for (const line of hrefs.sort()) {
       yield* Effect.logInfo(line);
     }
-
-    router.go(urls.content.product("sku_1", { query: { ref: "hero" } }));
-    yield* Effect.logInfo(`match product → ${router.match?.route.identifier}`);
-
-    router.go(urls.content.article("de", "launch"));
-    yield* Effect.logInfo(`match article → ${router.match?.route.identifier}`);
+    router.go("/products/sku_1?ref=hero");
+    yield* Effect.logInfo(`go product → ${router.match?.route.identifier}`);
+    router.go("/docs/v2/api/effect/Effect?src=twoslash");
+    yield* Effect.logInfo(
+      `go symbol → ${router.match?.route.identifier ?? "no match"}`,
+    );
   });
 
-const run = (label: string, cms: Layer.Layer<Cms>) =>
+const run = (label: string, edition: Layer.Layer<CmsEdition>) =>
   Effect.gen(function* () {
-    const rt = ManagedRuntime.make(appLayer(cms));
+    const rt = ManagedRuntime.make(appLayer(edition));
     yield* Effect.promise(() => rt.runPromise(demo(label)));
     yield* Effect.promise(() => rt.dispose());
   });
 
 void Effect.runPromise(
   Effect.gen(function* () {
-    yield* Effect.logInfo("CMS → fromEffect routes (typed params + query)");
-    yield* run("storefront (variants)", cmsStorefront);
-    yield* run("docs portal", cmsDocsPortal);
+    yield* Effect.logInfo("CMS tree types → fromEffect catalog");
+    yield* run("storefront", layerStorefront);
+    yield* run("docs portal", layerDocsPortal);
   }),
 );

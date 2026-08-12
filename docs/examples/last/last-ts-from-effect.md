@@ -9,23 +9,23 @@
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
-**Source:** [`examples/last/from-effect/main.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/from-effect/main.ts)  
+**Source:** [`examples/last/from-effect/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/from-effect/)  
 **Run:** `pnpm run example:last-from-effect`  
 **Spine:** [last-ts spine](/docs/last-ts-spine)
 
-## Why `fromEffect`
+## Type story (`cms.ts`)
 
-Static `.add(Route.get(…), …)` freezes path grammar in the catalog module. Here a
-**CMS Context service** (Layer-swapped) decides param/query shapes and which
-groups exist — same catalog code, different live routes.
+Work backwards from the URL surface:
 
-- `group.fromEffect` — destinations with different params/queries (`product`,
-  `variant`, `article`)
-- `groupsFromEffect` — optional top-level groups (`docs`)
+- **`SiteTree<Features>`** — conditional leaves/branches (`variants`, `docs`)
+- **`UrlsOf<Node>`** — recursive nest (`docs.api.symbol`)
+- **Narrow bags** — `locale: "en" | "de"`, `version: "v1" | "v2"` + query keys
 
-Sync `R=never` Effects still materialize immediately (tooling). Effects that
-`yield*` a service defer until `RouterBuilder.layer`.
+Runtime walks typed const trees into `group.fromEffect` / `groupsFromEffect` on a
+normal `Router.make().add` catalog. Bake `R` is `CmsEdition`.
 
-{.twoslash include="examples/last/from-effect/main.ts"}
+Type tests: `test/ui-from-effect-typed.test-d.ts`.
+
+{.twoslash include="examples/last/from-effect/cms.ts"}
 ``` ts
 ```

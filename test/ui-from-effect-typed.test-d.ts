@@ -1,40 +1,98 @@
 /**
- * CMS-style fromEffect / groupsFromEffect — UrlBuilder params + query + bake R.
+ * CMS tree types — recursion, conditionals, narrow param bags — plus fromEffect R.
  */
 import { expectTypeOf } from "vitest";
-import { Context, Effect, Layer, Schema, pipe } from "effect";
+import { Context, Effect, Layer, pipe } from "effect";
 import * as Layout from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
+// Layer used for RouterBuilder.layer R assert
+import type { SiteTree, SiteUrls, UrlsOf } from "../examples/last/from-effect/cms";
+import {
+  contentRoutes,
+  docsGroups,
+  docsPortalFeatures,
+  docsTree,
+  storefrontFeatures,
+} from "../examples/last/from-effect/cms";
 
-class Cms extends Context.Service<
-  Cms,
-  { readonly variants: true; readonly docs: true }
->()("hyperlink-ts/test/ui-from-effect-typed.test-d/Cms") {}
+type StorefrontUrls = SiteUrls<typeof storefrontFeatures>;
+type DocsPortalUrls = SiteUrls<typeof docsPortalFeatures>;
 
-const product = Route.get("product", "/products/:sku", {
-  params: { sku: Schema.String },
-  query: { ref: Schema.optionalKey(Schema.String) },
-});
+// =============================================================================
+// Conditional SiteTree — variants / docs flip the shape
+// =============================================================================
 
-const variant = Route.get("variant", "/products/:sku/v/:variant", {
-  params: { sku: Schema.String, variant: Schema.String },
-  query: { ref: Schema.optionalKey(Schema.String) },
-});
+type StorefrontTree = SiteTree<typeof storefrontFeatures>;
+type DocsTree = SiteTree<typeof docsPortalFeatures>;
 
-const article = Route.get("article", "/:locale/blog/:slug", {
-  params: {
-    locale: Schema.Literals(["en", "de"]),
-    slug: Schema.String,
-  },
-  query: { preview: Schema.optionalKey(Schema.String) },
-});
+type StorefrontIds = StorefrontTree["id"];
+expectTypeOf<StorefrontIds>().toEqualTypeOf<"content">();
+
+type DocsIds = DocsTree["id"];
+expectTypeOf<DocsIds>().toEqualTypeOf<"content" | "docs">();
+
+// =============================================================================
+// Recursive UrlsOf — nested docs.api.symbol + narrow literals
+// =============================================================================
+
+declare const storefront: StorefrontUrls;
+declare const docsPortal: DocsPortalUrls;
+
+expectTypeOf(
+  storefront.content.product("sku_1", { query: { ref: "hero" } }),
+).toEqualTypeOf<string>();
+expectTypeOf(
+  storefront.content.variant("sku_1", "red", { query: { ref: "grid" } }),
+).toEqualTypeOf<string>();
+expectTypeOf(
+  storefront.content.article("en", "launch", { query: { preview: "1" } }),
+).toEqualTypeOf<string>();
+
+// @ts-expect-error storefront has no docs branch
+storefront.docs;
+
+// @ts-expect-error locale must be en | de
+storefront.content.article("fr", "launch");
+
+// @ts-expect-error variant needs sku + variant
+storefront.content.variant("sku_1");
+
+expectTypeOf(
+  docsPortal.docs.guide("v2", "routing", { query: { q: "layer" } }),
+).toEqualTypeOf<string>();
+expectTypeOf(
+  docsPortal.docs.api.symbol("v1", "effect", "Effect", {
+    query: { src: "twoslash" },
+  }),
+).toEqualTypeOf<string>();
+
+// @ts-expect-error docs portal has no variant leaf
+docsPortal.content.variant;
+
+// @ts-expect-error version must be v1 | v2
+docsPortal.docs.guide("v3", "routing");
+
+type ApiUrls = UrlsOf<typeof docsTree>["api"];
+expectTypeOf<keyof ApiUrls>().toEqualTypeOf<"symbol">();
+
+type _SiteUrlsAlias = SiteUrls<typeof storefrontFeatures>;
+expectTypeOf<StorefrontUrls>().toEqualTypeOf<_SiteUrlsAlias>();
+
+// =============================================================================
+// fromEffect — bake R + runtime catalog from the same trees
+// =============================================================================
+
+class CmsEdition extends Context.Service<
+  CmsEdition,
+  "storefront" | "docsPortal"
+>()("hyperlink-ts/test/ui-from-effect-typed.test-d/CmsEdition") {}
 
 const content = Route.group("content").fromEffect(
   Effect.gen(function* () {
-    yield* Cms;
-    return [product, variant, article] as const;
+    const edition = yield* CmsEdition;
+    return contentRoutes(edition);
   }),
 );
 
@@ -46,52 +104,20 @@ type ContentR = typeof content extends Route.Group<
   infer R
 > ? R
   : never;
-expectTypeOf<ContentR>().toEqualTypeOf<Cms>();
+expectTypeOf<ContentR>().toEqualTypeOf<CmsEdition>();
 
-const Site = Router.make("typed-cms-from-effect")
+const Site = Router.make("typed-cms-tree")
   .add(Route.get("home", "/"), content)
   .groupsFromEffect(
     Effect.gen(function* () {
-      yield* Cms;
-      return [
-        Route.group("docs").add(
-          Route.get("guide", "/docs/:version/:slug", {
-            params: { version: Schema.String, slug: Schema.String },
-            query: { q: Schema.optionalKey(Schema.String) },
-          }),
-        ),
-      ] as const;
+      const edition = yield* CmsEdition;
+      if (edition !== "docsPortal") return [] as const;
+      return docsGroups(docsTree);
     }),
   );
 
 type SiteR = Router.Api.Context<typeof Site>;
-expectTypeOf<SiteR>().toEqualTypeOf<Cms>();
-
-type Urls = Route.UrlBuilder<typeof Site>;
-declare const urls: Urls;
-
-expectTypeOf(urls.home()).toEqualTypeOf<string>();
-expectTypeOf(
-  urls.content.product("sku_1", { query: { ref: "hero" } }),
-).toEqualTypeOf<string>();
-expectTypeOf(
-  urls.content.variant("sku_1", "red", { query: { ref: "grid" } }),
-).toEqualTypeOf<string>();
-expectTypeOf(
-  urls.content.article("en", "launch", { query: { preview: "1" } }),
-).toEqualTypeOf<string>();
-expectTypeOf(
-  urls.docs.guide("v2", "routing", { query: { q: "layer" } }),
-).toEqualTypeOf<string>();
-
-// @ts-expect-error product needs sku
-urls.content.product();
-
-// @ts-expect-error variant needs sku + variant
-urls.content.variant("sku_1");
-
-// @ts-expect-error article needs locale + slug
-urls.content.article("en");
+expectTypeOf<SiteR>().toEqualTypeOf<CmsEdition>();
 
 const home = pipe(
   RouterBuilder.group(Site, "__top", (h) =>
@@ -117,5 +143,5 @@ const routes = pipe(
 
 type LayerR = typeof routes extends Layer.Layer<any, any, infer R> ? R
   : never;
-type _HasCms = [Cms] extends [LayerR] ? true : false;
-expectTypeOf<true>().toEqualTypeOf<_HasCms>();
+type _HasEdition = [CmsEdition] extends [LayerR] ? true : false;
+expectTypeOf<true>().toEqualTypeOf<_HasEdition>();

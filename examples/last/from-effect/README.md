@@ -1,21 +1,14 @@
-# last-ts — CMS → typed routes (`fromEffect`)
+# last-ts — CMS tree types → `fromEffect`
 
 **Run:** `pnpm run example:last-from-effect`
 
-A Layer-swappable `Cms` service decides which destinations exist and which
-param/query shapes they use. Those Effects feed a normal catalog:
+The show is **`cms.ts`**: a const CMS AST with
 
-```ts
-Router.make("cms-from-effect")
-  .add(Route.get("home", "/"), content) // content = group.fromEffect(…)
-  .groupsFromEffect(docsGroups);
-```
+- **conditional** `SiteTree<Features>` (`variants` / `docs` flip leaves + branches)
+- **recursive** `UrlsOf` (`docs.api.symbol`)
+- **narrow** path params (`locale: "en" | "de"`, `version: "v1" | "v2"`) + query bags
 
-| API | In this example |
-|-----|-----------------|
-| `group.fromEffect` | `product` (`:sku` + `?ref`), optional `variant` (`:sku/:variant` + `?ref`), `article` (`:locale/:slug` + `?preview`) |
-| `groupsFromEffect` | optional `docs.guide` (`:version/:slug` + `?q`) |
-| `Route.UrlBuilder<typeof Site>` | typed path args + `{ query }` |
-| `RouterBuilder.layer(Site)` | bake `R` includes `Cms` |
+`main.ts` walks those trees inside `group.fromEffect` / `groupsFromEffect` and
+plugs them into `Router.make().add`. Bake `R` is `CmsEdition`.
 
-Swap `cmsStorefront` vs `cmsDocsPortal` — same catalog module, different live grammar.
+Type fireworks: `test/ui-from-effect-typed.test-d.ts`.
