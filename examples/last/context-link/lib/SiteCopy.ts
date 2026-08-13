@@ -5,7 +5,6 @@
  */
 import { Context, Layer } from "effect";
 
-// ---cut---
 export class SiteCopy extends Context.Service<SiteCopy, {
   readonly brand: string;
 }>()("hyperlink-ts/examples/last/context-link/lib/SiteCopy") {}

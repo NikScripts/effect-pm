@@ -556,6 +556,30 @@ pre.shiki {
 .code-block {
   position: relative;
 }
+/* Repo-relative path for `{.twoslash include="…"}` fences — sits above the highlighted body. */
+.code-block-file {
+  margin: 0;
+  padding: 0.45rem 2.6rem 0.45rem 0.85rem;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--muted-fg);
+  background: color-mix(in oklab, var(--card) 92%, var(--fg) 4%);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 0.55rem 0.55rem 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-block:has(> .code-block-file) > pre {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.code-block:has(> .code-block-file) .copy-btn {
+  top: 2.35rem;
+}
 /* consistent left inset before the line-number gutter (matches .api-source-code) */
 .code-block > pre {
   padding-left: 0.7rem;

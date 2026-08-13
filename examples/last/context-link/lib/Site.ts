@@ -8,7 +8,6 @@ import * as Last from "last-ts/Last";
 import * as NavBar from "../ui/NavBar";
 import * as SiteCopy from "./SiteCopy";
 
-// ---cut---
 export class Site extends Last.context({
   NavBar: NavBar.NavBarContext,
   SiteCopy: SiteCopy.SiteCopy,

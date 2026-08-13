@@ -7,7 +7,7 @@
 # last-ts — Last.context / Last.link
 
 {.draft}
-**Draft** — Twoslash fences include the runnable demo under `examples/last/context-link/`.
+**Draft** — Twoslash fences include the **full** runnable files under `examples/last/context-link/` (no `---cut---`); each fence shows its path.
 
 **App:** [`examples/last/context-link/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/context-link/)  
 **Run:** `pnpm run example:last-context-link`  
@@ -38,19 +38,19 @@ examples/last/context-link/
 - **`Last.link`**: direct home brand, group-narrowed `DocsLink`, uncalled
   `ChapterLink` (`slug` + `query` props), external `out`
 
-## 1. Catalog
+## Catalog
 
 {.twoslash include="examples/last/context-link/lib/Catalog.ts"}
 ``` ts
 ```
 
-## 2. Content bag (`Context.Service`)
+## SiteCopy
 
 {.twoslash include="examples/last/context-link/lib/SiteCopy.ts"}
 ``` ts
 ```
 
-## 3. Region kit — NavBar
+## NavBar
 
 Leaf Views, `Last.link` wrappers, composition View, `NavBarContext`.
 
@@ -58,25 +58,25 @@ Leaf Views, `Last.link` wrappers, composition View, `NavBarContext`.
 ``` tsx
 ```
 
-## 4. Site (nested contexts)
+## Site
 
 {.twoslash include="examples/last/context-link/lib/Site.ts"}
 ``` ts
 ```
 
-## 5. Tree (composition only)
+## Tree
 
 {.twoslash include="examples/last/context-link/lib/Tree.tsx"}
 ``` tsx
 ```
 
-## 6. Provider
+## Provider
 
 {.twoslash include="examples/last/context-link/lib/Provider.tsx"}
 ``` tsx
 ```
 
-## 7. App
+## App
 
 {.twoslash include="examples/last/context-link/App.tsx"}
 ``` tsx

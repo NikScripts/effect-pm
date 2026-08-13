@@ -8,7 +8,6 @@ import * as Layout from "last-ts/Layout";
 import * as RouterBuilder from "last-ts/RouterBuilder";
 import * as Catalog from "./Catalog";
 
-// ---cut---
 const main = pipe(
   RouterBuilder.group(Catalog.Catalog, "main", (h) =>
     h

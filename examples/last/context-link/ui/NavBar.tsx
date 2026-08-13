@@ -10,7 +10,6 @@ import * as View from "last-ts/View";
 import * as Catalog from "../lib/Catalog";
 import * as SiteCopy from "../lib/SiteCopy";
 
-// ---cut---
 // =============================================================================
 // Leaf Views (DOM here)
 // =============================================================================

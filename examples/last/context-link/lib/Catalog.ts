@@ -7,7 +7,6 @@
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 
-// ---cut---
 export class Catalog extends Router.make("examples/last/context-link").add(
   Router.group("main").add(
     Route.get("home", "/"),

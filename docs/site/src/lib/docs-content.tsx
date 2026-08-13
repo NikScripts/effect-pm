@@ -355,12 +355,17 @@ const toReact = (n: any): React.ReactNode => {
       // attribute above the fence opts the block into TS-language-service hover types.
       // `include="examples/…"` pulls the runnable `.ts` (cuts live in that file). Wrapped in a
       // `.code-block` container carrying the copy button; line numbers are pure CSS on `.line`.
+      // Included fences show the repo-relative path as a file chrome label.
       {
         const twoslash = (n.attributes?.class ?? "").split(/\s+/).includes("twoslash");
+        const include = n.attributes?.include?.trim();
         const text = resolveFenceText(n);
         return h(
           "div",
           { key: keySeq++, className: "code-block" },
+          include !== undefined && include !== ""
+            ? h("div", { key: keySeq++, className: "code-block-file" }, include)
+            : null,
           h(CopyButton, { key: keySeq++, code: visibleCode(text) }),
           highlightToReact(text, n.lang, { twoslash }),
         );
