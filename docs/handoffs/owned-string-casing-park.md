@@ -35,11 +35,12 @@ stays lowercase path/UI segments.
 
 Do **not** Eng without a dedicated cutover.
 
-### 4. `Route.Href` brand
+### 4. `Route.Href` brand — **superseded**
 
 Tried `effect/Brand` on `urlBuilder` returns — UrlBuilder types collapsed to
-`never` in `.test-d.ts`. Reverted. Next: hand-rolled brand or Brand after proving
-UrlMethod inference, then tighten `go` / `Link` off bare `string`.
+`never` in `.test-d.ts`. **Eng'd instead:** `Router.link(catalog)` /
+`Waku.link(catalog)` closes `to` over {@link Route.PathsOf} (no brand). Free-form
+URLs use `out`.
 
 ## Done this track
 
