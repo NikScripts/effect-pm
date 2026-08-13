@@ -8,6 +8,16 @@
 
 **A soft-nav `repo` group whose splat path is a real repo-relative file; the page renders that file (Twoslash first, full viewer later, in-browser editor much later).**
 
+## Perf lock (owner)
+
+| Priority | Rule |
+|----------|------|
+| **1 — page load** | Visiting `/repo/…` must feel like a normal docs page (static HTML / cached artifact). **Live Twoslash on request is forbidden** for this surface. |
+| **2 — process reuse** | Prefer **piggybacking the docgen / API-reference file walk** over a second full-repo crawl. Extra build work is acceptable if it stays incremental and does not regress (1). |
+| **3 — build wall-clock** | Distant third. OK to spend more CI/SSG minutes to keep (1) green. |
+
+Same instinct as API symbol pages today: **our** packages can be pre-rendered; heavy on-demand Twoslash is already treated as a build/serializer hazard ([`api/[pkg]/[module]/[symbol].tsx`](../site/src/pages/(book)/api/[pkg]/[module]/[symbol].tsx) comment — effect deps SSR, not static).
+
 ## Sketch
 
 ```text
@@ -67,15 +77,19 @@ Open splat without a root allowlist is a footgun (secrets, `.env`, `node_modules
 
 Reject `..`, absolute paths, and anything outside the allowlist before read.
 
-### Twoslash vs highlight-only
+### Twoslash vs highlight-only — bake, don’t pay at click
 
-Full-library modules often pull deep graphs; Twoslash can be **slow or noisy** vs teaching examples. PoC options:
+Full-library modules pull deep graphs; Twoslash is fine **offline**, toxic **on the request path**.
 
-1. **Shiki-only** first (instant, no typecheck) — still proves the route  
-2. Twoslash with `@noErrors` / sized allowlist  
-3. Twoslash “real” only for files already in the example/docs include set  
+| Approach | Page load | Process | When |
+|----------|-----------|---------|------|
+| **A. Prebaked HTML** from gen-api / SSG (Shiki ± Twoslash at build) | Best | Reuses or extends the existing file walk | **Default for ship** |
+| **B. Shiki-only bake** (no typecheck) | Excellent | Cheap highlight pass on allowlisted files | PoC / fallback if Twoslash bake is too fat |
+| **C. Live Twoslash on SSR/SSG-per-request** | Worst | “No extra process” but **burns the user** | **Rejected** for `/repo` |
 
-Do not block the route concept on “every `Last.ts` hover is perfect.”
+Docgen already touches most of these files for API reference (symbols, `file:line` source links, hover maps in `highlight.ts` / `api-source-links`). The offer is: **emit a per-file render artifact in that same pass** (or a sibling emit keyed by repo-relative path), then `/repo/*path` is a lookup + serve — not a second compiler.
+
+Do not block the route on “every `Last.ts` hover is perfect.” Prefer fast colored source + links into `/api/…` over a cold Twoslash on click.
 
 ### `fromEffect` vs hand `Route.get`
 
@@ -102,8 +116,9 @@ Once the route exists: `Last.link(Site, { to: (u) => u.repo.file })` with `path`
 ## Unpark checklist
 
 1. Last.context / Last.link track 1 accepted; track 2 still optional  
-2. Owner picks PoC root allowlist + Twoslash vs Shiki-first  
-3. One docs-site page + catalog group; no new package surface until viewer earns it  
+2. Owner picks PoC root allowlist  
+3. Perf path locked: **bake artifact at docgen/SSG** (reuse file walk); measure TTFB/HTML weight on a fat module (`Last.ts`) before expanding Twoslash richness  
+4. One docs-site page + catalog group; no new package surface until viewer earns it  
 
 ## Status line for board
 
