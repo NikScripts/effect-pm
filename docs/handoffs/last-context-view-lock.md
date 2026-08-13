@@ -7,7 +7,14 @@
 
 ## One-sentence lock
 
-**Component DI is `View`. Group Views (and non-UI services) with `Last.context`. Bridge with `Last.provider(Context)` + `Last.use(Context)`. Pure DOM lives only on leaf Views; composition Views have zero DOM tags.**
+**Component DI is `View`. Group kits with `Last.context` / `Last.provider` / `Last.use`. Build custom links with `Last.link` (wrap a component or a narrowed `Link`). Prefer named link components over raw `Link`.**
+
+## Build order (two tracks)
+
+| # | Track | Status |
+|---|--------|--------|
+| **1** | `Last.context` + `Last.provider(Context)` + `Last.use` + **`Last.link`** + base `Link` `to`/`out` | **Lock below — Eng next** |
+| **2** | Adapt context tools to the **router/builder** (provide per catalog / group / route; `Last.use` active scope) | **Parked** until track 1 is locked + Eng’d — do not design/impl yet |
 
 ---
 
@@ -19,11 +26,12 @@
 | `Context.Service` | Only for **non-component** values (e.g. copy / config bags). |
 | Leaf Views own DOM | Pure HTML (`header`, `a`, `aside`, …) lives in the leaf View default (or provided impl). |
 | Composition Views | **Zero** DOM tags — only compose other Views / `Last.use` results / content services. |
-| No `href="/…"` in kits | In-app URLs go through **`Link`** (`to`). External URLs use **`Link`** (`out`). |
+| No `href="/…"` in kits | In-app / external via **`Link`** / **`Last.link`** (`to` / `out`). |
+| Prefer `Last.link` | Avoid raw `Link` except when a custom link component makes no sense. |
 | No `.layer` API on context | No `Site.layer`, no `bag.layer(…)`, no `static layer` on classes. Plain `Layer.succeed` / `Layer.mergeAll` at the edge when binding impls. |
 | No “Chrome” | Banned name (see layout lock). |
 | `import * as` | All last-ts and local modules: `import * as NavBar from "./NavBar"`, then `NavBar.NavBarContext`. |
-| API shape | `Last.context` / `Last.provider(Context)` / `Last.use(Context)` — not `Site.use()` methods, not `Site.Site.use()`. |
+| API shape | `Last.context` / `Last.provider(Context)` / `Last.use(Context)` / `Last.link` — not `Site.use()` methods. |
 
 ---
 
@@ -231,51 +239,130 @@ export class Body extends Layout.make()(
 
 ---
 
-## Link: `to` + `out`
+## Base `Link`: `to` + `out`
 
 **Today:** `Router.Link` / Waku `Link` take **`to`** (in-app soft-nav).
 
-**Expand:**
+**Expand the base link:**
 
 | Prop | Role |
 |------|------|
-| `to` | In-app destination — string or `(urls) => string`; soft-nav / `go` |
-| `out` | External URL — plain navigation (no router `go`); use for leaving the app |
+| `to` | In-app — string or `(urls) => string`; soft-nav / `go` |
+| `out` | External URL — plain navigation (no router `go`) |
 
-Rules:
+At each use site: **`to` xor `out`**. Prefer **`Last.link`** wrappers over raw `Link`.
 
-- Pass **`to` xor `out`** (not both; not neither when the leaf is a link).
-- **No raw `href="/…"`** in region kits — always `Link` with `to` / `out`.
-- `className` / `children` / a11y props unchanged.
+---
 
-```tsx
-<Link.Link to={urls.index()}>Home</Link.Link>
-<Link.Link out="https://effect.website">Effect</Link.Link>
+## `Last.link` (track 1)
+
+**Not** a service / `Context.Reference` / `View.make` class. **`const` helper** that wraps with `Link`.
+
+- Pass a **regular component** → returns a **regular component**
+- Pass an **effect-based component** → returns an **effect-based component**
+- Pass **no component** → returns a narrowed **`Link`** that still wraps `children`
+
+Name: **`Last.link`** (not `View.link`) — sits with `Last.use` / `Last.provider`; does not mint a View tag.
+
+### Overloads
+
+```ts
+import * as Last from "last-ts/Last"
+
+// Wrap a base component
+const DocsItem = Last.link(Site.Site, Item.Item, opts)
+
+// No component — narrowed Link, still wraps children
+const DocsLink = Last.link(Site.Site, opts)
+const ChapterLink = Last.link(Site.Site, { to: (u) => u.docs.chapter })
 ```
 
-Exact module surface stays `import * as Router` / `import * as Waku` (or a shared `Link` re-export) — Eng picks one product path; behavior above is the lock.
+### Modes
+
+**A. Direct** — link fixed at creation; result has **no** `to`/`out` props:
+
+```ts
+Last.link(Site.Site, Brand, { to: (u) => u.index() })
+Last.link(Site.Site, { out: "https://effect.website" })
+Last.link(Site.Site, { to: (u) => u.docs.chapter("routing") }) // handler called → direct
+```
+
+**B. Attribute** — result accepts link props; wrapper builds `Link`:
+
+```ts
+// can enable both; each use still to xor out
+Last.link(Site.Site, Item.Item, { to: true, out: true })
+```
+
+### Narrowing `to` (catalog scope)
+
+| `opts.to` | Meaning |
+|-----------|---------|
+| `true` | Attribute: full-catalog `to` (string or urls callback) |
+| `(u) => u.docs` (group) | Attribute: `to` only selects routes in that group |
+| `(u) => u.docs.chapter` (**uncalled** route) | Attribute: route **params are component props**; **`query` is one prop** |
+| `(u) => u.docs.chapter("routing")` (**called**) | Direct link to that URL |
+| omitted with `out: true` / `out: URL` | External attribute or direct |
+
+### Params + `query` as props (uncalled route)
+
+Same shapes the router / urlBuilder already use for that route:
+
+- **Path params** → **individual props** (e.g. `slug`)
+- **Query** → **one prop** `query`
+
+```tsx
+const ChapterLink = Last.link(Site.Site, {
+  to: (u) => u.docs.chapter, // uncalled
+})
+
+<ChapterLink slug="routing">Routing</ChapterLink>
+<ChapterLink slug="routing" query={{ tab: "api" }}>Routing</ChapterLink>
+```
+
+```tsx
+const DocsLink = Last.link(Site.Site, {
+  to: (u) => u.docs, // group
+})
+
+<DocsLink to={(docs) => docs.chapter("routing")}>Routing</DocsLink>
+<DocsLink to={(docs) => docs.index()}>Docs home</DocsLink>
+```
+
+```tsx
+const HomeLink = Last.link(Site.Site, { to: (u) => u.index() })
+
+<HomeLink>Home</HomeLink>
+```
+
+### With a base component
+
+```tsx
+const DocsItem = Last.link(Site.Site, Item.Item, { to: (u) => u.docs })
+
+<DocsItem to={(docs) => docs.chapter("routing")}>Routing</DocsItem>
+```
+
+Base component props merge with link props (`children`, `className`, …).
 
 ---
 
 ## Content vs structure
 
-- Structure: leaf Views (DOM / `Link`).
+- Structure: leaf Views (DOM) + `Last.link` wrappers.
 - Content: `Context.Service` bags (e.g. `SiteCopy`) or other non-UI services.
-- Composition View wires content → leaf props (`to` / `out` / children). Never bake copy or paths into leaf defaults unless the leaf is purely presentational chrome with props.
+- Composition View wires content → leaf / link props. No hardcoded `href="/…"`.
 
 ---
 
-## Router-scoped provide (later, additive)
+## Track 2 — router-scoped context (PARKED)
 
-Same `Last.context` / `Last.use` model. **Additional place to attach Layers** on the builder (rename TBD — **not** `SiteBuilder`; must stay generic for HttpApi + pages):
+Do **not** Eng until track 1 ships. Reminder only:
 
-| Scope | Idea |
-|-------|------|
-| Whole catalog | provide on builder `layer(api)` |
-| Group | provide on `group(…)` |
-| Route | provide on that handle |
-
-`Last.use(Service)` uses the **active** merge (route > group > router). Optional overload `Last.use(Router, selector?)` for explicit scope — **does not change** the context API above.
+- Provide Layers on the builder for **catalog / group / route**
+- `Last.use(Service)` → active merge (route > group > router)
+- Optional `Last.use(Router, selector?)` for explicit scope
+- Builder rename TBD (generic for HttpApi + pages — **not** `SiteBuilder`)
 
 ---
 
@@ -283,11 +370,13 @@ Same `Last.context` / `Last.use` model. **Additional place to attach Layers** on
 
 - `Context.Service` for component slots
 - DOM in composition Views / `Tree` / `Layout.make` body (beyond placing `<Tree />`)
-- Hardcoded `href="/…"` instead of `Link` `to` / `out`
+- Hardcoded `href="/…"` instead of `Link` / `Last.link`
+- Treating `Last.link` as a View/service/Tag
 - `Site.layer` / static `layer` / `bag.layer`
 - Flattened `NavBarView` on `Site`
 - Word **Chrome** for this surface
 - `Site.Site.use()` — use `Last.use(Site.Site)`
+- Eng’ing track 2 before track 1 is locked
 
 ---
 
@@ -296,16 +385,16 @@ Same `Last.context` / `Last.use` model. **Additional place to attach Layers** on
 | Piece | Status |
 |-------|--------|
 | Phase A site Frame kits (current tree) | Eng’d earlier — **superseded by this lock** for next cut |
-| `Last.context` / `Last.provider(Context)` / `Last.use` | **Not Eng’d** |
-| Link `out` | **Not Eng’d** |
-| Builder rename + route/group provide | Parked; additive |
+| Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Not Eng’d** — lock ready |
+| Track 2: router/builder-scoped provide | **Parked** |
 
 ---
 
-## Acceptance (when Eng’d)
+## Acceptance (track 1)
 
 1. `Last.context` + nested region contexts; `Last.provider(Site)`; `Last.use(Site)` / `Last.use(NavBarContext)`.
 2. Every component slot is a View.
 3. Composition Views / Tree contain no DOM tags.
-4. In-app links use `to`; external use `out`; no bare `href="/"` in kits.
-5. `import * as` only for last-ts modules.
+4. `Last.link`: direct vs attribute; group / uncalled route / called route narrowing; params as props; `query` singular prop; no-component overload.
+5. Base `Link` supports `out`; prefer `Last.link` over raw `Link`.
+6. `import * as` only for last-ts modules.
