@@ -1,13 +1,8 @@
 /**
  * @module ui/Router (docs site)
  *
- * Skin: branded `urls` + Waku **layer** (`hyperlink-ts/ui/Router/waku`) +
- * `setDefault` (no layout Provider) + no-op {@link Outlet} for file routes.
- * Lite Memory/History stay on `hyperlink-ts/ui/Router` — this skin only wires
- * the Waku layer.
- *
- * RSC note: pass **string** `to` values into {@link Link} from Server Components
- * (`urls.docs("routing")`). Function builders are client-only.
+ * Soft-nav: branded `urls` + Waku **layer** + {@link Link} from
+ * `Waku.link(site)` (same catalog as soft-nav).
  */
 "use client";
 
@@ -45,7 +40,7 @@ export const Provider = Waku.Provider;
 export const useRouter = Waku.useRouter as () => LiveRouter;
 export const useHasRouter = Waku.useHasRouter;
 export const useMatch = Waku.useMatch;
-export const Link = Waku.Link;
+export const Link = Waku.link(defaultSite);
 /** Waku layer only (`layer.waku`). */
 export const layer = Waku.layer;
 

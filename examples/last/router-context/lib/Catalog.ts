@@ -1,8 +1,8 @@
 /**
  * @module examples/last/router-context/lib/Catalog
  *
- * Path catalog only (no Site/DocsKit imports) — typed `Paths` / `Urls` / `To`
- * for {@link AppLink} without a Site ↔ NavBar cycle.
+ * Path catalog + derived {@link Link} (same module — {@link Router.link}).
+ * No Site/DocsKit imports so NavBar can soft-nav without a Site ↔ NavBar cycle.
  */
 import { Schema } from "effect";
 import * as Route from "last-ts/Route";
@@ -20,6 +20,9 @@ export class Catalog extends Router.make("examples/last/router-context").add(
     }),
   ),
 ) {}
+
+/** Typesafe soft-nav for this catalog. */
+export const Link = Router.link(Catalog);
 
 export type Urls = Route.UrlBuilder<typeof Catalog>;
 export type Paths = Route.PathsOf<typeof Catalog>;

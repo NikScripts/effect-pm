@@ -118,8 +118,16 @@ export const useHasRouter: typeof internal.useHasRouter =
 export const useMatch: typeof internal.useMatch = internal.useMatch;
 
 /**
- * Soft-nav link — Waku `Link` when the live service is `_tag: "Waku"`.
+ * Soft-nav link — prefer {@link link}`(YourCatalog)` beside the router.
+ * Deprecated free generic kept for migration; Waku push when `_tag: "Waku"`.
  *
  * @public
  */
 export const Link: typeof internal.Link = internal.Link;
+
+/**
+ * Derive a typesafe Link from a catalog (same module as the router).
+ *
+ * @public
+ */
+export const link: typeof internal.link = internal.link;

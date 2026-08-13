@@ -2,12 +2,12 @@
  * @module examples/last/router-context/ui/NavBar
  *
  * Leaf Views (DOM) + composition View (zero DOM) + `NavBarContext`.
- * Soft-nav via catalog-typed {@link ../lib/AppLink} (`PathsOf` / urlBuilder).
+ * Soft-nav via {@link ../lib/Catalog.Link} (`Router.link(Catalog)`).
  */
 import * as React from "react";
 import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
-import * as AppLink from "../lib/AppLink";
+import { Link } from "../lib/Catalog";
 import * as SiteCopy from "../lib/SiteCopy";
 
 export class Root extends View.make<Root, {
@@ -54,17 +54,17 @@ export class NavBar extends View.make<NavBar>()(
     } = Last.use(NavBarContext);
     return (
       <NavRoot>
-        <AppLink.Link to="/">
+        <Link to="/">
           <BrandView>{copy.brand}</BrandView>
-        </AppLink.Link>
+        </Link>
         <NavEl>
-          <AppLink.Link to="/about">
+          <Link to="/about">
             <ItemView>About</ItemView>
-          </AppLink.Link>
+          </Link>
           {" · "}
-          <AppLink.Link to={(u) => u.docs.index()}>
+          <Link to={(u) => u.docs.index()}>
             <ItemView>Docs</ItemView>
-          </AppLink.Link>
+          </Link>
         </NavEl>
       </NavRoot>
     );

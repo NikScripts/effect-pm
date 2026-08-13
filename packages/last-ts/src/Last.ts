@@ -72,7 +72,8 @@ export const contextProvide: typeof lastContext.contextProvide =
   lastContext.contextProvide;
 
 /**
- * Wrap a component (or children) with a narrowed {@link ./Router.Link}.
+ * Wrap a component (or children) with soft-nav ({@link ./Router.UnboundLink}).
+ * Prefer {@link ./Router.link}`(YourCatalog)` beside the router for typed `to`.
  * Returns a plain / effect component — not a View tag.
  *
  * @public

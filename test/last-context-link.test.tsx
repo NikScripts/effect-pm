@@ -1,5 +1,5 @@
 /**
- * Last.context / Last.use / Last.link + Router.Link `out`.
+ * Last.context / Last.use / Last.link + Link `out`.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Layer, pipe } from "effect";

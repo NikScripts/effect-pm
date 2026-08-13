@@ -366,22 +366,23 @@ export type UrlMethodLoose = catalog.UrlMethodLoose;
 export type UrlQueryOptions = catalog.UrlQueryOptions;
 
 /**
- * Branded in-app href from {@link urlBuilder}. Bare `string` is not an href.
- *
- * @public
- */
-export type Href<P extends string = string> = catalog.Href<P>;
-
-/**
  * Typed union of catalog paths (`/docs/:slug` → `` `/docs/${string}` ``).
+ * Closed over by {@link ./Router.link}`(catalog)`.
  *
  * @public
  */
 export type PathsOf<A> = catalog.PathsOf<A>;
 
 /**
- * {@link ./Router.Link} `to` value: {@link PathsOf} literal, optional `?query`,
- * or branded {@link Href}.
+ * Path (+ optional `?query`) from a {@link urlBuilder} method for one template.
+ *
+ * @public
+ */
+export type PathHref<Path extends string> = catalog.PathHref<Path>;
+
+/**
+ * {@link ./Router.link} `to` value: {@link PathsOf} literal or the same with
+ * `?query` (urlBuilder output). Never bare `string` — use `out` for free-form.
  *
  * @public
  */

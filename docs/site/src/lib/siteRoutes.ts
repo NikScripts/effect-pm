@@ -288,6 +288,13 @@ export const requireSitePath = (href: string): SitePath => {
 };
 
 /**
+ * Narrow a runtime href for catalog {@link ./../ui/Router.Link} `to`
+ * (`Waku.link(site)` — PathsOf only, no bare `string`).
+ */
+export const asLinkTo = (href: string): import("last-ts/Route").ToHref<Site> =>
+  requireSitePath(href);
+
+/**
  * Resolve an in-book href through {@link urls} when it matches a known pattern.
  * Preserves `?query` and `#hash`. Unknown absolute paths pass through.
  */

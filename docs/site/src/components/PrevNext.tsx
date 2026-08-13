@@ -1,7 +1,5 @@
-// Page footer: previous / next links with the real chapter titles. Soft-nav via Router.Link —
-// hrefs from the flattened book order (crosses group boundaries).
-
 import { prevNext } from "../lib/docs-content.js";
+import { asLinkTo } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
 export async function PrevNext({ slug }: { readonly slug: string }) {
@@ -10,7 +8,7 @@ export async function PrevNext({ slug }: { readonly slug: string }) {
   return (
     <nav className="prevnext" aria-label="Previous and next chapter">
       {prev !== undefined ? (
-        <Router.Link className="prevnext-link prevnext-prev" to={prev.href}>
+        <Router.Link className="prevnext-link prevnext-prev" to={asLinkTo(prev.href)}>
           <span className="prevnext-dir">← Previous</span>
           <span className="prevnext-title">{prev.title}</span>
         </Router.Link>
@@ -18,7 +16,7 @@ export async function PrevNext({ slug }: { readonly slug: string }) {
         <span />
       )}
       {next !== undefined ? (
-        <Router.Link className="prevnext-link prevnext-next" to={next.href}>
+        <Router.Link className="prevnext-link prevnext-next" to={asLinkTo(next.href)}>
           <span className="prevnext-dir">Next →</span>
           <span className="prevnext-title">{next.title}</span>
         </Router.Link>

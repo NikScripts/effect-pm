@@ -950,23 +950,6 @@ export type UrlQueryOptions = {
   } | undefined;
 };
 
-/**
- * Brand on every {@link urlBuilder} result — bare `string` is not an href.
- * {@link PathsOf} literals are also accepted on {@link ../Router.Link} `to`.
- *
- * @public
- */
-export declare const HrefTypeId: unique symbol;
-
-/**
- * Typesafe in-app href — {@link urlBuilder} output (or a {@link PathsOf} literal).
- *
- * @public
- */
-export type Href<P extends string = string> = P & {
-  readonly [HrefTypeId]: typeof HrefTypeId;
-};
-
 /** Turn `/docs/:slug` into `` `/docs/${string}` ``; static paths stay literals. */
 export type InstantiatePath<P extends string> = string extends P ? string
   : P extends `${infer Head}:${infer Rest}`
@@ -988,7 +971,7 @@ type RoutesOfGroup<G> = G extends
 
 /**
  * Typed union of all in-app paths for catalog `A` (params → `${string}`).
- * Use on {@link ../Router.Link} `to` — never bare `string`.
+ * Closed over by {@link ../Router.link} — never bare `string` on `to`.
  *
  * @public
  */
@@ -1002,30 +985,23 @@ export type PathsOf<A> = A extends
   : never;
 
 /**
- * Values accepted by Link `to` for catalog `A`: {@link PathsOf} literals,
- * the same with `?query`, or a branded {@link Href} from {@link urlBuilder}.
+ * Values accepted by a catalog Link `to`: {@link PathsOf} literals or the same
+ * with `?query` (urlBuilder output).
  *
  * @public
  */
-export type ToHref<A> = [PathsOf<A>] extends [never]
-  ? Href
-  :
-    | PathsOf<A>
-    | `${PathsOf<A> & string}?${string}`
-    | Href;
+export type ToHref<A> =
+  | PathsOf<A>
+  | `${PathsOf<A> & string}?${string}`;
 
 /** Loose builder for erased / runtime contexts. */
 export type UrlMethodLoose = (
   ...args: ReadonlyArray<string | UrlQueryOptions>
-) => Href;
+) => string;
 
 export type UrlBuilderLoose = {
   readonly [key: string]: UrlBuilderLoose | UrlMethodLoose;
 };
-
-/** @internal */
-export const asHref = <P extends string>(path: P): Href<P> =>
-  path as Href<P>;
 
 /**
  * Path param names in template order.
@@ -1072,20 +1048,17 @@ type UrlMethodArgsFromBags<
     ? [...PathArgTupleFromBag<Bags, Keys>, options?: UrlQueryOptions]
   : never;
 
-/** Branded href for one route path template. */
-type HrefForPath<Path extends string> = PathHref<Path> & Href;
-
 type UrlMethod<E extends uiRoute.Constraint> = E extends
   { readonly "~ParamBags": infer Bags extends { readonly [key: string]: string } }
   ? (
     ...args: UrlMethodArgsFromBags<Bags, PathKeys<E["path"]>>
-  ) => HrefForPath<E["path"]>
+  ) => PathHref<E["path"]>
   // Prefer literal `path` — Effect codecs in the Params slot mean concrete
   // endpoints often no longer `extends uiRoute.Route<…>`. Widened
   // `path: string` (e.g. after `Route.params`) stays {@link UrlMethodLoose}.
   : E extends { readonly path: infer PathType extends string }
     ? string extends PathType ? UrlMethodLoose
-    : (...args: UrlMethodArgs<PathKeys<PathType>>) => HrefForPath<PathType>
+    : (...args: UrlMethodArgs<PathKeys<PathType>>) => PathHref<PathType>
   : UrlMethodLoose;
 
 const isUrlQueryOptions = (value: unknown): value is UrlQueryOptions =>
@@ -1265,9 +1238,7 @@ export const urlBuilder = <A extends ApiConstraint>(
           }
           params[key] = value;
         }
-        return asHref(
-          withBase(appendQuery(compiled.build(params), optionsArg?.query)),
-        );
+        return withBase(appendQuery(compiled.build(params), optionsArg?.query));
       }) as UrlMethodLoose,
       { "~last-ts/pathKeys": compiled.keys },
     );

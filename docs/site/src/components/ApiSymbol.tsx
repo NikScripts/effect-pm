@@ -11,6 +11,7 @@ import {
 } from "../lib/highlight.js";
 import { declarationTypeLinks } from "../lib/api-source-links.js";
 import { prerenderedHtml } from "../lib/inert-html.js";
+import { asLinkTo, isSitePath } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
 // The `file:line` location — a link to the line on GitHub when known, otherwise plain text. External
@@ -57,7 +58,7 @@ const firstSentence = (s: string): string => {
 export const ApiSymbolRow = ({ s, href }: { s: Row; href: string }): React.ReactElement => (
   <Router.Link
     className="api-row"
-    to={href}
+    to={asLinkTo(href)}
     data-kind={s.kind}
     title={s.qualifiedName}
   >
@@ -148,10 +149,14 @@ export const ApiSymbolCard = ({
         {chips.length > 0 ? (
           <div className="api-chips">
             {chips.map((c, i) =>
-              c.href !== undefined ? (
-                <Router.Link className={`api-chip ${c.cls}`} to={c.href} key={i}>
+              c.href !== undefined && isSitePath(c.href) ? (
+                <Router.Link className={`api-chip ${c.cls}`} to={asLinkTo(c.href)} key={i}>
                   {c.text}
                 </Router.Link>
+              ) : c.href !== undefined ? (
+                <a className={`api-chip ${c.cls}`} href={c.href} key={i}>
+                  {c.text}
+                </a>
               ) : (
                 <span className={`api-chip ${c.cls}`} key={i}>
                   {c.text}

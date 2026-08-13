@@ -4,8 +4,9 @@
 "use client";
 
 import type * as React from "react";
-import * as Waku from "last-ts/Waku";
-import { urls } from "../lib/site";
+import { Link } from "../lib/Link";
+import { Site, urls } from "../lib/site";
+import type * as Route from "last-ts/Route";
 
 export const Group = (props: {
   readonly title: string;
@@ -18,11 +19,11 @@ export const Group = (props: {
 );
 
 export const Item = (props: {
-  readonly to: string;
+  readonly to: Route.ToHref<typeof Site>;
   readonly children: React.ReactNode;
 }): React.ReactElement => (
   <li>
-    <Waku.Link to={props.to}>{props.children}</Waku.Link>
+    <Link to={props.to}>{props.children}</Link>
   </li>
 );
 

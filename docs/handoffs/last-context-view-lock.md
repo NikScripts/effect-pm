@@ -90,9 +90,8 @@ Each region is **one module**: leaf Views + composition View + `*Context`.
 import type * as React from "react"
 import * as Last from "last-ts/Last"
 import * as View from "last-ts/View"
-import * as Link from "last-ts/…" // Router.Link / Waku.Link — product Link
+import { Link } from "../lib/Catalog" // Router.link(Catalog) — same module as router
 import * as SiteCopy from "../lib/SiteCopy"
-import * as Urls from "../lib/urls" // urlBuilder
 
 // --- Leaf Views (DOM here) ---
 
@@ -244,17 +243,24 @@ export class Body extends Layout.make()(
 
 | Prop | Role |
 |------|------|
-| `to` | In-app only — **typesafe**: {@link Route.PathsOf} literal, branded {@link Route.Href} from `urlBuilder`, or `(urls) => urls.group.route(…)`. **Bare `string` banned.** |
+| `to` | In-app only — **typesafe**: {@link Route.PathsOf} literal, urlBuilder result, or `(urls) => urls.group.route(…)`. **Bare `string` banned.** |
 | `out` | External / free-form URL — not soft-nav (service for how `out` is handled: **next**) |
 
-At each use site: **`to` xor `out`**. Prefer **`Last.link`** wrappers over raw `Link`.
+**Canonical:** derive Link in the **same module as the router**:
 
 ```ts
-<Router.Link<typeof App> to="/">Home</Router.Link>
-<Router.Link to={(u) => u.docs.chapter("routing")}>Routing</Router.Link>
-<Router.Link out="https://effect.website">Effect</Router.Link>
+export class App extends Router.make("app").add(…) {}
+export const Link = Router.link(App) // or Waku.link(App)
+```
+
+At each use site: **`to` xor `out`**. Prefer **`Last.link`** wrappers when narrowing; otherwise the derived `Link`.
+
+```ts
+<Link to="/">Home</Link>
+<Link to={(u) => u.docs.chapter("routing")}>Routing</Link>
+<Link out="https://effect.website">Effect</Link>
 // @ts-expect-error bare string
-<Router.Link to="/not-in-catalog" />
+<Link to="/not-in-catalog" />
 ```
 
 ---
@@ -513,7 +519,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 - `Context.Service` for component slots
 - DOM in composition Views / `Tree` / `Layout.make` body (beyond placing `<Tree />`)
 - Hardcoded `href="/…"` instead of `Link` / `Last.link`
-- Bare `string` on Link `to` — use {@link Route.PathsOf} / {@link Route.Href} / urlBuilder callback; free-form URLs → `out`
+- Bare `string` on Link `to` — use {@link Route.PathsOf} / urlBuilder callback on `Router.link(Catalog)`; free-form URLs → `out`
 - Treating `Last.link` as a View/service/Tag
 - `Site.layer` / static `layer` / `bag.layer`
 - Flattened `NavBarView` on `Site`

@@ -1,5 +1,6 @@
 /**
- * Last.link — wrap a component (or bare children) with Router.Link.
+ * Last.link — wrap a component (or bare children) with {@link Router.UnboundLink}.
+ * Prefer {@link Router.link}`(YourCatalog)` for app navigation.
  *
  * @internal
  */
@@ -8,7 +9,6 @@ import { Context } from "effect";
 import * as Router from "../Router";
 import type * as Route from "../Route";
 import {
-  asHref,
   type ApiConstraint,
   type UrlBuilder,
 } from "./routes";
@@ -65,14 +65,10 @@ const buildHrefFromParams = (
   return method(...pathArgs);
 };
 
-const BaseLink = Router.Link as React.FC<Record<string, unknown>>;
-
 const wrapWithLink = (
   inner: React.ReactNode,
   linkProps: {
-    readonly to?:
-      | Route.Href
-      | ((urls: Route.UrlBuilderLoose) => Route.Href);
+    readonly to?: string | ((urls: Route.UrlBuilderLoose) => string);
     readonly out?: string;
     readonly className?: string;
     readonly title?: string;
@@ -82,10 +78,10 @@ const wrapWithLink = (
     readonly "aria-current"?: React.AriaAttributes["aria-current"];
   },
 ): React.ReactElement =>
-  React.createElement(BaseLink, { ...linkProps, children: inner });
+  React.createElement(Router.UnboundLink, { ...linkProps, children: inner });
 
 type Mode =
-  | { readonly _tag: "direct"; readonly to: Route.Href }
+  | { readonly _tag: "direct"; readonly to: string }
   | { readonly _tag: "directOut"; readonly out: string }
   | {
       readonly _tag: "attrFull";
@@ -115,7 +111,7 @@ const resolveMode = (
   if (typeof opts.to === "function") {
     const selected = opts.to(urls);
     if (typeof selected === "string") {
-      return { _tag: "direct", to: asHref(selected) };
+      return { _tag: "direct", to: selected };
     }
     if (isUrlMethod(selected)) {
       return { _tag: "attrRoute", method: selected };
@@ -163,7 +159,7 @@ const renderLinked = (
       if (mode.allowTo && to !== undefined && to !== null) {
         return wrapWithLink(body, {
           ...common,
-          to: to as Route.Href | ((urls: Route.UrlBuilderLoose) => Route.Href),
+          to: to as string | ((urls: Route.UrlBuilderLoose) => string),
         });
       }
       throw new Error("Last.link: pass to or out");
@@ -176,11 +172,11 @@ const renderLinked = (
         );
       }
       const href = (to as (g: Route.UrlBuilderLoose) => string)(mode.group);
-      return wrapWithLink(body, { ...common, to: asHref(href) });
+      return wrapWithLink(body, { ...common, to: href });
     }
     case "attrRoute": {
       const href = buildHrefFromParams(mode.method, props);
-      return wrapWithLink(body, { ...common, to: asHref(href) });
+      return wrapWithLink(body, { ...common, to: href });
     }
   }
 };

@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import type { SearchHit } from "../lib/search-core.js";
+import { asLinkTo, isSitePath } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
 interface Range {
@@ -79,10 +80,11 @@ export const HitRow = ({
   readonly active?: boolean;
   readonly showPkg?: boolean;
   readonly onNavigate?: () => void;
-}): React.ReactElement => (
+}): React.ReactElement =>
+  isSitePath(hit.doc.url) ? (
   <Router.Link
     className={active ? "search-hit is-active" : "search-hit"}
-    to={hit.doc.url}
+    to={asLinkTo(hit.doc.url)}
     onClick={onNavigate}
   >
     <span className="search-hit-title">
@@ -105,4 +107,30 @@ export const HitRow = ({
       </span>
     ) : null}
   </Router.Link>
-);
+  ) : (
+  <a
+    className={active ? "search-hit is-active" : "search-hit"}
+    href={hit.doc.url}
+    onClick={onNavigate}
+  >
+    <span className="search-hit-title">
+      <span className="search-hit-name">
+        <Highlight text={hit.doc.title} query={query} />
+      </span>
+      {hit.doc.kind !== undefined ? (
+        <span className={`api-kind api-kind-${hit.doc.kind}`}>{hit.doc.kind}</span>
+      ) : null}
+      {showPkg && hit.doc.pkg !== undefined ? (
+        <span className="search-hit-ctx">{hit.doc.pkg}</span>
+      ) : null}
+      {hit.doc.context !== undefined ? (
+        <span className="search-hit-ctx">{hit.doc.context}</span>
+      ) : null}
+    </span>
+    {hit.doc.summary !== "" ? (
+      <span className="search-hit-sum">
+        <Highlight text={hit.doc.summary} query={query} />
+      </span>
+    ) : null}
+  </a>
+  );

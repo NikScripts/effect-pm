@@ -2,4 +2,4 @@
 "last-ts": minor
 ---
 
-`Router.Link` / `Waku.Link` `to` is typesafe only: `Route.PathsOf` literals, branded `Route.Href` from `urlBuilder`, or `(urls) => urls.group.route(…)`. Bare `string` is rejected — use `out` for external / free-form URLs.
+`Router.link(catalog)` / `Waku.link(catalog)` — derive Link in the same module as the router. `to` is typesafe (`Route.PathsOf` / urlBuilder / callback); bare `string` rejected — use `out` for free-form URLs.

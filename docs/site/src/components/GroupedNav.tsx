@@ -9,6 +9,7 @@
 
 import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";
+import { asLinkTo } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
 const STORAGE_KEY = "docs-nav-collapsed";
@@ -76,7 +77,7 @@ export function GroupedNav({
                 <Router.Link
                   key={i.href}
                   className="nav-lone-link"
-                  to={i.href}
+                  to={asLinkTo(i.href)}
                   aria-current={i.href === path ? "page" : undefined}
                   onClick={onNavigate}
                 >
@@ -119,7 +120,7 @@ export function GroupedNav({
                 {items.map((i) => (
                   <Router.Link
                     key={i.href}
-                    to={i.href}
+                    to={asLinkTo(i.href)}
                     aria-current={i.href === path ? "page" : undefined}
                     onClick={onNavigate}
                   >

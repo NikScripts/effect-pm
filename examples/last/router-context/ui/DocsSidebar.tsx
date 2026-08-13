@@ -6,7 +6,7 @@
 import * as React from "react";
 import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
-import * as AppLink from "../lib/AppLink";
+import { Link } from "../lib/Catalog";
 import * as DocsCopy from "../lib/DocsCopy";
 
 export class Root extends View.make<Root, {
@@ -42,9 +42,9 @@ export class DocsSidebar extends View.make<DocsSidebar>()(
     return (
       <SideRoot>
         <SideTitle>{copy.sidebarTitle}</SideTitle>
-        <AppLink.Link to={(u) => u.docs.chapter("routing")}>
+        <Link to={(u) => u.docs.chapter("routing")}>
           <ItemView>Routing</ItemView>
-        </AppLink.Link>
+        </Link>
       </SideRoot>
     );
   },

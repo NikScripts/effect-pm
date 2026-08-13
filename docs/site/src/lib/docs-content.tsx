@@ -23,7 +23,8 @@ import { PackageInstall } from "../islands/PackageInstall.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 import { buildTermIndex, slugify } from "./glossary.js";
-import { resolveBookHref, urls } from "./siteRoutes.js";
+import { asLinkTo, resolveBookHref, urls, type Site } from "./siteRoutes.js";
+import type * as Route from "last-ts/Route";
 
 /** Per-chapter island slots — filled by `loadDemoIslands` before `toReact`. */
 let demoIslands: {
@@ -402,7 +403,7 @@ export const chapterMeta = (raw: string): Promise<ChapterMeta> =>
 
 export interface NavItem {
   readonly slug: string;
-  readonly href: string;
+  readonly href: Route.ToHref<Site>;
   readonly title: string;
   readonly order?: number;
 }
@@ -410,7 +411,8 @@ export interface NavItem {
 // Book URLs are flat: `docs/guides/queues.md` and `docs/examples/queue/foo.md` become
 // `/docs/queues` and `/docs/foo` (folder is organization only). Basename must be unique
 // site-wide — see the collision guard in `content.ts`.
-const hrefFor = (slug: string, _group: string): string => urls.docs(slug);
+const hrefFor = (slug: string, _group: string): Route.ToHref<Site> =>
+  urls.docs(slug);
 
 // Resolve one slug to a nav item; the title comes from the page's own block (SSOT).
 // A parse error falls back to the slug so one bad file can't blank the nav.
@@ -450,7 +452,7 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
         items: [
           {
             slug: "",
-            href: resolveBookHref(g.href),
+            href: asLinkTo(resolveBookHref(g.href)),
             title: g.label,
           },
         ],
@@ -464,7 +466,7 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
         label: g.label,
         items: g.links.map((l) => ({
           slug: "",
-          href: resolveBookHref(l.href),
+          href: asLinkTo(resolveBookHref(l.href)),
           title: l.label,
         })),
       });

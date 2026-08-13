@@ -4,7 +4,7 @@ import { SymbolAside } from "./ApiAside.js";
 import { readSourceFile, referencedBy, symbolDetail, symbolSourceHtml } from "../lib/api-data.js";
 import { loadHighlighter } from "../lib/highlight.js";
 import { runServer } from "../lib/runtime.js";
-import { urls } from "../lib/siteRoutes.js";
+import { asLinkTo, isSitePath, urls } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
 // `/api/<pkg>/<module>/<name>` → a compact display label: `Module.name`, plus the package when it
@@ -67,11 +67,17 @@ export async function ApiSymbolPage({
               Referenced by <span className="api-source-lines">{refs.length} symbols</span>
             </div>
             <div className="api-chips">
-              {refs.slice(0, MAX_REFS).map((url) => (
-                <Router.Link className="api-chip api-chip-ref" to={url} key={url}>
-                  {refLabel(url, pkg)}
-                </Router.Link>
-              ))}
+              {refs.slice(0, MAX_REFS).map((url) =>
+                isSitePath(url) ? (
+                  <Router.Link className="api-chip api-chip-ref" to={asLinkTo(url)} key={url}>
+                    {refLabel(url, pkg)}
+                  </Router.Link>
+                ) : (
+                  <a className="api-chip api-chip-ref" href={url} key={url}>
+                    {refLabel(url, pkg)}
+                  </a>
+                ),
+              )}
               {refs.length > MAX_REFS ? (
                 <span className="api-chip">+{refs.length - MAX_REFS} more</span>
               ) : null}

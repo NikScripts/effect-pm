@@ -32,6 +32,7 @@ export {
   useHasRouter,
   useMatch,
   Link,
+  link,
   type WakuBinding,
 } from "./Router/waku";
 

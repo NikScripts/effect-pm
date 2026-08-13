@@ -23,9 +23,8 @@ examples/last/router-context/
     Frame.tsx            leaves + Outlet host + FrameContext
     DocsSidebar.tsx      docs-only region kit
   lib/
-    Catalog.ts           path-only catalog → Paths / Urls / To (typed Link)
+    Catalog.ts           path catalog + `Link = Router.link(Catalog)`
     App.ts               .context(Site) + docs.context(DocsKit)
-    AppLink.tsx          Router.Link typed with Catalog.To (no bare string)
     Site.ts / DocsKit.ts nested Last.context bags
     AppTree / DocsTree   composition only (Last.use(App…))
     AppLayout / DocsLayout  Layout.make — place trees only (no HTML)
@@ -52,12 +51,6 @@ examples/last/router-context/
 
 {.twoslash include="examples/last/router-context/lib/App.ts"}
 ``` ts
-```
-
-## AppLink (`to` typesafe)
-
-{.twoslash include="examples/last/router-context/lib/AppLink.tsx"}
-``` tsx
 ```
 
 ## Site + DocsKit

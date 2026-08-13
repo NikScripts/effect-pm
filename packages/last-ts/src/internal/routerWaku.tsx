@@ -220,24 +220,13 @@ const softNavClick = (
 };
 
 /**
- * Soft-nav (`to`) or external (`out`). Waku `Link` when `_tag === "Waku"` (push);
- * else `<a>` + {@link Service.go}. External skips soft-nav.
+ * Soft-nav (`to`) or external (`out`). Prefer {@link link}`(YourCatalog)`.
+ * Waku `Link` when `_tag === "Waku"` (push); else `<a>` + {@link Service.go}.
  */
-export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
-  readonly to?:
-    | Route.ToHref<A>
-    | ((urls: Route.UrlBuilder<A>) => Route.ToHref<A>);
-  readonly out?: string;
-  readonly replace?: boolean;
-  readonly children?: React.ReactNode;
-  readonly className?: string;
-  readonly title?: string;
-  readonly "data-kind"?: string;
-  readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
-  readonly "aria-current"?: React.AriaAttributes["aria-current"];
-}): React.ReactElement => {
-  const router = useRouter<A>();
-
+const renderWakuLink = <A extends ApiConstraint>(
+  props: Router.LinkProps<A>,
+  router: Service,
+): React.ReactElement => {
   if (props.out !== undefined) {
     return (
       <a
@@ -255,7 +244,7 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   }
 
   if (props.to === undefined) {
-    throw new Error("Waku.Link: pass to or out");
+    throw new Error("Waku.link: pass to or out");
   }
 
   const href =
@@ -301,4 +290,36 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
       {props.children}
     </a>
   );
+};
+
+/**
+ * Derive a typesafe Link for a catalog — same module as the router.
+ *
+ * ```ts
+ * export class Site extends Router.make("site").add(…) {}
+ * export const Link = Waku.link(Site)
+ * ```
+ *
+ * @public
+ */
+export const link = <A extends ApiConstraint>(
+  api: A,
+): Router.LinkComponent<A> => {
+  const Link = (props: Router.LinkProps<A>): React.ReactElement => {
+    const router = useRouter<A>();
+    return renderWakuLink(props, router);
+  };
+  Link.displayName = `Waku.link(${api.identifier})`;
+  return Link;
+};
+
+/**
+ * @deprecated Use {@link link}`(YourCatalog)` beside the catalog.
+ * @public
+ */
+export const Link = <A extends ApiConstraint = ApiConstraint>(
+  props: Router.LinkProps<A>,
+): React.ReactElement => {
+  const router = useRouter<A>();
+  return renderWakuLink(props, router);
 };

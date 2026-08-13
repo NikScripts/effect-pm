@@ -11,11 +11,12 @@ import {
   StandardsBook,
   standardsSidebar,
 } from "../src/ui/bookChrome.js";
+import { asLinkTo } from "../src/lib/siteRoutes.js";
 
 const groups = [
   {
     label: "Docs",
-    items: [{ slug: "index", href: "/docs/index", title: "Intro" }],
+    items: [{ slug: "index", href: asLinkTo("/docs/index"), title: "Intro" }],
   },
 ];
 

@@ -4,21 +4,21 @@
 "use client";
 
 import type * as React from "react";
-import * as Waku from "last-ts/Waku";
+import { Link } from "../lib/Link";
 import { urls } from "../lib/site";
 
 export const Brand = (): React.ReactElement => (
-  <Waku.Link className="navbar-brand" to={urls.index()}>
+  <Link className="navbar-brand" to={urls.index()}>
     last.ts
-  </Waku.Link>
+  </Link>
 );
 
 export const Links = (): React.ReactElement => (
   <nav className="navbar-links" aria-label="Primary">
-    <Waku.Link to={urls.index()}>Home</Waku.Link>
-    <Waku.Link to={urls.about()}>About</Waku.Link>
-    <Waku.Link to={urls.guides_slug("routing")}>Docs</Waku.Link>
-    <Waku.Link to={urls.view()}>View</Waku.Link>
+    <Link to={urls.index()}>Home</Link>
+    <Link to={urls.about()}>About</Link>
+    <Link to={urls.guides_slug("routing")}>Docs</Link>
+    <Link to={urls.view()}>View</Link>
   </nav>
 );
 

@@ -292,23 +292,11 @@ export const useRouterOption = (): Service | null => {
 export const useMatch = (): Route.Match | undefined => useRouter().match;
 
 /**
- * Link — in-app soft-nav (`to`) or external (`out`).
- *
- * ```tsx
- * <Router.Link<typeof App> to="/">Home</Router.Link>
- * <Router.Link to={(urls) => urls.app.dashboard()}>App</Router.Link>
- * <Router.Link out="https://effect.website">Effect</Router.Link>
- * ```
- *
- * `to` is typesafe only: {@link Route.PathsOf} / branded {@link Route.Href} from
- * {@link Route.urlBuilder}, or `(urls) => urls.group.route(…)`. Bare `string` is
- * banned — use `out` for free-form / external URLs.
- *
- * Pass `to` xor `out`. Prefer {@link ./Last.link} for named/narrowed links.
+ * Props for a catalog Link from {@link link}.
  *
  * @public
  */
-export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
+export type LinkProps<A extends ApiConstraint> = {
   readonly to?:
     | catalog.ToHref<A>
     | ((urls: Route.UrlBuilder<A>) => catalog.ToHref<A>);
@@ -320,8 +308,22 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   readonly "data-kind"?: string;
   readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   readonly "aria-current"?: React.AriaAttributes["aria-current"];
-}): React.ReactElement => {
-  const router = useRouter();
+};
+
+/**
+ * Soft-nav / external link component closed over catalog `A`.
+ *
+ * @public
+ */
+export type LinkComponent<A extends ApiConstraint> = (
+  props: LinkProps<A>,
+) => React.ReactElement;
+
+const renderLink = <A extends ApiConstraint>(
+  props: LinkProps<A>,
+  urls: Route.UrlBuilder<A>,
+  go: (href: string, options?: { readonly replace?: boolean }) => void,
+): React.ReactElement => {
   if (props.out !== undefined) {
     return React.createElement(
       "a",
@@ -338,12 +340,10 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
     );
   }
   if (props.to === undefined) {
-    throw new Error("Router.Link: pass to or out");
+    throw new Error("Router.link: pass to or out");
   }
   const href =
-    typeof props.to === "function"
-      ? props.to(router.urls as Route.UrlBuilder<A>)
-      : props.to;
+    typeof props.to === "function" ? props.to(urls) : props.to;
   return React.createElement(
     "a",
     {
@@ -365,10 +365,74 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
           return;
         }
         event.preventDefault();
-        router.go(href, { replace: props.replace });
+        go(href, { replace: props.replace });
       },
     },
     props.children,
+  );
+};
+
+/**
+ * Derive a typesafe Link for a catalog — same module as the router.
+ *
+ * ```ts
+ * export class App extends Router.make("app").add(…) {}
+ * export const Link = Router.link(App)
+ *
+ * <Link to="/">Home</Link>
+ * <Link to={(u) => u.docs.chapter("routing")}>Routing</Link>
+ * <Link out="https://effect.website">Effect</Link>
+ * ```
+ *
+ * `to` is {@link Route.PathsOf} / urlBuilder result / `(urls) => …` only —
+ * never bare `string`. Free-form URLs use `out`.
+ *
+ * @public
+ */
+export const link = <A extends ApiConstraint>(
+  api: A,
+): LinkComponent<A> => {
+  const Link = (props: LinkProps<A>): React.ReactElement => {
+    const router = useRouter();
+    return renderLink(
+      props,
+      router.urls as Route.UrlBuilder<A>,
+      (href, options) => router.go(href, options),
+    );
+  };
+  Link.displayName = `Router.link(${api.identifier})`;
+  return Link;
+};
+
+/**
+ * Props for {@link UnboundLink} — string `to` (Last.link / internal).
+ * App navigation should use {@link link}`(YourCatalog)`.
+ *
+ * @internal
+ */
+export type UnboundLinkProps = {
+  readonly to?: string | ((urls: Route.UrlBuilderLoose) => string);
+  readonly out?: string;
+  readonly replace?: boolean;
+  readonly children?: React.ReactNode;
+  readonly className?: string;
+  readonly title?: string;
+  readonly "data-kind"?: string;
+  readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  readonly "aria-current"?: React.AriaAttributes["aria-current"];
+};
+
+/**
+ * Untyped soft-nav renderer (Last.link / internal). Prefer {@link link}.
+ *
+ * @internal
+ */
+export const UnboundLink = (props: UnboundLinkProps): React.ReactElement => {
+  const router = useRouter();
+  return renderLink(
+    props as LinkProps<ApiConstraint>,
+    router.urls as Route.UrlBuilder<ApiConstraint>,
+    (href, options) => router.go(href, options),
   );
 };
 
