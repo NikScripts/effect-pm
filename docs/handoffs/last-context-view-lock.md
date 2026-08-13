@@ -98,23 +98,9 @@ export class Root extends View.make<Root, {
   ),
 ) {}
 
+// `to` / `out` are props from the composition View — never hardcode href="/"
 export class Brand extends View.make<Brand, {
-  readonly children?: React.ReactNode
-}>()(
-  "last-ts/site/NavBar/Brand",
-  (props) => (
-    <Link.Link className="navbar-brand" to={/* from composition, or urls via use */}>
-      {props.children}
-    </Link.Link>
-  ),
-) {}
-```
-
-**Correction on Brand:** leaf Views stay pure structure where possible; **`to` / `out` are passed as props** from the composition View (composition owns routing/content wiring). Brand does not hardcode `href="/"`:
-
-```ts
-export class Brand extends View.make<Brand, {
-  readonly to: string // or Link’s `to` input type
+  readonly to: string
   readonly children?: React.ReactNode
 }>()(
   "last-ts/site/NavBar/Brand",
@@ -136,6 +122,7 @@ export class Nav extends View.make<Nav, {
   ),
 ) {}
 
+/** Link leaf — pass `to` xor `out`. */
 export class Item extends View.make<Item, {
   readonly to?: string
   readonly out?: string
