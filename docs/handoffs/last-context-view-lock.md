@@ -1,6 +1,6 @@
 # Last.context + View UI kits (owner lock)
 
-**Status:** LOCK — **track 1 Eng’d + tip-synced** (track 2 unparked for next Eng)  
+**Status:** LOCK — **track 1 + track 2 Eng’d** (tip-sync after this cut)  
 
 **Branch:** `cursor/agent-k-page-route-6d0e` (same tip as `integration` after sync)  
 **Package:** `last-ts`  
@@ -15,7 +15,7 @@
 | # | Track | Status |
 |---|--------|--------|
 | **1** | `Last.context` + `Last.provider(Context)` + `Last.use` + **`Last.link`** + base `Link` `to`/`out` | **Eng’d + tip-synced** |
-| **2** | Adapt context tools to the **router/builder** (provide per catalog / group / route; `Last.use` active scope) | **Next** — track 1 settled; Eng when owner starts the router cut |
+| **2** | Adapt context tools to the **router/builder** (provide per catalog / group / route; `Last.use` active scope) | **Eng’d** — `.context` + `Last.contextProvide` + Outlet mounts + `Last.use(App, …)` |
 
 ---
 
@@ -356,16 +356,16 @@ Base component props merge with link props (`children`, `className`, …).
 
 ---
 
-## Track 2 — router-scoped context (NEXT)
+## Track 2 — router-scoped context (ENG’D)
 
-**Status:** Design lock in progress — Eng only after size/load + builder-debt path agreed  
+**Status:** Eng’d — demo [`examples/last/router-context/`](../../examples/last/router-context/) · twoslash [`last-ts-router-context`](../examples/last/last-ts-router-context.md)  
 **Replaces:** hand-rolled `Last.provider(layer, Site)` for app chrome when the catalog owns scope
 
 ### One-sentence
 
 **Contexts are declared on the router (catalog / group / route); RouterBuilder owes the Layers those contexts require (same debt shape as `Layout.provide`); the router mounts the active scope; `Last.use(Router, …)` reads it.**
 
-### Dream end-state
+### Shipped end-state
 
 ```ts
 // 1) Declare scopes on the catalog (definition)
@@ -382,20 +382,19 @@ const docs = pipe(
   RouterBuilder.group(App, "docs", (h) =>
     h.handle("chapter", Chapter),
   ),
-  Layout.provide(DocsShell),
-  // discharges DocsKit (+ nested View/Service tags) — name TBD; shape = Layout.provide
-  Context.provide(docsKitLayer),
+  Layout.provide(DocsLayout),
+  Last.contextProvide(DocsKit, docsKitLayer),
 )
 
 const root = pipe(
   RouterBuilder.layer(App), // still requires every group Layer
-  Layer.provide(docs),
-  Context.provide(siteLayer), // discharges root Site debt
+  Layer.provideMerge(Layer.mergeAll(main, docs)), // keep kit services
+  Last.contextProvide(Site, siteLayer), // discharges root Site debt
 )
 
-// 3) One edge bake — no Last.provider(layer, Site)
+// 3) One edge bake — no Last.provider(layer, Site); provideMerge keeps kit services
 export const Provider = Last.provider(
-  pipe(Waku.layer, Layer.provide(root), Layer.provideMerge(documentLayer)),
+  pipe(Memory.layer, Layer.provideMerge(root)),
 )
 
 // 4) Use anywhere under the match
@@ -405,7 +404,7 @@ const chapterBag = Last.use(App, (r) => r.docs.chapter)
 const { Root } = Last.use(NavBar.NavBarContext)  // track 1 still works
 ```
 
-Until `Context.provide` (or equivalent) fulfills each declared scope, **`routesLayer` keeps those services in `R`** — you cannot `Last.provider(routes)` with open debt (same loudness as missing `Layout.provide` on a page group).
+Until `Last.contextProvide` fulfills each declared scope, **`routesLayer` keeps those services in `R`** — you cannot bake a clean Layer with open debt (same loudness as missing `Layout.provide` on a page group).
 
 ### Declare (definition site — not a free-floating Provider)
 
@@ -435,18 +434,19 @@ class Site extends Router.make("app")
 | Piece | Layout today | Context dream |
 |-------|--------------|---------------|
 | Declare need | page group implies `Layout.Slot` | `.context(Ctx)` stamps scope + `ServicesOf<Ctx>` into `R` |
-| Discharge | `pipe(group, Layout.provide(AppShell))` | `pipe(group, Context.provide(implLayer))` (name TBD) |
-| Loud failure | open `Layout.Slot` → can’t bake clean Layer | open context services → can’t `Last.provider(routes)` |
-| Override | later `Layout.provide` / `yield*` | later `Context.provide` wins for that scope |
-| Defaults | View `static layer` / `Layer.succeed` compose into `implLayer` | same — kits ship default Layers; edge merges overrides |
+| Discharge | `pipe(group, Layout.provide(AppLayout))` | `pipe(group, Last.contextProvide(Ctx, implLayer))` |
+| Loud failure | open `Layout.Slot` → can’t bake clean Layer | open context services → can’t bake clean Layer |
+| Override | later `Layout.provide` / `yield*` | later `Last.contextProvide` wins for that scope |
+| Defaults | View Reference defaults + `Layer.succeed` for required Services | same — `Last.contextProvide(Site, siteCopyLayer)` discharges `ServicesOf<Site>` while Views use Reference defaults |
 
-**Ideas for `Context.provide` shape (pick at Eng):**
+**Fulfill shape (picked):**
 
-1. **Pipeable on group/catalog Layer** (best Layout dual): `pipe(group, Context.provide(docsKitLayer))`  
-2. **Keyed fulfill:** `Context.provide(DocsKit, docsKitLayer)` when multiple contexts share a group  
-3. **Auto from View defaults:** if every tag in `Ctx` has `static layer` / Reference default, debt collapses without a pipe — **opt-in only**; never silent for required Services without defaults  
+1. **`Last.contextProvide(kit)`** — excludes Layer outputs from `R`  
+2. **`Last.contextProvide(Ctx, kit)`** — excludes `ServicesOf<Ctx>` (preferred when Views are References with defaults)
 
 Catalog attach stays on the router definition; **fulfill stays on the builder** so handler modules own the heavy imports (codesplit-friendly).
+
+**Hard UI:** leaf Views own DOM; composition / Tree / `Layout.make` body = zero HTML; never name surfaces “shell” / “Chrome”.
 
 ### Use
 
@@ -489,12 +489,12 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 
 **Do not** Eng T2c before T2a/b — runtime without debt is how apps silently ship half-provided kits.
 
-### Open call (resolve before Eng)
+### Resolved at Eng
 
-1. **`Last.use(Router)` alone** — **leaning active merge**; confirm.  
-2. **Fulfill name** — `Context.provide` vs `Last.provide` vs `Kit.provide` (avoid clash with Effect `Context` / `Last.provide` upward bags).  
-3. **Attach API** — `.context(Ctx)` on catalog/group/route (declare) + builder pipeable (fulfill) — **leaning yes**; not builder-only declare.  
-4. **Per-route debt** — on `RouterBuilder.group` until route-level handle API exists, or stamp on `Route.get` and surface through group Layer.
+1. **`Last.use(Router)` alone** — active merge of mounted scopes.  
+2. **Fulfill name** — `Last.contextProvide` (not Effect `Context.provide` / `Last.provide`).  
+3. **Attach API** — `.context(Ctx)` on catalog/group (+ route annotation ready) + builder fulfill.  
+4. **Per-route** — `ContextScope` on route annotations works at runtime; typed route `.context` can follow.
 
 ### Non-goals (track 2)
 
@@ -524,7 +524,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 |-------|--------|
 | Phase A site Frame kits (current tree) | Eng’d earlier — **superseded by this lock** for next cut |
 | Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Eng’d** — `test/last-context-link.test.tsx` · demo [`examples/last/context-link/`](../../examples/last/context-link/) · twoslash [`last-ts-context-link`](../examples/last/last-ts-context-link.md) |
-| Track 2: router/builder-scoped provide | **Next** (unparked) |
+| Track 2: router/builder-scoped provide | **Eng’d** — `test/last-router-context.test.tsx` · demo [`examples/last/router-context/`](../../examples/last/router-context/) · twoslash [`last-ts-router-context`](../examples/last/last-ts-router-context.md) |
 
 ---
 

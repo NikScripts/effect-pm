@@ -363,6 +363,13 @@ type GroupNeedsLayout<G extends { readonly routes: Record<string, unknown> }> =
 type GroupLayoutDebt<G extends { readonly routes: Record<string, unknown> }> =
   GroupNeedsLayout<G> extends true ? Layout.Slot : never;
 
+/** Bake + context-kit services carried on the group (`from` / `.context`). */
+type GroupBakeR<G> = G extends {
+  readonly routes: Record<string, unknown>;
+} ? G extends catalog.Group<string, any, any, any, infer RX> ? RX
+  : never
+  : never;
+
 const groupNeedsLayoutRuntime = (g: GroupTop): boolean => {
   if (catalog.hasDeferredDestinations(g)) return true;
   const routes = Object.values(g.routes);
@@ -425,6 +432,7 @@ export const group = <
   Handlers.Error<Return>,
   | Exclude<Handlers.Context<Return>, never>
   | GroupLayoutDebt<A["groups"][Identifier]>
+  | GroupBakeR<A["groups"][Identifier]>
 > =>
   Layer.effectContext(
     Effect.gen(function* () {
@@ -456,6 +464,7 @@ export const group = <
     Handlers.Error<Return>,
     | Exclude<Handlers.Context<Return>, never>
     | GroupLayoutDebt<A["groups"][Identifier]>
+    | GroupBakeR<A["groups"][Identifier]>
   >;
 
 /**

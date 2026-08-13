@@ -15,7 +15,7 @@
  *   RouterBuilder.group(Site, "app", (h) =>
  *     h.handle("home", Home).handle("getUser", (req) => Effect.succeed(…)),
  *   ),
- *   Layout.provide(AppShell),
+ *   Layout.provide(AppLayout),
  * )
  * const routes = pipe(RouterBuilder.layer(Site), Layer.provide(app))
  * export const provider = Last.provider(
@@ -59,7 +59,8 @@ export type Group<
   Groups extends catalog.GroupTop = never,
   TopLevel extends boolean = boolean,
   R = never,
-> = catalog.Group<Id, Routes, Groups, TopLevel, R>;
+  Ctx = never,
+> = catalog.Group<Id, Routes, Groups, TopLevel, R, Ctx>;
 
 /** @public */
 export type GroupTop = catalog.GroupTop;

@@ -6,8 +6,8 @@
  *
  * ```ts
  * export class Site extends Last.context({ NavBar: NavBar.NavBarContext }) {}
- * export const Provider = Last.provider(routesLayer, Site)
- * const { NavBar } = Last.use(Site)
+ * // Track 1: Last.provider(layer, Site)
+ * // Track 2: catalog .context(Site) + Last.contextProvide(siteLayer); Last.use(App)
  * const DocsLink = Last.link(SiteCatalog, { to: (u) => u.docs })
  * ```
  *
@@ -44,7 +44,8 @@ export const provider: typeof appInternal.provider = appInternal.provider;
 export const context: typeof lastContext.context = lastContext.context;
 
 /**
- * Read a context bag under {@link provider}.
+ * Read a context bag under {@link provider}, or a router-scoped bag:
+ * `Last.use(App)`, `Last.use(App, "docs")`, `Last.use(App, (r) => r.docs)`.
  *
  * @public
  */
@@ -56,6 +57,19 @@ export const use: typeof lastContext.use = lastContext.use;
  * @public
  */
 export type ServicesOf<C> = lastContext.ServicesOf<C>;
+
+/**
+ * Discharge router `.context` Layer debt (dual of {@link ./Layout.provide}).
+ *
+ * @example
+ * ```ts
+ * pipe(RouterBuilder.group(App, "docs", …), Layout.provide(DocsLayout), Last.contextProvide(docsKitLayer))
+ * ```
+ *
+ * @public
+ */
+export const contextProvide: typeof lastContext.contextProvide =
+  lastContext.contextProvide;
 
 /**
  * Wrap a component (or children) with a narrowed {@link ./Router.Link}.

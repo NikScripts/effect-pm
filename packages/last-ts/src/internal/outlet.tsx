@@ -10,6 +10,7 @@ import * as AtomReact from "../AtomReact";
 import * as Layout from "../Layout";
 import type * as Route from "../Route";
 import { handleOf } from "../Route";
+import * as lastContext from "./lastContext";
 import * as pageContext from "./pageContext";
 import * as pageServices from "./pageServices";
 import * as routerBuilder from "./routerBuilder";
@@ -198,14 +199,17 @@ export const Outlet = (props: {
     href: props.router.href,
   };
 
+  const scopes = lastContext.activeContextScopes(props.router.api, match);
+  const body = React.createElement(MatchedBody, {
+    router: props.router,
+    match,
+    request,
+  });
+
   return React.createElement(pageContext.RequestProvider, {
     value: request,
     children: React.createElement(pageContext.DocumentRoot, {
-      children: React.createElement(MatchedBody, {
-        router: props.router,
-        match,
-        request,
-      }),
+      children: lastContext.wrapActiveContextScopes(scopes, body),
     }),
   });
 };

@@ -1,12 +1,22 @@
 /**
- * Last.context / Last.use / Last.provider(context) — React bag over Effect services.
+ * Last.context / Last.use / Last.provider(context) / Last.contextProvide —
+ * React bag over Effect services + router-scoped mount.
  *
  * @internal
  */
 import * as React from "react";
-import { Context } from "effect";
+import { Context, Layer, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "../AtomReact";
+import {
+  ContextScope,
+  type Api,
+  type ApiConstraint,
+  type Group,
+  type GroupTop,
+  isApi,
+} from "./routes";
+import type { Constraint as RouteConstraint } from "./route";
 
 export const LastContextTypeId = "~last-ts/Last/context" as const;
 
@@ -137,27 +147,329 @@ export const context = <const S extends Spec>(
   return Ctx as unknown as (abstract new () => {}) & LastContextClass<S>;
 };
 
+/** Active ContextScope classes mounted for the current match (catalog→group→route). */
+const ActiveScopesReactContext = React.createContext<
+  ReadonlyArray<LastContextClass>
+>([]);
+
 /**
- * Resolve a context bag under {@link makeContextProvider}.
+ * Tell {@link use} which router scopes are mounted (Outlet sets this).
  *
  * @internal
  */
-export const use = <C extends LastContextClass<any>>(
+export const ActiveScopesProvider = (props: {
+  readonly scopes: ReadonlyArray<LastContextClass>;
+  readonly children: React.ReactNode;
+}): React.ReactElement =>
+  React.createElement(
+    ActiveScopesReactContext.Provider,
+    { value: props.scopes },
+    props.children,
+  );
+
+const readBag = <C extends LastContextClass<any>>(
+  store: BagsStore,
   ctx: C,
 ): TypeOfSpec<C["spec"]> => {
-  const store = React.useContext(BagsReactContext);
-  if (store === null) {
-    throw new Error(
-      "Last.use: wrap the tree in Last.provider(YourContext) under an Atom runtime",
-    );
-  }
   const bag = store.get(ctx);
   if (bag === undefined) {
     throw new Error(
-      "Last.use: context was not registered by Last.provider — nest it under the provided root or provide it directly",
+      "Last.use: context was not registered — mount it via Last.provider(ctx) or a router .context scope on the active path",
     );
   }
   return bag as TypeOfSpec<C["spec"]>;
+};
+
+const scopeOf = (
+  annotations: Context.Context<never>,
+): LastContextClass | undefined => {
+  const opt = Context.getOption(
+    annotations as Context.Context<ContextScope>,
+    ContextScope,
+  );
+  return Option.isSome(opt) ? opt.value : undefined;
+};
+
+/** Marker for {@link use} catalog selectors `(r) => r.docs` / `(r) => r.docs.chapter`. */
+const ScopeSelTypeId = "~last-ts/Last/ScopeSel" as const;
+
+type ScopeSel =
+  | {
+      readonly [ScopeSelTypeId]: typeof ScopeSelTypeId;
+      readonly _tag: "group";
+      readonly group: GroupTop;
+    }
+  | {
+      readonly [ScopeSelTypeId]: typeof ScopeSelTypeId;
+      readonly _tag: "route";
+      readonly group: GroupTop;
+      readonly route: RouteConstraint;
+    };
+
+const isScopeSel = (u: unknown): u is ScopeSel =>
+  typeof u === "object" &&
+  u !== null &&
+  ScopeSelTypeId in u &&
+  (u as ScopeSel)[ScopeSelTypeId] === ScopeSelTypeId;
+
+type ScopeTree = {
+  readonly [key: string]: ScopeTree | ScopeSel;
+};
+
+const scopeTree = (api: ApiConstraint): ScopeTree => {
+  const root: Record<string, ScopeTree | ScopeSel> = {};
+  for (const g of Object.values(api.groups) as Array<GroupTop>) {
+    const groupSel: ScopeSel = {
+      [ScopeSelTypeId]: ScopeSelTypeId,
+      _tag: "group",
+      group: g,
+    };
+    const nest: Record<string, ScopeTree | ScopeSel> = {};
+    for (const route of Object.values(g.routes) as Array<RouteConstraint>) {
+      nest[route.identifier] = {
+        [ScopeSelTypeId]: ScopeSelTypeId,
+        _tag: "route",
+        group: g,
+        route,
+      };
+    }
+    // Group node is both selectable and a nest of routes.
+    root[g.identifier] = Object.assign(groupSel, nest);
+  }
+  return root;
+};
+
+/** Bag type for a catalog’s root `.context(Ctx)`. */
+export type RouterContextBag<A> = A extends {
+  readonly "~LastContext"?: infer C;
+} ? C extends LastContextClass<infer S> ? TypeOfSpec<S>
+  : A extends Api<any, any, any, any, infer C2>
+    ? C2 extends LastContextClass<infer S2> ? TypeOfSpec<S2>
+    : never
+  : never
+  : never;
+
+/** Bag type for `A["groups"][Id]` `.context(Ctx)`. */
+export type RouterGroupContextBag<A, Id extends string> = A extends {
+  readonly groups: infer G;
+} ? Id extends keyof G
+  ? G[Id] extends { readonly "~LastContext"?: infer C }
+    ? C extends LastContextClass<infer S> ? TypeOfSpec<S>
+    : never
+  : G[Id] extends Group<any, any, any, any, any, infer C2>
+    ? C2 extends LastContextClass<infer S2> ? TypeOfSpec<S2>
+    : never
+  : never
+  : never
+  : never;
+
+const mergeActiveBags = (
+  store: BagsStore,
+  scopes: ReadonlyArray<LastContextClass>,
+): object => {
+  const out: Record<string, unknown> = {};
+  for (const ctx of scopes) {
+    const bag = store.get(ctx);
+    if (bag !== undefined) Object.assign(out, bag);
+  }
+  return out;
+};
+
+const useStore = (): BagsStore => {
+  const store = React.useContext(BagsReactContext);
+  if (store === null) {
+    throw new Error(
+      "Last.use: wrap the tree in Last.provider(layer) (router scopes mount under Outlet)",
+    );
+  }
+  return store;
+};
+
+/**
+ * Resolve a context bag under {@link makeContextProvider}, or a router-scoped
+ * bag via catalog / group id / `(r) => r.docs` selector.
+ *
+ * @internal
+ */
+export function use<C extends LastContextClass<any>>(
+  ctx: C,
+): TypeOfSpec<C["spec"]>;
+export function use<A>(api: A & ApiConstraint): RouterContextBag<A>;
+export function use<
+  A extends { readonly groups: Record<string, GroupTop> },
+  const Id extends keyof A["groups"] & string,
+>(api: A & ApiConstraint, groupId: Id): RouterGroupContextBag<A, Id>;
+export function use<A>(
+  api: A & ApiConstraint,
+  select: (tree: ScopeTree) => unknown,
+): object;
+export function use(
+  first: LastContextClass<any> | ApiConstraint,
+  second?: string | ((tree: ScopeTree) => unknown),
+): object {
+  const store = useStore();
+  const active = React.useContext(ActiveScopesReactContext);
+
+  if (!isApi(first)) {
+    return readBag(store, first);
+  }
+
+  const api = first;
+  if (second === undefined) {
+    if (active.length > 0) {
+      return mergeActiveBags(store, active) as RouterContextBag<typeof api>;
+    }
+    const root = scopeOf(api.annotations);
+    if (root === undefined) {
+      throw new Error(
+        `Last.use: catalog "${api.identifier}" has no .context(…)`,
+      );
+    }
+    return readBag(store, root);
+  }
+
+  if (typeof second === "string") {
+    const group = api.groups[second] as GroupTop | undefined;
+    if (group === undefined) {
+      throw new Error(
+        `Last.use: group "${second}" not on catalog "${api.identifier}"`,
+      );
+    }
+    const ctx = scopeOf(group.annotations);
+    if (ctx === undefined) {
+      throw new Error(
+        `Last.use: group "${second}" has no .context(…)`,
+      );
+    }
+    return readBag(store, ctx);
+  }
+
+  const selected = second(scopeTree(api));
+  if (!isScopeSel(selected)) {
+    throw new Error(
+      "Last.use: selector must return a group or uncalled route (e.g. (r) => r.docs)",
+    );
+  }
+  const annotations =
+    selected._tag === "group"
+      ? selected.group.annotations
+      : selected.route.annotations;
+  const ctx = scopeOf(annotations);
+  if (ctx === undefined) {
+    throw new Error(
+      selected._tag === "group"
+        ? `Last.use: group "${selected.group.identifier}" has no .context(…)`
+        : `Last.use: route "${selected.route.identifier}" has no .context(…)`,
+    );
+  }
+  return readBag(store, ctx);
+}
+
+/**
+ * Discharge router `.context` Layer debt (Layout.provide dual).
+ * Merges kit outputs into the Layer graph so services stay available at runtime.
+ *
+ * - `Last.contextProvide(kit)` — excludes `Layer` outputs from `R`
+ * - `Last.contextProvide(Site, kit)` — excludes {@link ServicesOf}`<Site>` (View
+ *   Reference defaults need not appear in `kit`)
+ *
+ * @internal
+ */
+export const contextProvide: {
+  <Out, E2, R2>(
+    kit: Layer.Layer<Out, E2, R2>,
+  ): <A, E, R>(
+    self: Layer.Layer<A, E, R>,
+  ) => Layer.Layer<A | Out, E | E2, Exclude<R, Out> | R2>;
+  <C extends LastContextClass<any>, Out, E2, R2>(
+    ctx: C,
+    kit: Layer.Layer<Out, E2, R2>,
+  ): <A, E, R>(
+    self: Layer.Layer<A, E, R>,
+  ) => Layer.Layer<
+    A | Out,
+    E | E2,
+    Exclude<R, ServicesOf<C>> | R2
+  >;
+} = ((
+  first: Layer.Layer<any, any, any> | LastContextClass<any>,
+  second?: Layer.Layer<any, any, any>,
+) => {
+  const kit = second ?? (first as Layer.Layer<any, any, any>);
+  const ctxClass = second !== undefined
+    ? (first as LastContextClass)
+    : undefined;
+  return <A, E, R>(
+    self: Layer.Layer<A, E, R>,
+  ): Layer.Layer<any, any, any> => {
+    const merged = Layer.provideMerge(self, kit);
+    if (ctxClass === undefined) {
+      return merged;
+    }
+    // Type-level discharge of ServicesOf<Ctx>; runtime is provideMerge only.
+    return merged;
+  };
+}) as typeof contextProvide;
+
+const providerCache = new WeakMap<
+  LastContextClass,
+  (props: { readonly children: React.ReactNode }) => React.ReactElement
+>();
+
+/** Cached {@link makeContextProvider} per context class. @internal */
+export const contextProviderOf = (
+  ctxClass: LastContextClass,
+): ((props: {
+  readonly children: React.ReactNode;
+}) => React.ReactElement) => {
+  let cached = providerCache.get(ctxClass);
+  if (cached === undefined) {
+    cached = makeContextProvider(ctxClass);
+    providerCache.set(ctxClass, cached);
+  }
+  return cached;
+};
+
+/**
+ * Collect ContextScope annotations along the active match (catalog → group → route).
+ *
+ * @internal
+ */
+export const activeContextScopes = (
+  api: ApiConstraint,
+  match: {
+    readonly group: GroupTop;
+    readonly route: { readonly annotations: Context.Context<never> };
+  },
+): ReadonlyArray<LastContextClass> => {
+  const scopes: Array<LastContextClass> = [];
+  const root = scopeOf(api.annotations);
+  if (root !== undefined) scopes.push(root);
+  const group = scopeOf(match.group.annotations);
+  if (group !== undefined) scopes.push(group);
+  const route = scopeOf(match.route.annotations);
+  if (route !== undefined) scopes.push(route);
+  return scopes;
+};
+
+/**
+ * Nest bag bridges for active scopes (outer = catalog, inner = route).
+ *
+ * @internal
+ */
+export const wrapActiveContextScopes = (
+  scopes: ReadonlyArray<LastContextClass>,
+  body: React.ReactNode,
+): React.ReactElement => {
+  let node: React.ReactNode = body;
+  for (let i = scopes.length - 1; i >= 0; i--) {
+    const ctx = scopes[i]!;
+    node = React.createElement(contextProviderOf(ctx), null, node);
+  }
+  return React.createElement(ActiveScopesProvider, {
+    scopes,
+    children: node,
+  });
 };
 
 /**

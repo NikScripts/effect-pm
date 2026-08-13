@@ -19,6 +19,7 @@ import {
 } from "./asRoutesBrand";
 import * as uiRoute from "./route";
 import type { Path } from "./route";
+import type * as lastContextModule from "./lastContext";
 
 export type { AsRoutesEffect } from "./asRoutesBrand";
 
@@ -59,6 +60,20 @@ export class GroupPrefix extends Context.Service<GroupPrefix, Path>()(
 ) {}
 
 /**
+ * Annotation: a {@link ../Last.context} class scoped to this catalog / group / route.
+ * Outlet mounts active-path bag bridges; RouterBuilder owes {@link ../Last.ServicesOf}.
+ *
+ * @internal
+ */
+export class ContextScope extends Context.Service<
+  ContextScope,
+  lastContextModule.LastContextClass
+>()("last-ts/Router/ContextScope") {}
+
+/** {@link ../Last.ServicesOf} — type-only; avoids a runtime cycle with lastContext. */
+type lastContextServicesOf<C> = lastContextModule.ServicesOf<C>;
+
+/**
  * Erased group shape (`HttpApiGroup.Constraint` / `Top` analogue).
  */
 export interface GroupTop extends Pipeable {
@@ -70,6 +85,11 @@ export interface GroupTop extends Pipeable {
   readonly routes: Readonly<Record<string, uiRoute.Constraint>>;
   readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
+  /**
+   * Phantom — Last.context class from {@link Group.context} (erased on GroupTop).
+   * Concrete {@link Group} fills this for `Last.use(App, "docs")` typing.
+   */
+  readonly "~LastContext"?: unknown;
   add(
     ...items: ReadonlyArray<
       uiRoute.Constraint | GroupTop | HttpApiEndpoint.Constraint
@@ -85,6 +105,8 @@ export interface GroupTop extends Pipeable {
   // `fromEffect` is only on {@link Group} (typed Items + R). Runtime proto still
   // implements it for erased {@link GroupTop} values.
   prefix(prefix: Path): GroupTop;
+  /** Scope a Last.context kit to this group. */
+  context(ctx: unknown): GroupTop;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupTop;
   annotateMerge<I>(annotations: Context.Context<I>): GroupTop;
   /** Annotate every current route (`HttpApiGroup.annotateEndpoints`). */
@@ -124,11 +146,13 @@ export interface Group<
   in out Groups extends GroupTop = never,
   out TopLevel extends boolean = boolean,
   out R = never,
+  out Ctx = never,
 > extends GroupTop {
   readonly identifier: Id;
   readonly topLevel: TopLevel;
   readonly routes: RouteMap<Routes>;
   readonly groups: GroupMap<Groups>;
+  readonly "~LastContext"?: Ctx;
   add<
     const A extends ReadonlyArray<
       uiRoute.Constraint | GroupTop | HttpApiEndpoint.Constraint
@@ -141,7 +165,8 @@ export interface Group<
     Groups | Extract<A[number], GroupTop>,
     TopLevel,
     | R
-    | (A[number] extends Group<string, any, any, any, infer RX> ? RX : never)
+    | (A[number] extends Group<string, any, any, any, infer RX> ? RX : never),
+    Ctx
   >;
   /**
    * Destinations from an Effect (or branded {@link AsRoutesEffect}).
@@ -157,7 +182,8 @@ export interface Group<
     Routes | FromEffectRoutes<Eff>,
     Groups | FromEffectGroups<Eff>,
     TopLevel,
-    R | EffectContext<Eff>
+    R | EffectContext<Eff>,
+    Ctx
   >;
   /**
    * Destinations from a service — phantom-typed onto the group; resolved in
@@ -165,22 +191,29 @@ export interface Group<
    */
   from<I, E extends uiRoute.Constraint>(
     service: Context.Service<I, ReadonlyArray<E>>,
-  ): Group<Id, Routes | E, Groups, TopLevel, R | I>;
-  prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel, R>;
+  ): Group<Id, Routes | E, Groups, TopLevel, R | I, Ctx>;
+  prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel, R, Ctx>;
+  /**
+   * Scope a {@link ../Last.context} kit to this group — builder owes its services;
+   * fulfill with {@link ../Last.contextProvide}.
+   */
+  context<C>(
+    ctx: C,
+  ): Group<Id, Routes, Groups, TopLevel, R | lastContextServicesOf<C>, C>;
   annotate<I, S>(
     tag: Context.Key<I, S>,
     value: S,
-  ): Group<Id, Routes, Groups, TopLevel, R>;
+  ): Group<Id, Routes, Groups, TopLevel, R, Ctx>;
   annotateMerge<I>(
     annotations: Context.Context<I>,
-  ): Group<Id, Routes, Groups, TopLevel, R>;
+  ): Group<Id, Routes, Groups, TopLevel, R, Ctx>;
   annotateEndpoints<I, S>(
     tag: Context.Key<I, S>,
     value: S,
-  ): Group<Id, Routes, Groups, TopLevel, R>;
+  ): Group<Id, Routes, Groups, TopLevel, R, Ctx>;
   annotateEndpointsMerge<I>(
     annotations: Context.Context<I>,
-  ): Group<Id, Routes, Groups, TopLevel, R>;
+  ): Group<Id, Routes, Groups, TopLevel, R, Ctx>;
 }
 
 export declare namespace Group {
@@ -243,12 +276,15 @@ export interface Api<
   in out Groups extends GroupTop = never,
   out R = never,
   out DeferredGroups extends GroupTop = never,
+  out Ctx = never,
 > extends Pipeable {
   new(_: never): {};
   readonly [TypeId]: typeof TypeId;
   readonly identifier: Id;
   readonly groups: GroupMap<Groups>;
   readonly annotations: Context.Context<never>;
+  /** Phantom — root Last.context from {@link Api.context}. */
+  readonly "~LastContext"?: Ctx;
   add<
     const A extends ReadonlyArray<
       | uiRoute.Constraint
@@ -262,11 +298,12 @@ export interface Api<
     Id,
     MergeApiAddsFromTuple<Groups, MapApiAddTuple<A>>,
     R | ItemRequirements<A[number]>,
-    DeferredGroups
+    DeferredGroups,
+    Ctx
   >;
   addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
     api: HttpApi.HttpApi<Id2, ApiGroups>,
-  ): Api<Id, MergeApiAdds<Groups, GroupTop>, R, DeferredGroups>;
+  ): Api<Id, MergeApiAdds<Groups, GroupTop>, R, DeferredGroups, Ctx>;
   /**
    * Top-level groups from an Effect. Typed for {@link UrlBuilder}; bake `R`
    * unions the Effect context. Not added to {@link Group.ToService} (handlers
@@ -280,16 +317,24 @@ export interface Api<
     Id,
     Groups,
     R | EffectContext<Eff>,
-    DeferredGroups | FromEffectGroups<Eff>
+    DeferredGroups | FromEffectGroups<Eff>,
+    Ctx
   >;
-  prefix(prefix: Path): Api<Id, Groups, R, DeferredGroups>;
+  prefix(prefix: Path): Api<Id, Groups, R, DeferredGroups, Ctx>;
+  /**
+   * Root-scoped {@link ../Last.context} — every match under this catalog.
+   * `RouterBuilder.layer` owes the kit services; fulfill with {@link ../Last.contextProvide}.
+   */
+  context<C>(
+    ctx: C,
+  ): Api<Id, Groups, R | lastContextServicesOf<C>, DeferredGroups, C>;
   annotate<I, S>(
     tag: Context.Key<I, S>,
     value: S,
-  ): Api<Id, Groups, R, DeferredGroups>;
+  ): Api<Id, Groups, R, DeferredGroups, Ctx>;
   annotateMerge<I>(
     context: Context.Context<I>,
-  ): Api<Id, Groups, R, DeferredGroups>;
+  ): Api<Id, Groups, R, DeferredGroups, Ctx>;
 }
 
 /**
@@ -309,6 +354,7 @@ export interface ApiConstraint {
     effect: Effect.Effect<Iterable<GroupTop>, never, unknown>,
   ): ApiConstraint;
   prefix(prefix: Path): ApiConstraint;
+  context(ctx: unknown): ApiConstraint;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): ApiConstraint;
   annotateMerge<I>(context: Context.Context<I>): ApiConstraint;
 }
@@ -322,11 +368,15 @@ export declare namespace Api {
    * `extends Api<…>` check fail and collapses `R` to `never`.
    */
   export type Context<A> = A extends
-    Api<infer _Id, infer _Groups, infer R, infer _Deferred> ? R
+    Api<infer _Id, infer _Groups, infer R, infer _Deferred, infer _Ctx> ? R
     : never;
   /** Groups contributed only via {@link Api.groupsFromEffect}. */
   export type DeferredGroups<A> = A extends
-    Api<infer _Id, infer _Groups, infer _R, infer D> ? D
+    Api<infer _Id, infer _Groups, infer _R, infer D, infer _Ctx> ? D
+    : never;
+  /** Root {@link ../Last.context} class stamped by {@link Api.context}. */
+  export type ContextClass<A> = A extends
+    Api<infer _Id, infer _Groups, infer _R, infer _Deferred, infer Ctx> ? Ctx
     : never;
 }
 
@@ -607,6 +657,12 @@ const groupProto = {
   ): GroupTop {
     return this.annotate(FromRoutes, service);
   },
+  context(this: GroupTop, ctx: unknown): GroupTop {
+    return this.annotate(
+      ContextScope,
+      ctx as lastContextModule.LastContextClass,
+    );
+  },
 };
 
 const makeGroupProto = (options: {
@@ -728,6 +784,12 @@ const appProto = {
       ...optionsFromApi(this),
       annotations: Context.merge(this.annotations, annotations),
     });
+  },
+  context(this: ApiConstraint, ctx: unknown): ApiConstraint {
+    return this.annotate(
+      ContextScope,
+      ctx as lastContextModule.LastContextClass,
+    );
   },
 };
 

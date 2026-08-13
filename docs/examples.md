@@ -577,6 +577,11 @@ Closed `FilePath` / `RoutePath` unions → `Route.fileRoot` → typed `urls.*`.
 `examples/last/context-link/` · `pnpm run example:last-context-link`  
 `Last.context` / `Last.use` / `Last.link` + nested View kits (full-file Twoslash).
 
+### [last-ts router context](/docs/last-ts-router-context)
+
+`examples/last/router-context/` · `pnpm run example:last-router-context`  
+Catalog / group `.context` + `Last.contextProvide` + `Last.use(App, …)` (track 2).
+
 ### [last-ts fromEffect Catalog](/docs/last-ts-from-effect)
 
 `examples/last/from-effect/Catalog.ts` · `pnpm run example:last-from-effect`  
