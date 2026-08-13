@@ -358,77 +358,149 @@ Base component props merge with link props (`children`, `className`, …).
 
 ## Track 2 — router-scoped context (NEXT)
 
-**Status:** Design lock in progress — Eng only after size/load path is agreed  
+**Status:** Design lock in progress — Eng only after size/load + builder-debt path agreed  
 **Replaces:** hand-rolled `Last.provider(layer, Site)` for app chrome when the catalog owns scope
 
 ### One-sentence
 
-**Contexts are declared on the router (catalog / group / route); the router mounts the active scope — no separate edge `Last.provider(Site)`. `Last.use(Router, …)` reads that scope.**
+**Contexts are declared on the router (catalog / group / route); RouterBuilder owes the Layers those contexts require (same debt shape as `Layout.provide`); the router mounts the active scope; `Last.use(Router, …)` reads it.**
+
+### Dream end-state
+
+```ts
+// 1) Declare scopes on the catalog (definition)
+class App extends Router.make("app")
+  .context(Site) // root — Last.ServicesOf<Site> enters catalog R
+  .add(
+    Router.group("docs")
+      .context(DocsKit) // group debt
+      .add(Route.get("chapter", "/docs/:slug")),
+  ) {}
+
+// 2) Builder — handlers + layout + **context Layers** (compile-time required)
+const docs = pipe(
+  RouterBuilder.group(App, "docs", (h) =>
+    h.handle("chapter", Chapter),
+  ),
+  Layout.provide(DocsShell),
+  // discharges DocsKit (+ nested View/Service tags) — name TBD; shape = Layout.provide
+  Context.provide(docsKitLayer),
+)
+
+const root = pipe(
+  RouterBuilder.layer(App), // still requires every group Layer
+  Layer.provide(docs),
+  Context.provide(siteLayer), // discharges root Site debt
+)
+
+// 3) One edge bake — no Last.provider(layer, Site)
+export const Provider = Last.provider(
+  pipe(Waku.layer, Layer.provide(root), Layer.provideMerge(documentLayer)),
+)
+
+// 4) Use anywhere under the match
+const { NavBar } = Last.use(App)                 // active merge (recommended)
+const docsBag = Last.use(App, "docs")
+const chapterBag = Last.use(App, (r) => r.docs.chapter)
+const { Root } = Last.use(NavBar.NavBarContext)  // track 1 still works
+```
+
+Until `Context.provide` (or equivalent) fulfills each declared scope, **`routesLayer` keeps those services in `R`** — you cannot `Last.provider(routes)` with open debt (same loudness as missing `Layout.provide` on a page group).
 
 ### Declare (definition site — not a free-floating Provider)
 
-| Scope | Meaning | Wrap |
-|-------|---------|------|
-| **Catalog (root)** | Every page / everything under this router | Outermost context provider for the catalog |
-| **Group** | Only that group’s routes | Provider around the group’s matched tree |
-| **Route** | One route | Provider around that route’s page body |
+| Scope | Meaning | Wrap | Builder debt |
+|-------|---------|------|--------------|
+| **Catalog (root)** | Every page under this router | Outermost context bridge | `Last.ServicesOf<RootCtx>` on `RouterBuilder.layer` |
+| **Group** | That group’s routes | Around group match tree | Same on `RouterBuilder.group` Layer `R` |
+| **Route** | One route | Around page body | On that route’s handler / group fulfill path |
 
-Sketch (API names TBD — shape is the lock):
+Sketch:
 
 ```ts
 class Site extends Router.make("app")
-  .context(RootContext) // root — all pages
+  .context(RootContext)
   .add(
     Router.group("docs")
-      .context(DocsContext) // group
+      .context(DocsContext)
       .add(
-        Route.get("chapter", "/docs/:slug")
-          // .context(ChapterContext) // optional per-route
+        Route.get("chapter", "/docs/:slug"),
+        // .context(ChapterContext) // optional
       ),
   ) {}
 ```
 
-Still one Layer bake for transport + handlers (`Last.provider(routesLayer)`). What goes away for kits is **`Last.provider(layer, Site)` / nesting `Provider` by hand** — scopes come from the catalog.
+### Builder debt — mirror `Layout.provide`
 
-### Use (same bag ergonomics as track 1)
+| Piece | Layout today | Context dream |
+|-------|--------------|---------------|
+| Declare need | page group implies `Layout.Slot` | `.context(Ctx)` stamps scope + `ServicesOf<Ctx>` into `R` |
+| Discharge | `pipe(group, Layout.provide(AppShell))` | `pipe(group, Context.provide(implLayer))` (name TBD) |
+| Loud failure | open `Layout.Slot` → can’t bake clean Layer | open context services → can’t `Last.provider(routes)` |
+| Override | later `Layout.provide` / `yield*` | later `Context.provide` wins for that scope |
+| Defaults | View `static layer` / `Layer.succeed` compose into `implLayer` | same — kits ship default Layers; edge merges overrides |
+
+**Ideas for `Context.provide` shape (pick at Eng):**
+
+1. **Pipeable on group/catalog Layer** (best Layout dual): `pipe(group, Context.provide(docsKitLayer))`  
+2. **Keyed fulfill:** `Context.provide(DocsKit, docsKitLayer)` when multiple contexts share a group  
+3. **Auto from View defaults:** if every tag in `Ctx` has `static layer` / Reference default, debt collapses without a pipe — **opt-in only**; never silent for required Services without defaults  
+
+Catalog attach stays on the router definition; **fulfill stays on the builder** so handler modules own the heavy imports (codesplit-friendly).
+
+### Use
 
 ```ts
-Last.use(Router)                           // active scope (see open call below)
+Last.use(Router)                           // active merged bag (route ▷ group ▷ root) — recommended default
 Last.use(Router, "docs")                   // explicit group id
-Last.use(Router, (r) => r.docs)            // group via urlBuilder / catalog tree
-Last.use(Router, (r) => r.docs.chapter)    // route (uncalled) via catalog tree
+Last.use(Router, (r) => r.docs)            // group via catalog tree
+Last.use(Router, (r) => r.docs.chapter)    // route (uncalled)
 ```
 
-Also keep track 1: `Last.use(NavBarContext)` under whatever provider the router mounted for the active match.
+Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 
 ### Merge
 
-When nested scopes all provide overlapping tags: **route > group > catalog**. Only the **active match path** mounts; inactive groups/routes do not wrap the tree.
+**route > group > catalog**. Only the **active match path** mounts; inactive groups/routes do not wrap the tree and should not load their context modules.
 
 ### Size & load time (hard)
 
 | Rule | Why |
 |------|-----|
-| **Active path only** | Mount providers for catalog + matched group + matched route — never every group’s context on every navigation |
-| **Root stays thin** | Catalog-level context = shared chrome / copy. Heavy feature bags live on **group / route** so `/` does not pay for docs tooling |
-| **No static import fan-out** | Catalog module must not eagerly import every group’s View kit. Register by key; load/provide with the group/route Layer (same instinct as codesplit route handlers) |
-| **One Atom / Layer runtime** | Do not stack `Last.provider(layer)` per scope. Router adds **context bag bridges** under the existing runtime |
-| **Selectors are type-thin** | `Last.use(Router, (r) => r.docs.chapter)` must not pull page bodies or Twoslash into the client graph — catalog types / ids only |
-| **Measure before expand** | Acceptance: navigating a lean route must not download inactive group context modules; bundle analyzer / network on spine or Last site |
+| **Active path only** | Mount providers for catalog + matched group + matched route only |
+| **Root stays thin** | Catalog context = shared chrome/copy; heavy bags on group/route |
+| **Debt on builder, not catalog file** | `.context(Ctx)` should be type/stamp only; `Context.provide(layer)` lives next to handlers so kits aren’t eagerly imported from `Router.make` |
+| **One Atom / Layer runtime** | Context scopes = bag bridges under existing `Last.provider(layer)` — not nested Layer providers |
+| **Selectors type-thin** | `(r) => r.docs.chapter` must not pull page bodies |
+| **Measure** | Lean route navigation must not download inactive group context chunks |
 
-**Forbidden for track 2:** “provide all group contexts at root for simplicity,” or putting every View default Layer into `Router.make`’s module scope.
+**Forbidden:** provide every group context at root “for simplicity”; put every View Layer into the catalog module.
+
+### Build plan (how we Eng the dream)
+
+| Phase | Ship | Proof |
+|-------|------|-------|
+| **T2a — types + debt** | `.context(Ctx)` stamps; `ServicesOf` flows into `RouterBuilder.group` / `layer` `R`; incomplete provide fails typecheck | `.test-d.ts` — missing `Context.provide` errors; happy path `R = never` |
+| **T2b — fulfill pipeable** | `Context.provide(layer)` (Layout dual) registers fulfilled scope on the group/catalog Layer | unit: Layer build includes context tags |
+| **T2c — runtime mount** | Soft-nav match → mount catalog→group→route bag bridges (active path only) | memory router test: `Last.use` sees bags; sibling group not mounted |
+| **T2d — `Last.use(Router, …)`** | bare = active merge; string group; `(r) => group \| route` selectors | type + runtime tests |
+| **T2e — dogfood** | Port context-link demo + spine/Last site chrome off hand `Last.provider(layer, Site)` | bundle/network: home doesn’t load docs kit chunk |
+| **T2f — docs** | Twoslash dream page; lock status → Eng’d | Examples hub |
+
+**Do not** Eng T2c before T2a/b — runtime without debt is how apps silently ship half-provided kits.
 
 ### Open call (resolve before Eng)
 
-1. **`Last.use(Router)` alone** — active **merged** bag (route▷group▷root), or **root-only** (explicit selector required for group/route)?  
-2. **Attach API** — `.context(Ctx)` on `Router.make` / `group` / `Route.get` vs builder `RouterBuilder.group(…).context(…)` vs Layer pipeable like `Layout.provide`?  
-3. **Overlap with `Layout.provide`** — layout stays layout; context is DI bags. Do not merge the two APIs.
+1. **`Last.use(Router)` alone** — **leaning active merge**; confirm.  
+2. **Fulfill name** — `Context.provide` vs `Last.provide` vs `Kit.provide` (avoid clash with Effect `Context` / `Last.provide` upward bags).  
+3. **Attach API** — `.context(Ctx)` on catalog/group/route (declare) + builder pipeable (fulfill) — **leaning yes**; not builder-only declare.  
+4. **Per-route debt** — on `RouterBuilder.group` until route-level handle API exists, or stamp on `Route.get` and surface through group Layer.
 
 ### Non-goals (track 2)
 
-- In-browser editor / `/repo` viewer  
-- Renaming RouterBuilder this cut (unless attach API forces it)  
-- Replacing track 1 `Last.context` / `Last.use(Ctx)` for tests / partial mounts  
+- `/repo` viewer / editor  
+- Merging Layout + Context into one API  
+- Dropping track 1 partial `Last.provider(Ctx)` for tests  
 
 ---
 
