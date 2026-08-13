@@ -332,8 +332,15 @@ Node.policy(MyNode, LookupPolicy.yieldRefuse, LookupPolicy.pickFirst) // varargs
 ```
 
 Reject boolean primary (`yield(true)`). Backing: `Context.Service` per policy +
-default Layer. Tip still has `withPolicy` + uneven sugar — `Node.policy` + full
-both-ways surface when owner says Eng.
+default Layer.
+
+**Override precedence (locked 2026-08-13):** call-site (`ListenOptions.onYield`,
+lookupClient `{ pick }`, …) **>** `Node.policy` stamp on the node **>** ambient
+Service default (`yield("Accept")` / unset Pick → coldAmbiguous path). Local
+wins over stamped wins over package default.
+
+Tip still has `withPolicy` + uneven sugar — `Node.policy` + full both-ways
+surface when owner says Eng.
 
 ### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
 
