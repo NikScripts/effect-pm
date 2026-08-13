@@ -32,13 +32,21 @@ const isTag = (u: unknown): u is Context.Tag<any, any> =>
   "key" in u &&
   typeof (u as { readonly key: unknown }).key === "string";
 
+type ServiceValue<T> = [T] extends [LastContextClass<infer Nested>]
+  ? TypeOfSpec<Nested>
+  : [T] extends [Context.Reference<infer A>] ? A
+  : [T] extends [Context.Tag<any, infer A>] ? A
+  : // View Tag classes often fail `extends Tag` in conditional position
+    T extends { readonly key: string } ? (
+      T extends { readonly Type: infer P extends object }
+        ? (props: P) => React.ReactElement | null
+        : (props: any) => React.ReactElement | null
+    )
+    : never;
+
 /** Resolved value shape for a context spec. */
 export type TypeOfSpec<S extends Spec> = {
-  readonly [K in keyof S]: S[K] extends LastContextClass<infer Nested>
-    ? TypeOfSpec<Nested>
-    : S[K] extends Context.Tag<any, infer A>
-      ? A
-      : never;
+  readonly [K in keyof S]: ServiceValue<S[K]>;
 };
 
 /** Flattened service union for Layer debt. */
@@ -75,6 +83,18 @@ export const EffectContextProvider = (props: {
     { value: props.context },
     props.children,
   );
+
+/** Sync Context from the layer provider (for Last.link View tags). @internal */
+export const useEffectContext = (): Context.Context<any> => {
+  const fromLayer = React.useContext(EffectReactContext);
+  if (fromLayer !== null) return fromLayer;
+  const runtime = AtomReact.useRuntime();
+  const result = AtomReact.useAtomValue(runtime);
+  if (!AsyncResult.isSuccess(result)) {
+    throw new Error("Last: Atom runtime Context not ready");
+  }
+  return result.value;
+};
 
 const resolveBag = (
   effectCtx: Context.Context<any>,
@@ -142,17 +162,6 @@ export const use = <C extends LastContextClass<any>>(
     );
   }
   return bag as TypeOfSpec<C["spec"]>;
-};
-
-const useEffectContext = (): Context.Context<any> => {
-  const fromLayer = React.useContext(EffectReactContext);
-  if (fromLayer !== null) return fromLayer;
-  const runtime = AtomReact.useRuntime();
-  const result = AtomReact.useAtomValue(runtime);
-  if (!AsyncResult.isSuccess(result)) {
-    throw new Error("Last.provider(context): Atom runtime Context not ready");
-  }
-  return result.value;
 };
 
 /**

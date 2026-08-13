@@ -4,8 +4,11 @@
  * @internal
  */
 import * as React from "react";
+import { Context } from "effect";
 import * as Router from "../Router";
 import type * as Route from "../Route";
+import type { ApiConstraint, UrlBuilder } from "./routes";
+import * as lastContext from "./lastContext";
 
 const pathKeysSym = "~last-ts/pathKeys" as const;
 
@@ -23,8 +26,8 @@ type LinkCommon = {
   readonly "aria-current"?: React.AriaAttributes["aria-current"];
 };
 
-export type LinkOpts = {
-  readonly to?: true | ((urls: Route.UrlBuilderLoose) => unknown);
+export type LinkOpts<A extends ApiConstraint = ApiConstraint> = {
+  readonly to?: true | ((urls: UrlBuilder<A>) => unknown);
   readonly out?: true | string;
 };
 
@@ -88,7 +91,7 @@ type Mode =
 
 const resolveMode = (
   urls: Route.UrlBuilderLoose,
-  opts: LinkOpts,
+  opts: LinkOpts<any>,
 ): Mode => {
   if (typeof opts.out === "string") {
     return { _tag: "directOut", out: opts.out };
@@ -182,6 +185,12 @@ const isComponent = (u: unknown): u is AnyComponent =>
     u !== null &&
     "$$typeof" in (u as object));
 
+const isContextTag = (u: unknown): u is Context.Tag<any, any> =>
+  typeof u === "function" &&
+  u !== null &&
+  "key" in u &&
+  typeof (u as { readonly key: unknown }).key === "string";
+
 /**
  * @internal
  */
@@ -193,8 +202,8 @@ export const link = ((
   const Component = isComponent(second) ? second : undefined;
   const opts = (
     Component !== undefined ? third : second
-  ) as LinkOpts | undefined;
-  const resolvedOpts: LinkOpts = opts ?? { to: true };
+  ) as LinkOpts<any> | undefined;
+  const resolvedOpts: LinkOpts<any> = opts ?? { to: true };
 
   const Linked = (props: Record<string, unknown>): React.ReactElement => {
     const router = Router.useRouter();
@@ -202,22 +211,30 @@ export const link = ((
       router.urls as Route.UrlBuilderLoose,
       resolvedOpts,
     );
-    const body =
-      Component !== undefined
-        ? React.createElement(Component, props)
-        : (props.children as React.ReactNode);
+    let body: React.ReactNode = props.children as React.ReactNode;
+    if (Component !== undefined) {
+      const resolved = isContextTag(Component)
+        ? Context.get(lastContext.useEffectContext(), Component)
+        : Component;
+      body = React.createElement(
+        resolved as React.ComponentType<Record<string, unknown>>,
+        props,
+      );
+    }
     return renderLinked(mode, props, body);
   };
   Linked.displayName = "Last.link";
   return Linked;
 }) as {
-  <A>(
+  <A extends ApiConstraint>(
     api: A,
-    opts: LinkOpts,
-  ): React.FC<LinkCommon & Record<string, unknown>>;
-  <A, P extends object>(
+    opts: LinkOpts<A>,
+  ): React.FC<LinkCommon & Record<string, any>>;
+  <A extends ApiConstraint, P extends object>(
     api: A,
-    component: React.ComponentType<P>,
-    opts?: LinkOpts,
-  ): React.FC<P & LinkCommon & Record<string, unknown>>;
+    component:
+      | React.ComponentType<P>
+      | Context.Tag<any, (props: P) => React.ReactElement | null>,
+    opts?: LinkOpts<A>,
+  ): React.FC<P & LinkCommon & Record<string, any>>;
 };

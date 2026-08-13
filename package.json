@@ -453,6 +453,7 @@
     "docs:last-site": "pnpm --dir docs/last/site dev",
     "example:last-spine": "pnpm --dir examples/last/spine dev",
     "example:last-from-effect": "tsx examples/last/from-effect/main.ts",
+    "example:last-context-link": "tsx examples/last/context-link/main.ts",
     "example:apps-router-docs": "vite --config examples/apps/router-docs/vite.config.ts",
     "example:ui-router-mini-docs": "tsx examples/ui/router-mini-docs.ts",
     "example:ui-group-nav": "tsx examples/ui/group-nav.ts",
