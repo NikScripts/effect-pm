@@ -295,7 +295,7 @@ no second `make`.
 |------|------|--------------------|
 | **`.pipe(Address.*)`** | Class hierarchy / type widen after `make` | Addresses **append** |
 | **`Node.config(MyNode, { …partial })`** | Process roles / knobs after the class exists | Partial `NodeConfig` bag — last-write merge; overlay shell (not a new Tag/make). **Reject** `withConfig` / `withPolicy` as the name |
-| **`Node.policy(MyNode, …)`** | Handler-shaped Lookup/Node policy overlays on a node | Same overlay shell; **policy** only (Yield / Pick / …) — not mode dials |
+| **`Node.policy(MyNode, …fragments)`** | Handler-shaped policy overlays on a node | **Varargs merge** (like today’s `withPolicy`); policy only (Yield / Pick / …) — not mode dials. Bag stays on `Node.config` |
 | **`LookupConfig.provide` on layers** | Client / peers / serve composition | Layer override of ambient Lookup config — not stamped into the Node forever |
 
 ```ts
@@ -328,6 +328,7 @@ LookupPolicy.pickFirst
 
 Node.policy(MyNode, LookupPolicy.yield("Refuse"))
 Node.policy(MyNode, LookupPolicy.yieldRefuse) // equivalent
+Node.policy(MyNode, LookupPolicy.yieldRefuse, LookupPolicy.pickFirst) // varargs merge
 ```
 
 Reject boolean primary (`yield(true)`). Backing: `Context.Service` per policy +
