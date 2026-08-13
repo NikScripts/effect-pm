@@ -6,6 +6,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Toolkit
 
+- **Repo source viewer (`/repo/…`)** — soft-nav splat → real package/source file → Twoslash (then viewer, much later editor). Parked until context/link goals settle: [`../handoffs/repo-source-viewer-park.md`](../handoffs/repo-source-viewer-park.md).
 - **last-ts codesplit** — Effect+React building blocks package (`Last`, `View`, `Route`/`Router`, `Page`, vite/docgen); Hyperlink keeps `Ui` size chrome + Dashboard. Plan: [last-ts-codesplit.md](./last-ts-codesplit.md).
 - **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Eng’d: `Tag`/`value`/`promise`/`default`/`defaults` + factory `{ defaults }` (`pure` retired); `cell` parked/rejected.
 - **Wire groups & identity** — regular RpcGroup = tag key; shared Spec = `Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (kind-keyed wire, ordinary serve/client). W1–W3 Eng’d: [wire-groups-and-identity.md](./wire-groups-and-identity.md).
