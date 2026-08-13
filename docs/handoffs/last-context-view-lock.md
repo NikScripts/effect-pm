@@ -1,6 +1,7 @@
 # Last.context + View UI kits (owner lock)
 
-**Status:** LOCK (design) — not Eng’d  
+**Status:** LOCK — **track 1 Eng’d** on `cursor/agent-k-page-route-6d0e` (track 2 still parked)  
+
 **Branch:** `cursor/agent-k-page-route-6d0e`  
 **Package:** `last-ts`  
 **Related:** [`page-layout-lock.md`](./page-layout-lock.md) · [`last-provider-lock.md`](./last-provider-lock.md) · [`router-httpapi-lock.md`](./router-httpapi-lock.md)
@@ -13,7 +14,7 @@
 
 | # | Track | Status |
 |---|--------|--------|
-| **1** | `Last.context` + `Last.provider(Context)` + `Last.use` + **`Last.link`** + base `Link` `to`/`out` | **Lock below — Eng next** |
+| **1** | `Last.context` + `Last.provider(Context)` + `Last.use` + **`Last.link`** + base `Link` `to`/`out` | **Eng’d** |
 | **2** | Adapt context tools to the **router/builder** (provide per catalog / group / route; `Last.use` active scope) | **Parked** until track 1 is locked + Eng’d — do not design/impl yet |
 
 ---
@@ -385,7 +386,7 @@ Do **not** Eng until track 1 ships. Reminder only:
 | Piece | Status |
 |-------|--------|
 | Phase A site Frame kits (current tree) | Eng’d earlier — **superseded by this lock** for next cut |
-| Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Not Eng’d** — lock ready |
+| Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Eng’d** — `test/last-context-link.test.tsx` |
 | Track 2: router/builder-scoped provide | **Parked** |
 
 ---

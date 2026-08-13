@@ -17,6 +17,7 @@ import { Atom } from "effect/unstable/reactivity";
 import * as AtomReact from "../AtomReact";
 import * as Document from "../Document";
 import * as Router from "../Router";
+import * as lastContext from "./lastContext";
 import type { Service } from "./router";
 
 // =============================================================================
@@ -193,32 +194,17 @@ const defaultRouterMount = (
 ): React.ReactElement =>
   React.createElement(Router.Provider, { value: service, children });
 
-/**
- * Bake a fulfilled Layer into a children-only React provider. Bridges
- * {@link ../Router.Router} from the Atom runtime into {@link ../Router.Provider}
- * when present.
- *
- * Builds the Layer **once**, then feeds that Context to both
- * `Atom.runtime(Layer.succeedContext(ctx))` and the router mount.
- * A second `Layer.build` would mint a divergent History/Memory service
- * (soft-nav updates one instance; Outlet reads another).
- *
- * @example
- * ```tsx
- * export const provider = Last.provider(
- *   History.layer.pipe(Layer.provide(routes)),
- * )
- * // <provider>…</provider>
- * ```
- *
- * @public
- */
-export const provider = <R, E = never>(
+const makeLayerProvider = <R, E = never>(
   layer: Layer.Layer<R, E, never>,
+  ctxClass?: lastContext.LastContextClass,
 ): ((props: {
   readonly children: React.ReactNode;
 }) => React.ReactElement) => {
   const erased = layer as Layer.Layer<any, any, never>;
+  const ContextProvider =
+    ctxClass !== undefined
+      ? lastContext.makeContextProvider(ctxClass)
+      : undefined;
   const Provider = (props: {
     readonly children: React.ReactNode;
   }): React.ReactElement => {
@@ -233,15 +219,19 @@ export const provider = <R, E = never>(
       const runtime = Atom.runtime(
         Layer_.succeedContext(ctx) as Layer.Layer<any, never, never> as never,
       );
-      return { runtime, router, cell };
+      return { runtime, router, cell, ctx };
     }, []);
-    const body =
+    let body: React.ReactNode = props.children;
+    if (ContextProvider !== undefined) {
+      body = React.createElement(ContextProvider, null, body);
+    }
+    body =
       boot.router !== null
         ? (routerMounts.get(boot.router._tag) ?? defaultRouterMount)(
             boot.router,
-            props.children,
+            body,
           )
-        : props.children;
+        : body;
     const cell = boot.cell;
     const withDocument =
       cell !== null
@@ -256,10 +246,48 @@ export const provider = <R, E = never>(
       React.createElement(
         AtomReact.RuntimeProvider as never,
         { runtime: boot.runtime },
-        withDocument,
+        React.createElement(
+          lastContext.EffectContextProvider,
+          { context: boot.ctx },
+          withDocument,
+        ),
       ),
     );
   };
   Provider.displayName = "Last.provider";
   return Provider;
 };
+
+/**
+ * Bake a fulfilled Layer and/or a {@link ./lastContext} into a children-only
+ * React provider.
+ *
+ * - `Last.provider(layer)` — Layer → Atom runtime (existing)
+ * - `Last.provider(Site)` — bridge Effect services → `Last.use` bags
+ * - `Last.provider(layer, Site)` — both
+ *
+ * @public
+ */
+export const provider: {
+  <R, E = never>(
+    layer: Layer.Layer<R, E, never>,
+  ): (props: { readonly children: React.ReactNode }) => React.ReactElement;
+  (
+    ctx: lastContext.LastContextClass,
+  ): (props: { readonly children: React.ReactNode }) => React.ReactElement;
+  <R, E = never>(
+    layer: Layer.Layer<R, E, never>,
+    ctx: lastContext.LastContextClass,
+  ): (props: { readonly children: React.ReactNode }) => React.ReactElement;
+} = ((
+  first: Layer.Layer<any, any, never> | lastContext.LastContextClass,
+  second?: lastContext.LastContextClass,
+) => {
+  if (lastContext.isContextClass(first)) {
+    return lastContext.makeContextProvider(first);
+  }
+  return makeLayerProvider(
+    first as Layer.Layer<any, any, never>,
+    second,
+  );
+}) as typeof provider;

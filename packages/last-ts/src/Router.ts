@@ -291,17 +291,21 @@ export const useRouterOption = (): Service | null => {
 export const useMatch = (): Route.Match | undefined => useRouter().match;
 
 /**
- * In-app link — `href` + click → {@link Service.go} (no full navigation).
+ * Link — in-app soft-nav (`to`) or external (`out`).
  *
  * ```tsx
  * <Router.Link to="/home">Home</Router.Link>
  * <Router.Link to={(urls) => urls.app.dashboard()}>App</Router.Link>
+ * <Router.Link out="https://effect.website">Effect</Router.Link>
  * ```
+ *
+ * Pass `to` xor `out`. Prefer {@link ./Last.link} for named/narrowed links.
  *
  * @public
  */
 export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
-  readonly to: string | ((urls: Route.UrlBuilder<A>) => string);
+  readonly to?: string | ((urls: Route.UrlBuilder<A>) => string);
+  readonly out?: string;
   readonly replace?: boolean;
   readonly children: React.ReactNode;
   readonly className?: string;
@@ -311,6 +315,24 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   readonly "aria-current"?: React.AriaAttributes["aria-current"];
 }): React.ReactElement => {
   const router = useRouter();
+  if (props.out !== undefined) {
+    return React.createElement(
+      "a",
+      {
+        href: props.out,
+        className: props.className,
+        title: props.title,
+        "data-kind": props["data-kind"],
+        "aria-current": props["aria-current"],
+        rel: "noopener noreferrer",
+        onClick: props.onClick,
+      },
+      props.children,
+    );
+  }
+  if (props.to === undefined) {
+    throw new Error("Router.Link: pass to or out");
+  }
   const href =
     typeof props.to === "function"
       ? props.to(router.urls as Route.UrlBuilder<A>)

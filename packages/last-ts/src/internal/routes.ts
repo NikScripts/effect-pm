@@ -1106,31 +1106,34 @@ export const urlBuilder = <A extends ApiConstraint>(
     }
     const leafId = identifiers[identifiers.length - 1]!;
     const compiled = uiRoute.compilePath(path);
-    const method: UrlMethodLoose = (...args) => {
-      const last = args[args.length - 1];
-      const optionsArg =
-        args.length > compiled.keys.length && isUrlQueryOptions(last)
-          ? last
-          : args.length === 1 &&
-              compiled.keys.length === 0 &&
-              isUrlQueryOptions(args[0])
-            ? args[0]
-            : undefined;
-      const pathArgs =
-        optionsArg === undefined
-          ? args
-          : args.slice(0, args.length - 1);
-      const params: Record<string, string> = {};
-      for (let i = 0; i < compiled.keys.length; i++) {
-        const key = compiled.keys[i]!;
-        const value = pathArgs[i];
-        if (typeof value !== "string") {
-          throw new Error(`Missing path parameter: ${key}`);
+    const method = Object.assign(
+      ((...args: ReadonlyArray<string | UrlQueryOptions>) => {
+        const last = args[args.length - 1];
+        const optionsArg =
+          args.length > compiled.keys.length && isUrlQueryOptions(last)
+            ? last
+            : args.length === 1 &&
+                compiled.keys.length === 0 &&
+                isUrlQueryOptions(args[0])
+              ? args[0]
+              : undefined;
+        const pathArgs =
+          optionsArg === undefined
+            ? args
+            : args.slice(0, args.length - 1);
+        const params: Record<string, string> = {};
+        for (let i = 0; i < compiled.keys.length; i++) {
+          const key = compiled.keys[i]!;
+          const value = pathArgs[i];
+          if (typeof value !== "string") {
+            throw new Error(`Missing path parameter: ${key}`);
+          }
+          params[key] = value;
         }
-        params[key] = value;
-      }
-      return withBase(appendQuery(compiled.build(params), optionsArg?.query));
-    };
+        return withBase(appendQuery(compiled.build(params), optionsArg?.query));
+      }) as UrlMethodLoose,
+      { "~last-ts/pathKeys": compiled.keys },
+    );
     setCallable(cursor, leafId, method);
   };
 

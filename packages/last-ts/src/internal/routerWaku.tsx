@@ -220,10 +220,12 @@ const softNavClick = (
 };
 
 /**
- * Soft-nav link — Waku `Link` when `_tag === "Waku"` (push); else `<a>` + {@link Service.go}.
+ * Soft-nav (`to`) or external (`out`). Waku `Link` when `_tag === "Waku"` (push);
+ * else `<a>` + {@link Service.go}. External skips soft-nav.
  */
 export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
-  readonly to: string | ((urls: Route.UrlBuilder<A>) => string);
+  readonly to?: string | ((urls: Route.UrlBuilder<A>) => string);
+  readonly out?: string;
   readonly replace?: boolean;
   readonly children: React.ReactNode;
   readonly className?: string;
@@ -233,6 +235,27 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   readonly "aria-current"?: React.AriaAttributes["aria-current"];
 }): React.ReactElement => {
   const router = useRouter<A>();
+
+  if (props.out !== undefined) {
+    return (
+      <a
+        href={props.out}
+        className={props.className}
+        title={props.title}
+        data-kind={props["data-kind"]}
+        aria-current={props["aria-current"]}
+        rel="noopener noreferrer"
+        onClick={props.onClick}
+      >
+        {props.children}
+      </a>
+    );
+  }
+
+  if (props.to === undefined) {
+    throw new Error("Waku.Link: pass to or out");
+  }
+
   const href =
     typeof props.to === "function"
       ? props.to(router.urls as Route.UrlBuilder<A>)

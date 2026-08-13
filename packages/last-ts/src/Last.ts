@@ -1,24 +1,23 @@
 /**
  * @module Last
  *
- * Cross-cutting Last.ts: factory brands, upward **Provides**, and
- * {@link provider} (Layer → children-only React provider).
+ * Cross-cutting Last.ts: factory brands, upward **Provides**,
+ * {@link provider}, {@link context} / {@link use}, and {@link link}.
  *
  * ```ts
- * function* helloProvides() {
- *   yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK; last wins
- * }
- * const meta = Last.toLayer(ShellMeta, helloProvides)
- *
- * export const provider = Last.provider(
- *   History.layer.pipe(Layer.provide(routes)),
- * )
- * // <provider>…</provider>
+ * export class Site extends Last.context({ NavBar: NavBar.NavBarContext }) {}
+ * export const Provider = Last.provider(routesLayer, Site)
+ * const { NavBar } = Last.use(Site)
+ * const DocsLink = Last.link(SiteCatalog, { to: (u) => u.docs })
  * ```
+ *
+ * SSOT: `docs/handoffs/last-context-view-lock.md`.
  */
 
 import { Context, Effect, Layer } from "effect";
 import * as appInternal from "./internal/app";
+import * as lastContext from "./internal/lastContext";
+import * as lastLink from "./internal/lastLink";
 
 // =============================================================================
 // Provider shell (Layer → children-only React component)
@@ -27,11 +26,44 @@ import * as appInternal from "./internal/app";
 export type App = appInternal.App;
 
 /**
- * Bake a fulfilled Layer into a children-only React provider.
+ * Bake a fulfilled Layer and/or a {@link context} into a children-only React provider.
  *
  * @public
  */
 export const provider: typeof appInternal.provider = appInternal.provider;
+
+// =============================================================================
+// Last.context / Last.use
+// =============================================================================
+
+/**
+ * Mint a context class: `class Site extends Last.context({ … }) {}`.
+ *
+ * @public
+ */
+export const context: typeof lastContext.context = lastContext.context;
+
+/**
+ * Read a context bag under {@link provider}.
+ *
+ * @public
+ */
+export const use: typeof lastContext.use = lastContext.use;
+
+/**
+ * Layer / runtime service debt for a {@link context} class.
+ *
+ * @public
+ */
+export type ServicesOf<C> = lastContext.ServicesOf<C>;
+
+/**
+ * Wrap a component (or children) with a narrowed {@link ./Router.Link}.
+ * Returns a plain / effect component — not a View tag.
+ *
+ * @public
+ */
+export const link: typeof lastLink.link = lastLink.link;
 
 /**
  * @deprecated Prefer {@link provider}.
