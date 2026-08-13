@@ -1,17 +1,34 @@
 {#last-ts-context-link title="last-ts — context / link" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
-> You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://dev.hyperlink.cool/docs/last-ts-context-link>.
+> Rendered docs (Tailscale):
+> <http://100.67.32.32:5192/docs/last-ts-context-link>
 <!-- docs-site-link:end -->
 # last-ts — Last.context / Last.link
 
 {.draft}
-**Draft** — paired with a runnable example; tip-check before treating as SSOT.
+**Draft** — Twoslash fences include the runnable demo under `examples/last/context-link/`.
 
-**Source:** [`examples/last/context-link/Demo.tsx`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/context-link/Demo.tsx)  
+**App:** [`examples/last/context-link/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/context-link/)  
 **Run:** `pnpm run example:last-context-link`  
 **Lock:** [`last-context-view-lock.md`](../../handoffs/last-context-view-lock.md)
+
+## Layout
+
+```text
+examples/last/context-link/
+  ui/
+    NavBar.tsx           leaves + Last.link + composition + NavBarContext
+  lib/
+    Catalog.ts           Router catalog (main / docs groups)
+    SiteCopy.ts          Context.Service content bag
+    Site.ts              nested Last.context
+    Tree.tsx             composition only (Last.use → Views)
+    routes.tsx           RouterBuilder handlers
+    Provider.tsx         Last.provider(layer, Site)
+  App.tsx                Provider > Tree
+  main.ts                renderToString harness
+```
 
 ## Value
 
@@ -21,6 +38,46 @@
 - **`Last.link`**: direct home brand, group-narrowed `DocsLink`, uncalled
   `ChapterLink` (`slug` + `query` props), external `out`
 
-{.twoslash include="examples/last/context-link/Demo.tsx"}
+## 1. Catalog
+
+{.twoslash include="examples/last/context-link/lib/Catalog.ts"}
+``` ts
+```
+
+## 2. Content bag (`Context.Service`)
+
+{.twoslash include="examples/last/context-link/lib/SiteCopy.ts"}
+``` ts
+```
+
+## 3. Region kit — NavBar
+
+Leaf Views, `Last.link` wrappers, composition View, `NavBarContext`.
+
+{.twoslash include="examples/last/context-link/ui/NavBar.tsx"}
+``` tsx
+```
+
+## 4. Site (nested contexts)
+
+{.twoslash include="examples/last/context-link/lib/Site.ts"}
+``` ts
+```
+
+## 5. Tree (composition only)
+
+{.twoslash include="examples/last/context-link/lib/Tree.tsx"}
+``` tsx
+```
+
+## 6. Provider
+
+{.twoslash include="examples/last/context-link/lib/Provider.tsx"}
+``` tsx
+```
+
+## 7. App
+
+{.twoslash include="examples/last/context-link/App.tsx"}
 ``` tsx
 ```

@@ -10,8 +10,8 @@ import * as AtomReact from "../AtomReact";
 
 export const LastContextTypeId = "~last-ts/Last/context" as const;
 
-/** Spec entry: a Context tag or a nested Last.context class. */
-export type SpecValue = Context.Tag<any, any> | LastContextClass<any>;
+/** Spec entry: a Context key / Service or a nested Last.context class. */
+export type SpecValue = Context.Key<any, any> | LastContextClass<any>;
 
 export type Spec = { readonly [key: string]: SpecValue };
 
@@ -24,25 +24,21 @@ const isLastContext = (u: unknown): u is LastContextClass =>
   typeof u === "function" &&
   u !== null &&
   LastContextTypeId in u &&
-  (u as LastContextClass)[LastContextTypeId] === LastContextTypeId;
+  (u as unknown as LastContextClass)[LastContextTypeId] === LastContextTypeId;
 
-const isTag = (u: unknown): u is Context.Tag<any, any> =>
-  typeof u === "function" &&
-  u !== null &&
-  "key" in u &&
-  typeof (u as { readonly key: unknown }).key === "string";
+const isKey = (u: unknown): u is Context.Key<any, any> =>
+  Context.isKey(u) ||
+  (typeof u === "function" &&
+    u !== null &&
+    "key" in u &&
+    typeof (u as { readonly key: unknown }).key === "string");
 
 type ServiceValue<T> = [T] extends [LastContextClass<infer Nested>]
   ? TypeOfSpec<Nested>
-  : [T] extends [Context.Reference<infer A>] ? A
-  : [T] extends [Context.Tag<any, infer A>] ? A
-  : // View Tag classes often fail `extends Tag` in conditional position
-    T extends { readonly key: string } ? (
-      T extends { readonly Type: infer P extends object }
-        ? (props: P) => React.ReactElement | null
-        : (props: any) => React.ReactElement | null
-    )
-    : never;
+  : [T] extends [Context.Key<any, infer A>] ? A
+  : // View.make classes: Key-shaped at runtime; Shape via Service.Shape
+  Context.Service.Shape<T> extends infer S ? ([S] extends [never] ? never : S)
+  : never;
 
 /** Resolved value shape for a context spec. */
 export type TypeOfSpec<S extends Spec> = {
@@ -53,7 +49,7 @@ export type TypeOfSpec<S extends Spec> = {
 export type ServicesOfSpec<S extends Spec> = {
   [K in keyof S]: S[K] extends LastContextClass<infer Nested>
     ? ServicesOfSpec<Nested>
-    : S[K] extends Context.Tag<infer I, any>
+    : S[K] extends Context.Key<infer I, any>
       ? I
       : never;
 }[keyof S];
@@ -104,7 +100,7 @@ const resolveBag = (
   for (const [key, value] of Object.entries(spec)) {
     if (isLastContext(value)) {
       bag[key] = resolveBag(effectCtx, value.spec);
-    } else if (isTag(value)) {
+    } else if (isKey(value)) {
       bag[key] = Context.get(effectCtx, value);
     }
   }

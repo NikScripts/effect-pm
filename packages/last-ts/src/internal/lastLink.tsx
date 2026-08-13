@@ -185,11 +185,19 @@ const isComponent = (u: unknown): u is AnyComponent =>
     u !== null &&
     "$$typeof" in (u as object));
 
-const isContextTag = (u: unknown): u is Context.Tag<any, any> =>
-  typeof u === "function" &&
-  u !== null &&
-  "key" in u &&
-  typeof (u as { readonly key: unknown }).key === "string";
+const isContextKey = (u: unknown): u is Context.Key<any, any> =>
+  Context.isKey(u) ||
+  (typeof u === "function" &&
+    u !== null &&
+    "key" in u &&
+    typeof (u as { readonly key: unknown }).key === "string");
+
+/** Props for a wrapped component or View/Service render fn. */
+type PropsOfLinked<C> = Context.Service.Shape<C> extends (
+  props: infer P extends object,
+) => any ? P
+  : C extends React.ComponentType<infer P extends object> ? P
+  : {};
 
 /**
  * @internal
@@ -213,7 +221,7 @@ export const link = ((
     );
     let body: React.ReactNode = props.children as React.ReactNode;
     if (Component !== undefined) {
-      const resolved = isContextTag(Component)
+      const resolved = isContextKey(Component)
         ? Context.get(lastContext.useEffectContext(), Component)
         : Component;
       body = React.createElement(
@@ -230,11 +238,9 @@ export const link = ((
     api: A,
     opts: LinkOpts<A>,
   ): React.FC<LinkCommon & Record<string, any>>;
-  <A extends ApiConstraint, P extends object>(
+  <A extends ApiConstraint, C>(
     api: A,
-    component:
-      | React.ComponentType<P>
-      | Context.Tag<any, (props: P) => React.ReactElement | null>,
+    component: C,
     opts?: LinkOpts<A>,
-  ): React.FC<P & LinkCommon & Record<string, any>>;
+  ): React.FC<PropsOfLinked<C> & LinkCommon & Record<string, any>>;
 };

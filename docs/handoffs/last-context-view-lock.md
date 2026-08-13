@@ -386,7 +386,7 @@ Do **not** Eng until track 1 ships. Reminder only:
 | Piece | Status |
 |-------|--------|
 | Phase A site Frame kits (current tree) | Eng’d earlier — **superseded by this lock** for next cut |
-| Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Eng’d** — `test/last-context-link.test.tsx` · demo [`examples/last/context-link/Demo.tsx`](../../examples/last/context-link/Demo.tsx) · twoslash [`last-ts-context-link`](../examples/last/last-ts-context-link.md) |
+| Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Eng’d** — `test/last-context-link.test.tsx` · demo [`examples/last/context-link/`](../../examples/last/context-link/) · twoslash [`last-ts-context-link`](../examples/last/last-ts-context-link.md) |
 | Track 2: router/builder-scoped provide | **Parked** |
 
 ---

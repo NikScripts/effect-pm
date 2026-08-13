@@ -5,7 +5,9 @@
  */
 import { renderToString } from "react-dom/server";
 import * as React from "react";
-import { App } from "./Demo";
+import { Effect } from "effect";
+import * as App from "./App";
 
-const html = renderToString(React.createElement(App));
-console.log(html);
+const html = renderToString(React.createElement(App.App));
+
+Effect.runSync(Effect.log(html));
