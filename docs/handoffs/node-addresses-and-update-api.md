@@ -313,19 +313,26 @@ Node.policy(MyNode, LookupPolicy.yield("Accept"))
 `Node.activate` remains the live flip for Active (runtime retarget), separate from
 stamping Listen/As/Advertise via `Node.config`.
 
-**Policy handlers (locked 2026-08-12):** one policy helper, **string options** —
-same family as `streamGap("stall")`. Not separate `yieldAccept` / `yieldRefuse`
-exports, not `yield(true|false)`.
+**Policy handlers (locked 2026-08-13):** **both forms for every option** — the
+parameter helper **and** named sugar. Neither is second-class.
 
 ```ts
+// helper + option (like streamGap("stall"))
 LookupPolicy.yield("Accept" | "Refuse" | Effect<boolean>)
-LookupPolicy.pick("First" | fn)   // same idea when we touch Pick
+LookupPolicy.pick("First" | fn)
+
+// named sugar (same Layer / same install)
+LookupPolicy.yieldAccept
+LookupPolicy.yieldRefuse
+LookupPolicy.pickFirst
+
 Node.policy(MyNode, LookupPolicy.yield("Refuse"))
+Node.policy(MyNode, LookupPolicy.yieldRefuse) // equivalent
 ```
 
-Backing: `Context.Service` per policy + default Layer. Engines `yield*` then
-invoke. Tip still has flat `yieldAccept` / `withPolicy` — rename + option strings
-when owner says Eng.
+Reject boolean primary (`yield(true)`). Backing: `Context.Service` per policy +
+default Layer. Tip still has `withPolicy` + uneven sugar — `Node.policy` + full
+both-ways surface when owner says Eng.
 
 ### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
 
