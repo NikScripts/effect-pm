@@ -572,6 +572,16 @@ Closed `FilePath` / `RoutePath` unions → `Route.fileRoot` → typed `urls.*`.
 
 `examples/last/spine/src/` — Page mint → soft-nav catalog → `Document.provide` → `Last.provider`.
 
+### [last-ts context / link](/docs/last-ts-context-link)
+
+`examples/last/context-link/` · `pnpm run example:last-context-link`  
+`Last.context` / `Last.use` / `Last.link` + nested View kits (full-file Twoslash).
+
+### [last-ts fromEffect Catalog](/docs/last-ts-from-effect)
+
+`examples/last/from-effect/Catalog.ts` · `pnpm run example:last-from-effect`  
+Layer-swappable URL grammar via `group.fromEffect`.
+
 ---
 
 ## Scenarios
