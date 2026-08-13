@@ -377,7 +377,7 @@ Do **not** Eng until track 1 ships. Reminder only:
 - Flattened `NavBarView` on `Site`
 - Word **Chrome** for this surface
 - `Site.Site.use()` — use `Last.use(Site.Site)`
-- Eng’ing track 2 before track 1 is locked
+- Eng’ing track 2 before track 1 was locked (track 1 is now tip-synced)
 
 ---
 
