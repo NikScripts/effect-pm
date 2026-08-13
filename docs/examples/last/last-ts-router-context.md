@@ -23,7 +23,9 @@ examples/last/router-context/
     Frame.tsx            leaves + Outlet host + FrameContext
     DocsSidebar.tsx      docs-only region kit
   lib/
-    App.ts               catalog .context(Site) + docs.context(DocsKit)
+    Catalog.ts           path-only catalog → Paths / Urls / To (typed Link)
+    App.ts               .context(Site) + docs.context(DocsKit)
+    AppLink.tsx          Router.Link typed with Catalog.To (no bare string)
     Site.ts / DocsKit.ts nested Last.context bags
     AppTree / DocsTree   composition only (Last.use(App…))
     AppLayout / DocsLayout  Layout.make — place trees only (no HTML)
@@ -42,10 +44,20 @@ examples/last/router-context/
 - Leaf Views own DOM; composition / Layout / Tree = **zero HTML**
 - No `Last.provider(layer, Site)` at the app edge
 
-## Catalog
+## Catalog (paths) + App (scopes)
+
+{.twoslash include="examples/last/router-context/lib/Catalog.ts"}
+``` ts
+```
 
 {.twoslash include="examples/last/router-context/lib/App.ts"}
 ``` ts
+```
+
+## AppLink (`to` typesafe)
+
+{.twoslash include="examples/last/router-context/lib/AppLink.tsx"}
+``` tsx
 ```
 
 ## Site + DocsKit

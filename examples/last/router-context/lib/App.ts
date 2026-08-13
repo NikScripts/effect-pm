@@ -2,6 +2,7 @@
  * @module examples/last/router-context/lib/App
  *
  * Catalog declares context scopes; builder owes those Layers.
+ * Path shape matches {@link ./Catalog} (typed Link uses Catalog’s Paths/To).
  */
 import { Schema } from "effect";
 import * as Route from "last-ts/Route";

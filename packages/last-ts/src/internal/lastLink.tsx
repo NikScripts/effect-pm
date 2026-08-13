@@ -7,7 +7,11 @@ import * as React from "react";
 import { Context } from "effect";
 import * as Router from "../Router";
 import type * as Route from "../Route";
-import type { ApiConstraint, UrlBuilder } from "./routes";
+import {
+  asHref,
+  type ApiConstraint,
+  type UrlBuilder,
+} from "./routes";
 import * as lastContext from "./lastContext";
 
 const pathKeysSym = "~last-ts/pathKeys" as const;
@@ -66,7 +70,9 @@ const BaseLink = Router.Link as React.FC<Record<string, unknown>>;
 const wrapWithLink = (
   inner: React.ReactNode,
   linkProps: {
-    readonly to?: string | ((urls: Route.UrlBuilderLoose) => string);
+    readonly to?:
+      | Route.Href
+      | ((urls: Route.UrlBuilderLoose) => Route.Href);
     readonly out?: string;
     readonly className?: string;
     readonly title?: string;
@@ -79,7 +85,7 @@ const wrapWithLink = (
   React.createElement(BaseLink, { ...linkProps, children: inner });
 
 type Mode =
-  | { readonly _tag: "direct"; readonly to: string }
+  | { readonly _tag: "direct"; readonly to: Route.Href }
   | { readonly _tag: "directOut"; readonly out: string }
   | {
       readonly _tag: "attrFull";
@@ -109,7 +115,7 @@ const resolveMode = (
   if (typeof opts.to === "function") {
     const selected = opts.to(urls);
     if (typeof selected === "string") {
-      return { _tag: "direct", to: selected };
+      return { _tag: "direct", to: asHref(selected) };
     }
     if (isUrlMethod(selected)) {
       return { _tag: "attrRoute", method: selected };
@@ -157,7 +163,7 @@ const renderLinked = (
       if (mode.allowTo && to !== undefined && to !== null) {
         return wrapWithLink(body, {
           ...common,
-          to: to as string | ((urls: Route.UrlBuilderLoose) => string),
+          to: to as Route.Href | ((urls: Route.UrlBuilderLoose) => Route.Href),
         });
       }
       throw new Error("Last.link: pass to or out");
@@ -170,11 +176,11 @@ const renderLinked = (
         );
       }
       const href = (to as (g: Route.UrlBuilderLoose) => string)(mode.group);
-      return wrapWithLink(body, { ...common, to: href });
+      return wrapWithLink(body, { ...common, to: asHref(href) });
     }
     case "attrRoute": {
       const href = buildHrefFromParams(mode.method, props);
-      return wrapWithLink(body, { ...common, to: href });
+      return wrapWithLink(body, { ...common, to: asHref(href) });
     }
   }
 };

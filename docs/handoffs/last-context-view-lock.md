@@ -242,16 +242,20 @@ export class Body extends Layout.make()(
 
 ## Base `Link`: `to` + `out`
 
-**Today:** `Router.Link` / Waku `Link` take **`to`** (in-app soft-nav).
-
-**Expand the base link:**
-
 | Prop | Role |
 |------|------|
-| `to` | In-app — string or `(urls) => string`; soft-nav / `go` |
-| `out` | External URL — plain navigation (no router `go`) |
+| `to` | In-app only — **typesafe**: {@link Route.PathsOf} literal, branded {@link Route.Href} from `urlBuilder`, or `(urls) => urls.group.route(…)`. **Bare `string` banned.** |
+| `out` | External / free-form URL — not soft-nav (service for how `out` is handled: **next**) |
 
 At each use site: **`to` xor `out`**. Prefer **`Last.link`** wrappers over raw `Link`.
+
+```ts
+<Router.Link<typeof App> to="/">Home</Router.Link>
+<Router.Link to={(u) => u.docs.chapter("routing")}>Routing</Router.Link>
+<Router.Link out="https://effect.website">Effect</Router.Link>
+// @ts-expect-error bare string
+<Router.Link to="/not-in-catalog" />
+```
 
 ---
 
@@ -509,6 +513,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 - `Context.Service` for component slots
 - DOM in composition Views / `Tree` / `Layout.make` body (beyond placing `<Tree />`)
 - Hardcoded `href="/…"` instead of `Link` / `Last.link`
+- Bare `string` on Link `to` — use {@link Route.PathsOf} / {@link Route.Href} / urlBuilder callback; free-form URLs → `out`
 - Treating `Last.link` as a View/service/Tag
 - `Site.layer` / static `layer` / `bag.layer`
 - Flattened `NavBarView` on `Site`

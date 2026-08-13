@@ -295,20 +295,26 @@ export const useMatch = (): Route.Match | undefined => useRouter().match;
  * Link — in-app soft-nav (`to`) or external (`out`).
  *
  * ```tsx
- * <Router.Link to="/home">Home</Router.Link>
+ * <Router.Link<typeof App> to="/">Home</Router.Link>
  * <Router.Link to={(urls) => urls.app.dashboard()}>App</Router.Link>
  * <Router.Link out="https://effect.website">Effect</Router.Link>
  * ```
+ *
+ * `to` is typesafe only: {@link Route.PathsOf} / branded {@link Route.Href} from
+ * {@link Route.urlBuilder}, or `(urls) => urls.group.route(…)`. Bare `string` is
+ * banned — use `out` for free-form / external URLs.
  *
  * Pass `to` xor `out`. Prefer {@link ./Last.link} for named/narrowed links.
  *
  * @public
  */
 export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
-  readonly to?: string | ((urls: Route.UrlBuilder<A>) => string);
+  readonly to?:
+    | catalog.ToHref<A>
+    | ((urls: Route.UrlBuilder<A>) => catalog.ToHref<A>);
   readonly out?: string;
   readonly replace?: boolean;
-  readonly children: React.ReactNode;
+  readonly children?: React.ReactNode;
   readonly className?: string;
   readonly title?: string;
   readonly "data-kind"?: string;

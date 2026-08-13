@@ -224,10 +224,12 @@ const softNavClick = (
  * else `<a>` + {@link Service.go}. External skips soft-nav.
  */
 export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
-  readonly to?: string | ((urls: Route.UrlBuilder<A>) => string);
+  readonly to?:
+    | Route.ToHref<A>
+    | ((urls: Route.UrlBuilder<A>) => Route.ToHref<A>);
   readonly out?: string;
   readonly replace?: boolean;
-  readonly children: React.ReactNode;
+  readonly children?: React.ReactNode;
   readonly className?: string;
   readonly title?: string;
   readonly "data-kind"?: string;
