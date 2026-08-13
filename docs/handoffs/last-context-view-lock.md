@@ -356,14 +356,79 @@ Base component props merge with link props (`children`, `className`, …).
 
 ---
 
-## Track 2 — router-scoped context (PARKED)
+## Track 2 — router-scoped context (NEXT)
 
-Do **not** Eng until track 1 ships. Reminder only:
+**Status:** Design lock in progress — Eng only after size/load path is agreed  
+**Replaces:** hand-rolled `Last.provider(layer, Site)` for app chrome when the catalog owns scope
 
-- Provide Layers on the builder for **catalog / group / route**
-- `Last.use(Service)` → active merge (route > group > router)
-- Optional `Last.use(Router, selector?)` for explicit scope
-- Builder rename TBD (generic for HttpApi + pages — **not** `SiteBuilder`)
+### One-sentence
+
+**Contexts are declared on the router (catalog / group / route); the router mounts the active scope — no separate edge `Last.provider(Site)`. `Last.use(Router, …)` reads that scope.**
+
+### Declare (definition site — not a free-floating Provider)
+
+| Scope | Meaning | Wrap |
+|-------|---------|------|
+| **Catalog (root)** | Every page / everything under this router | Outermost context provider for the catalog |
+| **Group** | Only that group’s routes | Provider around the group’s matched tree |
+| **Route** | One route | Provider around that route’s page body |
+
+Sketch (API names TBD — shape is the lock):
+
+```ts
+class Site extends Router.make("app")
+  .context(RootContext) // root — all pages
+  .add(
+    Router.group("docs")
+      .context(DocsContext) // group
+      .add(
+        Route.get("chapter", "/docs/:slug")
+          // .context(ChapterContext) // optional per-route
+      ),
+  ) {}
+```
+
+Still one Layer bake for transport + handlers (`Last.provider(routesLayer)`). What goes away for kits is **`Last.provider(layer, Site)` / nesting `Provider` by hand** — scopes come from the catalog.
+
+### Use (same bag ergonomics as track 1)
+
+```ts
+Last.use(Router)                           // active scope (see open call below)
+Last.use(Router, "docs")                   // explicit group id
+Last.use(Router, (r) => r.docs)            // group via urlBuilder / catalog tree
+Last.use(Router, (r) => r.docs.chapter)    // route (uncalled) via catalog tree
+```
+
+Also keep track 1: `Last.use(NavBarContext)` under whatever provider the router mounted for the active match.
+
+### Merge
+
+When nested scopes all provide overlapping tags: **route > group > catalog**. Only the **active match path** mounts; inactive groups/routes do not wrap the tree.
+
+### Size & load time (hard)
+
+| Rule | Why |
+|------|-----|
+| **Active path only** | Mount providers for catalog + matched group + matched route — never every group’s context on every navigation |
+| **Root stays thin** | Catalog-level context = shared chrome / copy. Heavy feature bags live on **group / route** so `/` does not pay for docs tooling |
+| **No static import fan-out** | Catalog module must not eagerly import every group’s View kit. Register by key; load/provide with the group/route Layer (same instinct as codesplit route handlers) |
+| **One Atom / Layer runtime** | Do not stack `Last.provider(layer)` per scope. Router adds **context bag bridges** under the existing runtime |
+| **Selectors are type-thin** | `Last.use(Router, (r) => r.docs.chapter)` must not pull page bodies or Twoslash into the client graph — catalog types / ids only |
+| **Measure before expand** | Acceptance: navigating a lean route must not download inactive group context modules; bundle analyzer / network on spine or Last site |
+
+**Forbidden for track 2:** “provide all group contexts at root for simplicity,” or putting every View default Layer into `Router.make`’s module scope.
+
+### Open call (resolve before Eng)
+
+1. **`Last.use(Router)` alone** — active **merged** bag (route▷group▷root), or **root-only** (explicit selector required for group/route)?  
+2. **Attach API** — `.context(Ctx)` on `Router.make` / `group` / `Route.get` vs builder `RouterBuilder.group(…).context(…)` vs Layer pipeable like `Layout.provide`?  
+3. **Overlap with `Layout.provide`** — layout stays layout; context is DI bags. Do not merge the two APIs.
+
+### Non-goals (track 2)
+
+- In-browser editor / `/repo` viewer  
+- Renaming RouterBuilder this cut (unless attach API forces it)  
+- Replacing track 1 `Last.context` / `Last.use(Ctx)` for tests / partial mounts  
 
 ---
 
