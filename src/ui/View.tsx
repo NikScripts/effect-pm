@@ -4,8 +4,7 @@
  * Re-export of `last-ts/View` — Effect DI components (`make` / Layer / mount).
  * Dashboard contribution surface: {@link ./Views}.
  *
- * Pane metadata for TUI/dashboard shells ({@link LayoutHints}) lives here on
- * Hyperlink — not on last-ts (codesplit: last-ts has no dashboard size/pane UI).
+ * Pane / shell metadata ({@link Chrome}) lives here on Hyperlink — not on last-ts.
  */
 "use client";
 
@@ -18,7 +17,7 @@ export * from "last-ts/View";
  *
  * @public
  */
-export interface LayoutHints {
+export interface Chrome {
   readonly width?: number;
   readonly selected?: boolean;
   /** TUI focused panes (Ink). */
@@ -27,23 +26,18 @@ export interface LayoutHints {
   readonly editMode?: boolean;
 }
 
-const LayoutHintsContext = React.createContext<LayoutHints>({});
+const ChromeContext = React.createContext<Chrome>({});
 
 /**
- * Provide {@link LayoutHints} for descendant components.
+ * Provide {@link Chrome} for descendant components.
  *
  * @public
  */
-export const LayoutHintsProvider = (props: {
-  readonly value: LayoutHints;
+export const ChromeProvider = (props: {
+  readonly value: Chrome;
   readonly children: React.ReactNode;
 }): React.ReactElement =>
-  React.createElement(
-    LayoutHintsContext.Provider,
-    { value: props.value },
-    props.children,
-  );
+  React.createElement(ChromeContext.Provider, { value: props.value }, props.children);
 
-/** Read parent {@link LayoutHints} (empty object when none). @public */
-export const useLayoutHints = (): LayoutHints =>
-  React.useContext(LayoutHintsContext);
+/** Read parent {@link Chrome} (empty object when none). @public */
+export const useChrome = (): Chrome => React.useContext(ChromeContext);

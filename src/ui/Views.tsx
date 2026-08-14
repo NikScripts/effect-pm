@@ -1,7 +1,7 @@
 /**
  * @module ui/Views
  *
- * Hyperlink dashboard views — size hints (Card/Detail/Page), Registry, bind/only,
+ * Hyperlink dashboard views — size chrome (Card/Detail/Page), Registry, bind/only,
  * react matchers, and compose. Built on `last-ts/View` DI (Service/Prototype/provide).
  *
  * Size lives on the Card/Detail/Page **ancestor** prototypes — not on View.
@@ -61,7 +61,7 @@ const sameViewKind = (a: ViewKind, b: ViewKind): boolean => a._tag === b._tag;
 export type ViewTag = LeafTag | GroupNav.MemberTag;
 
 /**
- * Base props for size hints skins (card/detail/page). Navigation stays with the parent.
+ * Base props for size chrome skins (card/detail/page). Navigation stays with the parent.
  *
  * @public
  */
@@ -74,7 +74,7 @@ export interface ViewProps {
 export type Component<Props extends object = ViewProps> = View.View<Props>;
 
 /**
- * A matched view ready to render (size hints).
+ * A matched view ready to render (size chrome).
  *
  * @public
  */
@@ -84,13 +84,13 @@ export interface Resolved {
   readonly Component: Component;
 }
 
-export const SizeHints: View.OpenPrototype<ViewProps, WithSize> = View.Prototype<
+export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototype<
   ViewProps,
   WithSize
 >()();
 
 /**
- * Size-hints add-ons — {@link SizeHints} with `annotations.size` fulfilled.
+ * Size-chrome add-ons — {@link SizeChrome} with `annotations.size` fulfilled.
  * Mint with `Views.Card.Service<Self, Props?>()(key, annotations?)` — bag stamps under
  * {@link View.annotationsSym}. Read with {@link View.annotations} (Effect) or
  * {@link View.getAnnotations}. Matcher components are **not** these — use
@@ -101,19 +101,19 @@ export const SizeHints: View.OpenPrototype<ViewProps, WithSize> = View.Prototype
 export const Card: View.FulfilledPrototype<
   ViewProps,
   WithSize<CardKind>
-> = SizeHints.Prototype()({ size: ViewKind.Card() });
+> = SizeChrome.Prototype()({ size: ViewKind.Card() });
 
 /** @public */
 export const Detail: View.FulfilledPrototype<
   ViewProps,
   WithSize<DetailKind>
-> = SizeHints.Prototype()({ size: ViewKind.Detail() });
+> = SizeChrome.Prototype()({ size: ViewKind.Detail() });
 
 /** @public */
 export const Page: View.FulfilledPrototype<
   ViewProps,
   WithSize<PageKind>
-> = SizeHints.Prototype()({ size: ViewKind.Page() });
+> = SizeChrome.Prototype()({ size: ViewKind.Page() });
 
 // =============================================================================
 // Registry service

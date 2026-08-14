@@ -181,9 +181,9 @@ const FocusedQueue = (props: {
       borderColor="red"
     >
       <Box flexShrink={0}>
-        <View.LayoutHintsProvider value={{ width: cols - 2 }}>
+        <View.ChromeProvider value={{ width: cols - 2 }}>
           <Match.Detail tag={tag} name={name} />
-        </View.LayoutHintsProvider>
+        </View.ChromeProvider>
       </Box>
       <Box flexGrow={1} flexDirection="column" paddingX={1}>
         <Box>
@@ -446,12 +446,12 @@ export const DashboardShell = (props: {
       isShardMapTag(focused)
     ) {
       return (
-        <View.LayoutHintsProvider
+        <View.ChromeProvider
           key={focused.key}
           value={{ cols, rows, width: cols - 2 }}
         >
           <Match.Detail tag={focused} name={focusName} />
-        </View.LayoutHintsProvider>
+        </View.ChromeProvider>
       );
     }
     // Unknown / Hyperlink leaf — View card exists; no detail skin yet.

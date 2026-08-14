@@ -385,9 +385,9 @@ export const Cell = (props: {
   // Group + leaf share kit Card when a family skin is on the layer (open stays parent / TUI focus).
   if (hasViewCard && viewTag !== null) {
     return (
-      <View.LayoutHintsProvider value={{ width: props.width, selected: props.selected }}>
+      <View.ChromeProvider value={{ width: props.width, selected: props.selected }}>
         <Match.Card tag={viewTag} name={props.name} />
-      </View.LayoutHintsProvider>
+      </View.ChromeProvider>
     );
   }
   if (isGroup) {

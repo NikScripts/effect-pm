@@ -93,136 +93,136 @@ const lifecycleTagOf = (
 
 const GroupCardView: View.View = (props) => {
   if (!Group.isGroup(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <GroupCell
       name={props.name ?? displayName(props.tag.key)}
       node={props.tag}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const PoolCardView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <QueueCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width}
-      selected={hints.selected}
+      width={chrome.width}
+      selected={chrome.selected}
     />
   );
 };
 
 const PriorityCardView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <PriorityCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const DaemonCardView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <DaemonCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const ApiCardView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <ApiCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const FleetCardView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FleetHealthCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const TelemetryCardView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <TelemetryCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const ShardMapCardView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <ShardMapCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const GateCardView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <GateCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 const HyperlinkCardView: View.View = (props) => {
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FallbackCell
       name={props.name ?? displayName(props.tag.key)}
       member={props.tag}
-      width={hints.width ?? 24}
-      selected={hints.selected === true}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
     />
   );
 };
 
 // ── details ─────────────────────────────────────────────────────────────────
 
-/** Read-only WorkPool detail body (PageXL) — Dashboard keeps edit/logs UI. */
+/** Read-only WorkPool detail body (PageXL) — Dashboard keeps edit/logs chrome. */
 const QueueDetailPanel = (props: {
   readonly tag: QueueTag;
   readonly name: string;
@@ -265,40 +265,40 @@ const QueueDetailPanel = (props: {
 
 const PoolDetailView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <QueueDetailPanel
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={hints.width}
+      width={chrome.width}
     />
   );
 };
 
 const PriorityDetailView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FocusedPriority
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
-      cols={hints.cols ?? hints.width ?? 80}
-      rows={hints.rows ?? 24}
-      editMode={hints.editMode}
+      cols={chrome.cols ?? chrome.width ?? 80}
+      rows={chrome.rows ?? 24}
+      editMode={chrome.editMode}
     />
   );
 };
 
 const DaemonDetailView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FocusedDaemon
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
-      cols={hints.cols ?? hints.width ?? 80}
-      rows={hints.rows ?? 24}
-      editMode={hints.editMode}
+      cols={chrome.cols ?? chrome.width ?? 80}
+      rows={chrome.rows ?? 24}
+      editMode={chrome.editMode}
     />
   );
 };
@@ -348,65 +348,65 @@ const DaemonPageView: View.View = (props) => {
 
 const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FocusedApi
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
-      cols={hints.cols ?? hints.width ?? 80}
-      rows={hints.rows ?? 24}
+      cols={chrome.cols ?? chrome.width ?? 80}
+      rows={chrome.rows ?? 24}
     />
   );
 };
 
 const FleetDetailView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FocusedFleetHealth
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
-      cols={hints.cols ?? hints.width ?? 80}
-      rows={hints.rows ?? 24}
+      cols={chrome.cols ?? chrome.width ?? 80}
+      rows={chrome.rows ?? 24}
     />
   );
 };
 
 const TelemetryDetailView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FocusedTelemetry
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
-      cols={hints.cols ?? hints.width ?? 80}
-      rows={hints.rows ?? 24}
+      cols={chrome.cols ?? chrome.width ?? 80}
+      rows={chrome.rows ?? 24}
     />
   );
 };
 
 const ShardMapDetailView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FocusedShardMap
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
-      cols={hints.cols ?? hints.width ?? 80}
-      rows={hints.rows ?? 24}
+      cols={chrome.cols ?? chrome.width ?? 80}
+      rows={chrome.rows ?? 24}
     />
   );
 };
 
 const GateDetailView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
-  const hints = View.useLayoutHints();
+  const chrome = View.useChrome();
   return (
     <FocusedGate
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
-      cols={hints.cols ?? hints.width ?? 80}
-      rows={hints.rows ?? 24}
+      cols={chrome.cols ?? chrome.width ?? 80}
+      rows={chrome.rows ?? 24}
     />
   );
 };
