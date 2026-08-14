@@ -48,16 +48,16 @@ not a mirror of `ui/Router`. Site `docs/site/src/ui/Router.tsx` is a thin skin �
 branded `urls`, `setDefault(docs)`, no-op `Outlet` for file-route bodies.
 
 ```tsx
-import * as Router from "../ui/Router" // site skin → Waku layer
+import * as Router from "../ui/Router" // site skin → Waku layer + Link
 
 const binding = Router.waku(site) // preferred; site `make` is a deprecated alias
 
-<Router.Link to={urls.home()}>Home</Router.Link>
+<Router.Link to={urls.home()}>Home</Router.Link>       // = Router.link(site)
 <Router.Link to={urls.docs("work-pools")}>Work pools</Router.Link>
 
 const r = Router.useRouter()
 void r.to((u) => u.search({ query: { q: "WorkPool" } }))
-// live service: r._tag === "Waku"
+// live service: r._tag === "Waku"  (Waku Layer supplies Service.go)
 ```
 
 ## Layers
@@ -68,7 +68,7 @@ void r.to((u) => u.search({ query: { q: "WorkPool" } }))
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
 | `hyperlink-ts/ui/Router/waku` | Waku **layer** — `waku` / `Provider` / `useRouter` (soft-nav: `Router.link(catalog)`) |
-| Site `ui/Router.tsx` | Skin: default binding + no-op Outlet |
-| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` |
+| Site `ui/Router.tsx` | Skin: default binding + `Link = Router.link(site)` + no-op Outlet |
+| Chrome + API + search | In-app hrefs use catalog `Link` / `urls.*` |
 | Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` via `urls` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |
