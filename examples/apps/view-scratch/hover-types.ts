@@ -135,7 +135,7 @@ export type Shipped_DenseCard_Props = View.PropsOf<DenseCard>;
 export type Shipped_DenseCard_TypeOf = View.Type<typeof DenseCard>;
 
 /** Open-chain Prototype still available for Requirement debt. */
-const DenseOpen = Views.SizeChrome.Prototype<DenseExtra>()({
+const DenseOpen = Views.SizeHints.Prototype<DenseExtra>()({
   spec: { kind: "hover-dense-open" } as const,
 });
 export type Shipped_DenseOpen_PropsOf = View.PropsOf<typeof DenseOpen>;

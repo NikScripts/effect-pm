@@ -60,7 +60,7 @@ export const annotationsSym: unique symbol = Symbol.for(
  *
  * @public
  */
-export interface Chrome {
+export interface LayoutHints {
   readonly width?: number;
   readonly selected?: boolean;
   /** TUI focused panes (Ink). */
@@ -69,21 +69,21 @@ export interface Chrome {
   readonly editMode?: boolean;
 }
 
-const ChromeContext = React.createContext<Chrome>({});
+const LayoutHintsContext = React.createContext<LayoutHints>({});
 
 /**
- * Provide layout chrome for descendant components.
+ * Provide layout hints for descendant components.
  *
  * @public
  */
-export const ChromeProvider = (props: {
-  readonly value: Chrome;
+export const LayoutHintsProvider = (props: {
+  readonly value: LayoutHints;
   readonly children: React.ReactNode;
 }): React.ReactElement =>
-  React.createElement(ChromeContext.Provider, { value: props.value }, props.children);
+  React.createElement(LayoutHintsContext.Provider, { value: props.value }, props.children);
 
-/** Read parent {@link Chrome} (empty object when none). @public */
-export const useChrome = (): Chrome => React.useContext(ChromeContext);
+/** Read parent {@link LayoutHints} (empty object when none). @public */
+export const useLayoutHints = (): LayoutHints => React.useContext(LayoutHintsContext);
 
 /**
  * Phantom brand for open-`R` views (not a JSX call signature).
@@ -654,7 +654,7 @@ export const Prototype =
  *
  * Pass a default component as the second argument for an optional slot
  * (Reference) — override with `Effect.provideService` / Layer for themes,
- * sidebars, nested settings chrome, etc.
+ * sidebars, nested settings layout, etc.
  *
  * @example
  * ```ts

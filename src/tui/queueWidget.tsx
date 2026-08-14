@@ -19,7 +19,7 @@ import {
   statusIcon as STATUS_ICON,
   blankBorder as BLANK_BORDER,
   type Status,
-} from "./chrome";
+} from "./display";
 
 export { bar, compact, displayName, fmt, spark, COLOR, STATUS_ICON, BLANK_BORDER };
 export type { Status };

@@ -45,18 +45,18 @@ const lifecycleTagOf = (
 
 const PoolCardView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
-  const chrome = View.useChrome();
+  const hints = View.useLayoutHints();
   return (
     <QueueCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={chrome.width}
-      selected={chrome.selected}
+      width={hints.width}
+      selected={hints.selected}
     />
   );
 };
 
-/** Read-only WorkPool detail body (PageXL) — Dashboard keeps edit/logs chrome. */
+/** Read-only WorkPool detail body (PageXL) — Dashboard keeps edit/logs UI. */
 const QueueDetailPanel = (props: {
   readonly tag: QueueTag;
   readonly name: string;
@@ -99,12 +99,12 @@ const QueueDetailPanel = (props: {
 
 const PoolDetailView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
-  const chrome = View.useChrome();
+  const hints = View.useLayoutHints();
   return (
     <QueueDetailPanel
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      width={chrome.width}
+      width={hints.width}
     />
   );
 };

@@ -1,7 +1,7 @@
 /**
  * @module tui/DashboardTopBar
  *
- * Public TUI dashboard chrome — crumb / title strip used by {@link ./DashboardShell}.
+ * Public TUI dashboard UI — crumb / title strip used by {@link ./DashboardShell}.
  *
  * @public
  */

@@ -1,7 +1,7 @@
 /**
- * @module tui/chrome
+ * @module tui/display
  *
- * Terminal chrome primitives (status theme, bars, sparklines, compact numbers) shared by
+ * Terminal display primitives (status theme, bars, sparklines, compact numbers) shared by
  * Ink widgets. Kept out of the package barrel so widget modules can import without cycles.
  *
  */

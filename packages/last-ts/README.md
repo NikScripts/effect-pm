@@ -25,7 +25,7 @@ yield* Page.document(Document.title("Chapter"))
 ```
 
 **Host boundary:** apps import **only** `last-ts/*`. `waku` is an optional peer
-inside this package. **Document chrome:** `docs/handoffs/page-document-lock.md`.
+inside this package. **Document fields:** `docs/handoffs/page-document-lock.md`.
 **Corrections:** `docs/handoffs/last-ts-api-corrections.md`.
 
 Root barrels real modules only.

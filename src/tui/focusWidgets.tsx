@@ -15,7 +15,7 @@ import {
   type PriorityTag,
 } from "../ui/data";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import { spark } from "./chrome";
+import { spark } from "./display";
 import * as PriorityView from "../ui/PriorityView";
 import * as DaemonView from "../ui/DaemonView";
 import * as Observe from "../Observe";
@@ -124,7 +124,7 @@ export const LogTail = (props: {
   </Box>
 );
 
-/** Focused `WorkPool.priority` detail (status + lanes + logs + edit chrome). @public */
+/** Focused `WorkPool.priority` detail (status + lanes + logs + edit UI). @public */
 export const FocusedPriority = (props: {
   readonly name: string;
   readonly tag: PriorityTag;
@@ -262,7 +262,7 @@ export const FocusedPriority = (props: {
   );
 };
 
-/** Focused Daemon detail (status + logs + edit chrome). @public */
+/** Focused Daemon detail (status + logs + edit UI). @public */
 export const FocusedDaemon = (props: {
   readonly name: string;
   readonly tag: DaemonTag;

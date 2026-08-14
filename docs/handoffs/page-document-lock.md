@@ -14,13 +14,13 @@
 - `Layout.Outlet` (component); root html via `RootLayout.make` / `Default` (see `page-layout-lock.md`)
 - `Last.provider` wraps `Document.FieldsProvider` when `Cell` is in the Layer
 - Dogfood: `SiteDocument` + shared `siteCell` in `_root` + provider layer
-- Tests: `test/document-chrome.test.ts`
+- Tests: `test/document.test.ts`
 
 ---
 
 ## One-sentence lock
 
-**Document chrome is a typed field bag + a swappable head renderer.** Apps write with
+**Document fields is a typed field bag + a swappable head renderer.** Apps write with
 `Page.document` (patches / partials). Layers fulfill requirements with
 `Document.provide`. Never `yield*` inside `()`, never a mid-tree `<Title>`, never
 direct `waku` head APIs.

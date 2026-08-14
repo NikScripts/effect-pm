@@ -1,7 +1,7 @@
 /**
  * @module tui/kindCells
  *
- * Ink grid/detail chrome for gate, api, fleet-health, telemetry, and shard-map.
+ * Ink grid/detail UI for gate, api, fleet-health, telemetry, and shard-map.
  * Data from `hyperlink-ts/ui` bundles; nicknames from the parent Group.
  *
  */
@@ -23,7 +23,7 @@ import * as FleetHealthView from "../ui/FleetHealthView";
 import * as TelemetryView from "../ui/TelemetryView";
 import * as ShardMapView from "../ui/ShardMapView";
 import * as Observe from "../Observe";
-import { bar, blankBorder as BLANK_BORDER, compact, displayName, spark } from "./chrome";
+import { bar, blankBorder as BLANK_BORDER, compact, displayName, spark } from "./display";
 
 
 const CELL_HEIGHT = 7;
@@ -78,7 +78,7 @@ const backHint = (
   </Box>
 );
 
-const FocusChrome = (props: {
+const FocusPane = (props: {
   readonly cols: number;
   readonly rows: number;
   readonly title: string;
@@ -160,7 +160,7 @@ export const FocusedGate = (props: {
   const avgMs =
     completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : undefined;
   return (
-    <FocusChrome cols={props.cols} rows={props.rows} title={props.name} borderColor="blue">
+    <FocusPane cols={props.cols} rows={props.rows} title={props.name} borderColor="blue">
       <Text>
         concurrency {s?.concurrency ?? 0} · in-flight {s?.inFlight ?? 0} · waiting {s?.waiting ?? 0}
       </Text>
@@ -173,7 +173,7 @@ export const FocusedGate = (props: {
           {bar(s?.inFlight ?? 0, Math.max(1, s?.concurrency ?? 1), Math.max(8, props.cols - 20))}
         </Text>
       </Box>
-    </FocusChrome>
+    </FocusPane>
   );
 };
 
@@ -248,7 +248,7 @@ export const FocusedApi = (props: {
   const endpoints = [...(m?.byEndpoint ?? [])].slice(0, 12);
   const maxReq = Math.max(1, ...endpoints.map((e) => e.requests));
   return (
-    <FocusChrome cols={props.cols} rows={props.rows} title={props.name} borderColor="magenta">
+    <FocusPane cols={props.cols} rows={props.rows} title={props.name} borderColor="magenta">
       <Text>
         {(m?.throughputPerSec ?? 0).toFixed(1)} req/s · in-flight {s?.inFlight ?? 0} · total{" "}
         {compact(s?.requestsTotal ?? 0)} · errors {compact(s?.errorsTotal ?? 0)} · rem{" "}
@@ -267,7 +267,7 @@ export const FocusedApi = (props: {
           </Box>
         ))}
       </Box>
-    </FocusChrome>
+    </FocusPane>
   );
 };
 
@@ -324,7 +324,7 @@ export const FocusedFleetHealth = (props: {
   const border =
     status === "ok" ? "green" : status === "degraded" || status === "partial" ? "yellow" : "gray";
   return (
-    <FocusChrome
+    <FocusPane
       cols={props.cols}
       rows={props.rows}
       title={`${props.name} · ${status ?? "…"}`}
@@ -335,7 +335,7 @@ export const FocusedFleetHealth = (props: {
           {displayName(node)} — {fleetNodeLabel(report)}
         </Text>
       ))}
-    </FocusChrome>
+    </FocusPane>
   );
 };
 
@@ -391,7 +391,7 @@ export const FocusedTelemetry = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <FocusChrome cols={props.cols} rows={props.rows} title={props.name} borderColor="cyan">
+    <FocusPane cols={props.cols} rows={props.rows} title={props.name} borderColor="cyan">
       <Text>
         fleet in-flight {fleet} · {count} metrics on this node
       </Text>
@@ -403,7 +403,7 @@ export const FocusedTelemetry = (props: {
           </Text>
         ))}
       </Box>
-    </FocusChrome>
+    </FocusPane>
   );
 };
 
@@ -458,12 +458,12 @@ export const FocusedShardMap = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <FocusChrome cols={props.cols} rows={props.rows} title={props.name} borderColor="yellow">
+    <FocusPane cols={props.cols} rows={props.rows} title={props.name} borderColor="yellow">
       <Text>
         fleet entries {compact(size)}
         {local !== undefined ? ` · this node ${compact(local)}` : ""}
       </Text>
       <NodeRows rows={rows} max={max} barWidth={Math.max(8, props.cols - 28)} />
-    </FocusChrome>
+    </FocusPane>
   );
 };

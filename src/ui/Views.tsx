@@ -1,7 +1,7 @@
 /**
  * @module ui/Views
  *
- * Hyperlink dashboard views — size chrome (Card/Detail/Page), Registry, bind/only,
+ * Hyperlink dashboard views — size hints (Card/Detail/Page), Registry, bind/only,
  * react matchers, and compose. Built on `last-ts/View` DI (Service/Prototype/provide).
  *
  * Size lives on the Card/Detail/Page **ancestor** prototypes — not on View.
@@ -61,7 +61,7 @@ const sameViewKind = (a: ViewKind, b: ViewKind): boolean => a._tag === b._tag;
 export type ViewTag = LeafTag | GroupNav.MemberTag;
 
 /**
- * Base props for size-chrome skins (card/detail/page). Navigation stays with the parent.
+ * Base props for size hints skins (card/detail/page). Navigation stays with the parent.
  *
  * @public
  */
@@ -74,7 +74,7 @@ export interface ViewProps {
 export type Component<Props extends object = ViewProps> = View.View<Props>;
 
 /**
- * A matched view ready to render (size chrome).
+ * A matched view ready to render (size hints).
  *
  * @public
  */
@@ -84,13 +84,13 @@ export interface Resolved {
   readonly Component: Component;
 }
 
-export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototype<
+export const SizeHints: View.OpenPrototype<ViewProps, WithSize> = View.Prototype<
   ViewProps,
   WithSize
 >()();
 
 /**
- * Size-chrome add-ons — {@link SizeChrome} with `annotations.size` fulfilled.
+ * Size-hints add-ons — {@link SizeHints} with `annotations.size` fulfilled.
  * Mint with `Views.Card.Service<Self, Props?>()(key, annotations?)` — bag stamps under
  * {@link View.annotationsSym}. Read with {@link View.annotations} (Effect) or
  * {@link View.getAnnotations}. Matcher components are **not** these — use
@@ -101,25 +101,25 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
 export const Card: View.FulfilledPrototype<
   ViewProps,
   WithSize<CardKind>
-> = SizeChrome.Prototype()({ size: ViewKind.Card() });
+> = SizeHints.Prototype()({ size: ViewKind.Card() });
 
 /** @public */
 export const Detail: View.FulfilledPrototype<
   ViewProps,
   WithSize<DetailKind>
-> = SizeChrome.Prototype()({ size: ViewKind.Detail() });
+> = SizeHints.Prototype()({ size: ViewKind.Detail() });
 
 /** @public */
 export const Page: View.FulfilledPrototype<
   ViewProps,
   WithSize<PageKind>
-> = SizeChrome.Prototype()({ size: ViewKind.Page() });
+> = SizeHints.Prototype()({ size: ViewKind.Page() });
 
 // =============================================================================
 // Registry service
 // =============================================================================
 
-/** Bound chrome captured when a contribution Layer built (View service was provided). @internal */
+/** Bound view captured when a contribution Layer built (View service was provided). @internal */
 type Bound = {
   readonly key: View.ViewKey;
   readonly kind: ViewKind;
@@ -377,8 +377,8 @@ export class GroupDash extends Context.Service<
 >()("hyperlink-ts/ui/Views/GroupDash") {}
 
 /**
- * BYO-chrome Group kit contribution (W20). Records the Group + leaves for the react kit.
- * Chrome `R` comes from `Views.bind` / `Views.only` layers you merge.
+ * BYO-hints Group kit contribution (W20). Records the Group + leaves for the react kit.
+ * Hints `R` comes from `Views.bind` / `Views.only` layers you merge.
  *
  * @example
  * ```ts
@@ -386,7 +386,7 @@ export class GroupDash extends Context.Service<
  *   Views.group(AppGroup),
  *   Views.bind(WorkPool.kind, PoolCard),
  *   Views.only(Special, CustomCard),
- * ).pipe(Layer.provideMerge(chrome), Layer.provideMerge(Views.base))
+ * ).pipe(Layer.provideMerge(sizeHints), Layer.provideMerge(Views.base))
  * const { for: bound, Provider } = Views.react(ready)
  * ```
  *

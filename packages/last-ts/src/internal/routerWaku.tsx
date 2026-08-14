@@ -54,7 +54,7 @@ export const waku = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
 
 let defaultBinding: WakuBinding<ApiConstraint, unknown> | null = null;
 
-/** Optional default Waku binding when no Provider is mounted (docs chrome). */
+/** Optional default Waku binding when no Provider is mounted (docs UI). */
 export const setDefault = <A extends ApiConstraint, U>(
   binding: WakuBinding<A, U> | null,
 ): void => {
@@ -176,7 +176,7 @@ export const Provider = (props: {
  * The one {@link Service} — from Provider context, or default Waku binding.
  *
  * This entry always runs under Waku's router (companion pulls `waku`). Prefer
- * context from {@link Provider}; `setDefault` is for chrome without a local Provider.
+ * context from {@link Provider}; `setDefault` is for UI without a local Provider.
  */
 export const useRouter = <A extends ApiConstraint = ApiConstraint>(): Service<A> => {
   const fromCtx = Router.useRouterOption();

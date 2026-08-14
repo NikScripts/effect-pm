@@ -24,8 +24,8 @@ const pathKeysSym = "~last-ts/pathKeys" as const;
 
 type UrlQuery = NonNullable<UrlQueryOptions["query"]>;
 
-/** Anchor chrome shared by every linked result. */
-export type LinkChromeProps = {
+/** Anchor props shared by every linked result. */
+export type LinkAnchorProps = {
   readonly children?: React.ReactNode;
   readonly className?: string;
   readonly title?: string;
@@ -300,7 +300,7 @@ type LinkedProps<
   A extends ApiConstraint,
   O extends LinkOpts<A>,
   C = {},
-> = PropsOfLinked<C> & LinkChromeProps & DestPropsFromOpts<A, O>;
+> = PropsOfLinked<C> & LinkAnchorProps & DestPropsFromOpts<A, O>;
 
 /**
  * @internal

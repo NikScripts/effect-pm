@@ -1,7 +1,7 @@
 /**
  * @module Document
  *
- * Head chrome — typed field bag + swappable renderer (`Document.make`).
+ * Document head — typed field bag + swappable renderer (`Document.make`).
  * Apps write with {@link ./Page.document}; Layers fulfill with {@link provide}.
  * Never `yield*` inside `()`. SSOT: `docs/handoffs/page-document-lock.md`.
  *

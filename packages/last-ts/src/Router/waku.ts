@@ -58,7 +58,7 @@ export const layer = {
   ): internal.WakuBinding<A, U> => internal.waku(api, urls),
 } as const;
 
-/** Optional default binding when no Provider is mounted (docs chrome). @public */
+/** Optional default binding when no Provider is mounted (docs UI). @public */
 export const setDefault: typeof internal.setDefault = internal.setDefault;
 
 /** @public */

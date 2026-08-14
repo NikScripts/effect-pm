@@ -9,7 +9,7 @@ import * as Views from "../src/ui/Views";
 
 const Open = View.Prototype<Views.ViewProps, Views.WithSize>()();
 expectTypeOf(Open).toEqualTypeOf<View.OpenPrototype<Views.ViewProps, Views.WithSize>>();
-expectTypeOf(Views.SizeChrome).toEqualTypeOf<
+expectTypeOf(Views.SizeHints).toEqualTypeOf<
   View.OpenPrototype<Views.ViewProps, Views.WithSize>
 >();
 expectTypeOf<View.RequirementOf<typeof Open>>().toEqualTypeOf<Views.WithSize>();

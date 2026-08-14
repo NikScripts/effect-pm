@@ -27,7 +27,7 @@ export class Request extends Context.Service<Request, RequestValue>()(
 ) {}
 
 /**
- * Document chrome bag (title today; extend later).
+ * Document fields bag (title today; extend later).
  *
  * @public
  */
@@ -36,7 +36,7 @@ export type DocumentValue = {
 };
 
 /**
- * Effect API for document chrome (`yield* Page.Document`, then `.set`).
+ * Effect API for document fields (`yield* Page.Document`, then `.set`).
  *
  * @public
  */
@@ -46,7 +46,7 @@ export type DocumentApi = {
 };
 
 /**
- * Set-anywhere document chrome (`yield* Page.Document`).
+ * Set-anywhere document fields (`yield* Page.Document`).
  *
  * @public
  */

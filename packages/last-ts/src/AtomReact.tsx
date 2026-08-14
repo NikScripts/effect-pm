@@ -4,12 +4,12 @@
  * React binding over Effect's native reactive layer (`effect/unstable/reactivity`) —
  * `AtomRegistry` provider + hooks, plus `Atom.AtomRuntime` context for app layers.
  *
- * Prefer { ../Last.provider} —  {@link ../Last.app} call sites take children only:
+ * Prefer {@link ../Last.provider} so call sites take children only:
  *
  * ```ts
  * import * as Last from "last-ts/Last"
  *
- * export const Provider = Last.app(appLayer).Provider
+ * export const Provider = Last.provider(appLayer)
  * // <Provider>…</Provider>
  * ```
  *

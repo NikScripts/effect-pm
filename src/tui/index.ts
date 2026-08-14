@@ -21,7 +21,7 @@
  *
  */
 export * from "../ui";
-export * from "./chrome";
+export * from "./display";
 export { make, type AnyTag } from "./make";
 export { layer } from "./layer";
 export { Dashboard } from "./Dashboard";

@@ -109,7 +109,7 @@ export const DocumentRoot = (props: {
 };
 
 /**
- * Read document chrome from the React bridge.
+ * Read document fields from the React bridge.
  *
  * @public
  */

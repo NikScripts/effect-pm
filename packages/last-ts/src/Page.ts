@@ -126,7 +126,7 @@ export { Request } from "./internal/pageServices";
 export { Document } from "./internal/pageServices";
 
 /**
- * Merge head-chrome patches / partials into the current {@link Document.Cell}.
+ * Merge document-field patches / partials into the current {@link Document.Cell}.
  *
  * Never `yield*` inside `()`.
  *

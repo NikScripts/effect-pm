@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import * as Document from "last-ts/Document";
 import * as Page from "last-ts/Page";
 
-describe("Document chrome", () => {
+describe("Document fields", () => {
   it("Document.provide builds Cell; Page.document merges title", async () => {
     const layer = Document.provide(
       Document.Default,

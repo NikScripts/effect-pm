@@ -12,9 +12,9 @@ expectTypeOf<View.PropsOf<PoolCard>>().toEqualTypeOf<Views.ViewProps>();
 expectTypeOf<PoolCard["Service"]>().toEqualTypeOf<View.View<Views.ViewProps>>();
 
 // Svc type is View.View (defaults to {})
-type ChromeSkin = View.View<Views.ViewProps>;
+type DefaultSkin = View.View<Views.ViewProps>;
 type TypedSkin = PoolCard["Service"];
-expectTypeOf<ChromeSkin>().toEqualTypeOf<
+expectTypeOf<DefaultSkin>().toEqualTypeOf<
   (props: Views.ViewProps) => React.ReactElement | null
 >();
-expectTypeOf<TypedSkin>().toEqualTypeOf<ChromeSkin>();
+expectTypeOf<TypedSkin>().toEqualTypeOf<DefaultSkin>();
