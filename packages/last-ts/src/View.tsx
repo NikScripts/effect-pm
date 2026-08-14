@@ -56,36 +56,6 @@ export const annotationsSym: unique symbol = Symbol.for(
 );
 
 /**
- * Layout hints for a provided component (width, selection, …).
- *
- * @public
- */
-export interface LayoutHints {
-  readonly width?: number;
-  readonly selected?: boolean;
-  /** TUI focused panes (Ink). */
-  readonly cols?: number;
-  readonly rows?: number;
-  readonly editMode?: boolean;
-}
-
-const LayoutHintsContext = React.createContext<LayoutHints>({});
-
-/**
- * Provide layout hints for descendant components.
- *
- * @public
- */
-export const LayoutHintsProvider = (props: {
-  readonly value: LayoutHints;
-  readonly children: React.ReactNode;
-}): React.ReactElement =>
-  React.createElement(LayoutHintsContext.Provider, { value: props.value }, props.children);
-
-/** Read parent {@link LayoutHints} (empty object when none). @public */
-export const useLayoutHints = (): LayoutHints => React.useContext(LayoutHintsContext);
-
-/**
  * Phantom brand for open-`R` views (not a JSX call signature).
  *
  * @internal
