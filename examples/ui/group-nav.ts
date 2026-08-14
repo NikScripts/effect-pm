@@ -22,7 +22,7 @@ class Hub extends Group.Service<Hub>("examples/group-nav/Hub")({ Nwsl }) {}
 
 /** Catalog generated from the Group — health + leaf logs/schedule included. */
 export const site = Route.make("hub").add(
-  Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+  Route.group("tree", { topLevel: true }).effect(Group.asRoutes(Hub)),
 );
 
 export const urls = Route.urlBuilder(site);

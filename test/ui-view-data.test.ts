@@ -35,7 +35,7 @@ class Nightly extends Daemon.Service<Nightly>()("app/runtime/Nightly", {
 class Hub extends Group.Service<Hub>("app/runtime/Hub")({ Jobs, Nightly }) {}
 
 const hubSite = Route.make("hub").add(
-  Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+  Route.group("tree", { topLevel: true }).effect(Group.asRoutes(Hub)),
 );
 
 class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/runtime-pool-card") {}

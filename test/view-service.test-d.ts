@@ -3,6 +3,7 @@
  */
 import { expectTypeOf } from "vitest";
 import { Effect, Layer } from "effect";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Callout extends View.make<Callout, { readonly text: string }>()(
@@ -43,7 +44,7 @@ class Hello extends View.make<Hello, { readonly who: string }>()(
 
 expectTypeOf(Hello.layer).toMatchTypeOf<Layer.Layer<Hello>>();
 
-const Root = View.mount(Hello);
+const Root = View.stamp(Last.provide(Hello));
 expectTypeOf(Root).toMatchTypeOf<View.Component<{ readonly who: string }>>();
 
 class Open extends View.make<Open>()("test/view-service/Open") {
@@ -55,5 +56,5 @@ class Open extends View.make<Open>()("test/view-service/Open") {
     }),
   );
 }
-// @ts-expect-error open-R layer is not mountable
-View.mount(Open);
+// @ts-expect-error open-R layer is not fulfillable without requirements
+View.stamp(Last.provide(Open));

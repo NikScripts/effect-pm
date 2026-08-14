@@ -1,5 +1,5 @@
 /**
- * yield* Last.provide → Last.toLayer(Service, gen) → View.mount
+ * Last.provide — entry-point fulfill (Service / Effect → value).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
@@ -8,97 +8,49 @@ import { renderToString } from "react-dom/server";
 import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
-class ShellMeta extends Context.Service<
-  ShellMeta,
-  { readonly title: string }
->()("hyperlink-ts/test/last-provide.test/ShellMeta") {}
-
-class ModalMeta extends Context.Service<
-  ModalMeta,
-  { readonly title: string }
->()("hyperlink-ts/test/last-provide.test/ModalMeta") {}
-
-function* helloProvides() {
-  yield* Last.provide(ShellMeta, { title: "uDumb" });
+class Greeter extends Context.Service<Greeter, string>()(
+  "hyperlink-ts/test/last-provide.test/Greeter",
+) {
+  static layer = Layer.succeed(Greeter, "hello");
 }
 
-class Page extends View.make<Page>()("test/last-provide/Page") {
-  static layer = Layer.effect(
-    Page,
-    Effect.gen(function* () {
-      const meta = yield* ShellMeta;
-      return (_props: {}) =>
-        React.createElement(
-          "div",
-          null,
-          React.createElement("h1", null, meta.title),
-          React.createElement("p", null, "body"),
-        );
-    }),
-  ).pipe(Layer.provide(Last.toLayer(ShellMeta, helloProvides)));
-}
-
-describe("yield* Last.provide → Context.Service → View", () => {
-  it("deep provide + toLayer supplies yield* in another View", () => {
-    const App = View.mount(Page);
-    const html = renderToString(React.createElement(App));
-    expect(html).toContain("uDumb");
-    expect(html).toContain("body");
+describe("Last.provide", () => {
+  it("fulfills a Service with closed layer", () => {
+    expect(Last.provide(Greeter)).toBe("hello");
   });
 
-  it("last write wins across provide calls", () => {
-    function* winsProvides() {
-      yield* Last.provide(ShellMeta, { title: "first" });
-      yield* Last.provide(ShellMeta, { title: "second" });
-    }
-
-    class Show extends View.make<Show>()("test/last-provide/Show") {
+  it("fulfills a Service with requirements", () => {
+    class Open extends Context.Service<Open, string>()(
+      "hyperlink-ts/test/last-provide.test/Open",
+    ) {
       static layer = Layer.effect(
-        Show,
+        Open,
         Effect.gen(function* () {
-          const meta = yield* ShellMeta;
-          return (_props: {}) => React.createElement("span", null, meta.title);
+          return yield* Greeter;
         }),
-      ).pipe(Layer.provide(Last.toLayer(ShellMeta, winsProvides)));
-    }
-
-    const App = View.mount(Show);
-    expect(renderToString(React.createElement(App))).toContain("second");
-  });
-
-  it("two services keep separate titles", () => {
-    function* metaProvides() {
-      yield* Last.provide(ShellMeta, { title: "Shell" });
-      yield* Last.provide(ModalMeta, { title: "Modal" });
-    }
-
-    class Both extends View.make<Both>()("test/last-provide/Both") {
-      static layer = Layer.effect(
-        Both,
-        Effect.gen(function* () {
-          const shell = yield* ShellMeta;
-          const modal = yield* ModalMeta;
-          return (_props: {}) =>
-            React.createElement(
-              "div",
-              null,
-              React.createElement("span", null, shell.title),
-              React.createElement("span", null, modal.title),
-            );
-        }),
-      ).pipe(
-        Layer.provide(
-          Layer.mergeAll(
-            Last.toLayer(ShellMeta, metaProvides),
-            Last.toLayer(ModalMeta, metaProvides),
-          ),
-        ),
       );
     }
+    expect(Last.provide(Open, Greeter.layer)).toBe("hello");
+  });
 
-    const App = View.mount(Both);
-    const html = renderToString(React.createElement(App));
-    expect(html).toContain("Shell");
-    expect(html).toContain("Modal");
+  it("runs an Effect with R=never", () => {
+    expect(Last.provide(Effect.succeed(42))).toBe(42);
+  });
+
+  it("runs an Effect with requirements", () => {
+    const program = Effect.gen(function* () {
+      return yield* Greeter;
+    });
+    expect(Last.provide(program, Greeter.layer)).toBe("hello");
+  });
+
+  it("fulfills a View Service to a render fn", () => {
+    class Page extends View.make<Page>()("test/last-provide/Page") {
+      static layer = Layer.succeed(Page, (_props: {}) =>
+        React.createElement("h1", null, "body"),
+      );
+    }
+    const App = View.stamp(Last.provide(Page));
+    expect(renderToString(React.createElement(App))).toContain("body");
   });
 });

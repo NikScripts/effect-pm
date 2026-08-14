@@ -7,11 +7,12 @@
  * - **Mint:** {@link make} — Context slot; service shape is a {@link ViewFn}
  * - **Build:** `Layer.succeed` / `Layer.effect` + `Effect.gen`
  * - **Default Layer:** `static layer = Layer.succeed(This, impl)` (compose deps there)
- * - **Edge:** {@link mount}`(Tag)` — uses `Tag.layer` (`R` must be `never`)
- * - **Up:** {@link Last.provide} → {@link Last.toLayer}
+ * - **Edge:** {@link Last.provide}`(Tag)` → {@link ViewFn}; stamp with {@link stamp}
+ *   for a JSX-legal {@link Component} (`R` must be `never`)
+ * - **Page runtime:** {@link Last.provider}`(layer)` when Atom / router context is needed
  *
  * There is no freestanding View value you call as JSX. Always `yield*` a
- * minted view (or {@link mount} one at the app edge). Name is {@link make}
+ * minted view (or {@link Last.provide} one at the app edge). Name is {@link make}
  * (HttpApi-shaped), not `Service`.
  *
  * Prototype metadata: {@link annotations} / {@link getAnnotations}.
@@ -74,7 +75,8 @@ export type ViewFn<Props extends object = {}> = (
 
 /**
  * Fulfilled view — legal as a JSX component (`R` is `never`).
- * Produced by {@link mount}; Prefer {@link ViewFn} for Layer implementations.
+ * Produced by {@link stamp}`({@link Last.provide}(…))`. Prefer {@link ViewFn}
+ * for Layer implementations.
  *
  * @public
  */
@@ -88,7 +90,7 @@ export type Component<
 
 /**
  * Open requirements — **not** a JSX component. Prefer {@link Service} +
- * `Layer.effect` / `Effect.gen`, then {@link mount} at the edge.
+ * `Layer.effect` / `Effect.gen`, then {@link Last.provide} at the edge.
  *
  * Runtime value is still a render function; the type hides the call signature
  * so `<View />` is rejected while `R` is open.
@@ -159,7 +161,8 @@ export type ViewPropsOf<V> = V extends {
 
 /**
  * Brand a plain component fn as a fulfilled {@link Component} (type-level;
- * no runtime change). Used by {@link mount} and fallbacks.
+ * no runtime change). Pair with {@link Last.provide} at the edge:
+ * `View.stamp(Last.provide(Hello))`.
  *
  * @public
  */
@@ -176,70 +179,6 @@ export function stamp(
 ): Component<any> {
   return component as Component<any>;
 }
-
-/**
- * App edge: build a runtime from `service.layer`, resolve the service, render.
- * This is the only public path to a JSX-legal {@link Component}.
- *
- * Compose deps on `static layer` — do **not** pass a second Layer argument.
- * Parameter is structural (`{ layer }`) so Effect Unify on the Service class
- * does not block `View.mount(Hello)`.
- *
- * @example
- * ```ts
- * const App = View.mount(Hello)
- * // render <App who="nik" />
- * ```
- *
- * @public
- */
-export const mount: {
-  <
-    S extends {
-      readonly layer: Layer.Layer<any, any, never>;
-    },
-  >(
-    service: S,
-  ): Component<S extends { readonly Type: infer P extends object } ? P : {}>;
-} = ((service: {
-  readonly layer: Layer.Layer<any, any, never>;
-}) => {
-  const { layer } = service;
-  const Shell = Last.app(layer as Layer.Layer<any, any, never>);
-  const Mounted = (props: object): React.ReactElement | null =>
-    React.createElement(
-      Shell.Provider,
-      null,
-      React.createElement(ServiceRenderer, {
-        service: service as unknown as Context.Key<unknown, ViewFn<object>>,
-        props,
-      }),
-    );
-  return stamp(Mounted);
-}) as typeof mount;
-
-/** Resolve a View Service from the runtime and call it. @internal */
-const ServiceRenderer = (props: {
-  readonly service: Context.Key<unknown, ViewFn<object>>;
-  readonly props: object;
-}): React.ReactElement | null => {
-  const runtime = AtomReact.useRuntime();
-  const atom = React.useMemo(
-    () =>
-      runtime.atom(
-        props.service as unknown as Effect.Effect<ViewFn<object>>,
-      ),
-    [runtime, props.service],
-  );
-  const result = AtomReact.useAtomValue(atom);
-  if (AsyncResult.isSuccess(result)) {
-    return result.value(props.props);
-  }
-  if (AsyncResult.isFailure(result)) {
-    throw Cause.squash(result.cause);
-  }
-  return null;
-};
 
 /**
  * Turn an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
@@ -653,7 +592,7 @@ export const Prototype =
  *   () => <nav data-sidebar="default">Menu</nav>,
  * ) {}
  *
- * const App = View.mount(Hello)
+ * const App = View.stamp(Last.provide(Hello))
  * ```
  *
  * Prefer `pipe(layer, Layer.provide(…))` over `layer.pipe(…)`.

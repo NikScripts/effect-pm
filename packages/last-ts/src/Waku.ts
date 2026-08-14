@@ -30,7 +30,6 @@ export {
   layer as binding,
   setDefault,
   isWakuBinding,
-  router,
   Provider,
   useRouter,
   useHasRouter,

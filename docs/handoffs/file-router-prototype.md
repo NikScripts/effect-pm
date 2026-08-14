@@ -24,7 +24,7 @@ Disk uses `[param]`; Hyperlink `Route` keeps `:param`. Adapter translates.
 ## Compose API (dream)
 
 ```ts
-Route.group("docs").fromEffect(Router.fileSystem("./pages/docs", opts?))
+Route.group("docs").effect(Router.fileSystem("./pages/docs", opts?))
 Route.fileSystem("root", "/", { topLevel: true, dir: "./pages" })
 Route.fileRoot()                 // root + "/" + topLevel
 Route.fileRoot({ dir: "./pages" })

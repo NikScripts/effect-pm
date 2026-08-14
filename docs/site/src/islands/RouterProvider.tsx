@@ -1,16 +1,12 @@
 "use client";
 
-/** Mount Waku router binding via {@link Last.app} — children-only Provider. */
+/** Waku catalog Layer via {@link Last.provider} — children-only. */
 import * as React from "react";
-import { Layer } from "effect";
-import * as Waku from "hyperlink-ts/ui/Router/waku";
 import * as Last from "last-ts/Last";
-import { site } from "../lib/siteRoutes.js";
-import * as Router from "../ui/Router.js";
+import * as Waku from "last-ts/Waku";
+import { site, urls } from "../lib/siteRoutes.js";
 
-const Provider = Last.app(Layer.empty).pipe(
-  Waku.router(Router.waku(site)),
-).Provider;
+const Provider = Last.provider(Waku.fromApi(site, urls));
 
 export function RouterProvider(props: {
   readonly children: React.ReactNode;

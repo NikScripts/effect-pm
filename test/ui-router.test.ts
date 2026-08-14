@@ -22,7 +22,7 @@ class Nwsl extends Group.Service<Nwsl>("test/nav/Nwsl")({ HttpApi }) {}
 class Hub extends Group.Service<Hub>("test/nav/Hub")({ Nwsl }) {}
 
 const hubSite = Route.make("hub").add(
-  Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+  Route.group("tree", { topLevel: true }).effect(Group.asRoutes(Hub)),
 );
 
 const run = <A>(
@@ -176,7 +176,7 @@ describe("Router.memory (Route.Api)", () => {
 describe("Group.asRoutes + fromEffect", () => {
   it("emits leaf-only groups (no nested route groups)", () => {
     const site = Route.make("hub").add(
-      Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+      Route.group("tree", { topLevel: true }).effect(Group.asRoutes(Hub)),
     );
     // fromEffect defers — materialize via router install (R = never)
     const router = Router.unsafeService(site, "Memory");

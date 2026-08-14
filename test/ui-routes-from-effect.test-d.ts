@@ -14,7 +14,7 @@ class Hub extends Group.Service<Hub>("test/fromEffect/Hub")({ Nwsl }) {}
 
 const site = Route.make("site").add(
   Route.get("home", "/home"),
-  Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+  Route.group("hub", { topLevel: true }).effect(Group.asRoutes(Hub)),
 );
 
 const urls = Route.urlBuilder(site);

@@ -34,7 +34,7 @@ class Nightly extends Daemon.Service<Nightly>()("app/observe-use/Nightly", {
 class Hub extends Group.Service<Hub>("app/observe-use/Hub")({ Jobs, Nightly }) {}
 
 const hubSite = Route.make("hub").add(
-  Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+  Route.group("tree", { topLevel: true }).effect(Group.asRoutes(Hub)),
 );
 
 class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/observe-use-pool-card") {}

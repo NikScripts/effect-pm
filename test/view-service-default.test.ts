@@ -5,6 +5,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Sidebar extends View.make<Sidebar>()(
@@ -30,7 +31,7 @@ class Shell extends View.make<Shell>()("test/view-default/Shell") {
 
 describe("View.make default (Reference)", () => {
   it("yields the default component with no Layer for the slot", () => {
-    const App = View.mount(Shell);
+    const App = View.stamp(Last.provide(Shell));
     const html = renderToString(React.createElement(App));
     expect(html).toContain("data-sidebar=\"default\"");
     expect(html).toContain("Menu");
@@ -66,7 +67,7 @@ describe("View.make default (Reference)", () => {
       );
     }
 
-    const App = View.mount(SettingsShell);
+    const App = View.stamp(Last.provide(SettingsShell));
     const html = renderToString(React.createElement(App));
     expect(html).toContain("data-sidebar=\"settings\"");
     expect(html).toContain("Settings nav");
@@ -104,7 +105,7 @@ describe("View.make default (Reference)", () => {
       );
     }
 
-    const App = View.mount(ThemedShell);
+    const App = View.stamp(Last.provide(ThemedShell));
     const html = renderToString(React.createElement(App));
     expect(html).toContain("data-sidebar=\"theme\"");
     expect(html).toContain("Themed");

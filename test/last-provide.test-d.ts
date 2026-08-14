@@ -1,45 +1,44 @@
 /**
- * yield* Last.provide → Last.toLayer(Service, gen)
+ * Last.provide — entry-point fulfill type surface.
  */
 import { expectTypeOf } from "vitest";
-import { Context, Layer } from "effect";
+import { Context, Effect, Layer } from "effect";
 import * as Last from "last-ts/Last";
+import * as View from "last-ts/View";
 
-class ShellMeta extends Context.Service<
-  ShellMeta,
-  { readonly title: string; readonly crumb?: string }
->()("hyperlink-ts/test/last-provide.test-d/ShellMeta") {}
-
-class ModalMeta extends Context.Service<
-  ModalMeta,
-  { readonly title: string }
->()("hyperlink-ts/test/last-provide.test-d/ModalMeta") {}
-
-function* helloProvides() {
-  yield* Last.provide(ShellMeta, { title: "uDumb" });
+class Greeter extends Context.Service<Greeter, string>()(
+  "hyperlink-ts/test/last-provide.test-d/Greeter",
+) {
+  static layer = Layer.succeed(Greeter, "hello");
 }
 
-const shellLayer = Last.toLayer(ShellMeta, helloProvides);
-expectTypeOf(shellLayer).toEqualTypeOf<Layer.Layer<ShellMeta>>();
+expectTypeOf(Last.provide(Greeter)).toEqualTypeOf<string>();
+expectTypeOf(Last.provide(Effect.succeed(1))).toEqualTypeOf<number>();
 
-function* emptyProvides() {
-  yield* Last.provide(ShellMeta, {});
+class Open extends Context.Service<Open, string>()(
+  "hyperlink-ts/test/last-provide.test-d/Open",
+) {
+  static layer = Layer.effect(
+    Open,
+    Effect.gen(function* () {
+      return yield* Greeter;
+    }),
+  );
 }
 
-// @ts-expect-error incomplete provide is not Layer<ShellMeta>
-const _incomplete: Layer.Layer<ShellMeta> = Last.toLayer(
-  ShellMeta,
-  emptyProvides,
-);
+expectTypeOf(Last.provide(Open, Greeter.layer)).toEqualTypeOf<string>();
 
-function* bothProvides() {
-  yield* Last.provide(ShellMeta, { title: "Shell" });
-  yield* Last.provide(ModalMeta, { title: "Modal" });
+// @ts-expect-error open-R Service needs requirements
+Last.provide(Open);
+
+class Hello extends View.make<Hello, { readonly who: string }>()(
+  "test/last-provide.test-d/Hello",
+) {
+  static layer = Layer.succeed(Hello, ({ who }) => {
+    void who;
+    return null;
+  });
 }
 
-expectTypeOf(Last.toLayer(ShellMeta, bothProvides)).toEqualTypeOf<
-  Layer.Layer<ShellMeta>
->();
-expectTypeOf(Last.toLayer(ModalMeta, bothProvides)).toEqualTypeOf<
-  Layer.Layer<ModalMeta>
->();
+const Root = View.stamp(Last.provide(Hello));
+expectTypeOf(Root).toMatchTypeOf<View.Component<{ readonly who: string }>>();

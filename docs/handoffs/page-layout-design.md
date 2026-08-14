@@ -32,7 +32,7 @@
 | **Provide (upward)** | Register a **value** into a bag (not a DOM title node). Last wins. |
 | **Requirement** | R-style debt (same idea as View Prototype) — keys the layout needs. |
 | **Stamp** | Older note — runtime metadata on the default export (`stampOf`) for a future host adapter. **Not** how locked `Page.make` / `Page.static` work today; see “createPages provenance” below. |
-| **View** | Separate: DI components + `View.gen` / `fromEffect`. Pages *may* use Views inside; Page ≠ View. |
+| **View** | Separate: DI components + `View.gen` / `effect`. Pages *may* use Views inside; Page ≠ View. |
 | **Views.Page** | Hyperlink dashboard **size** — never file-router Page. |
 
 ### Upward values (clarified)
@@ -60,7 +60,7 @@ const Book = Layout.make<{ readonly title: string }>()(
 // Or Effect-built chrome
 const BookFx = Layout.make<{ readonly title: string }>()(
   "app/layout/book",
-  ({ Outlet }) => Page.fromEffect(myLayoutEffect(Outlet)), // or View.fromEffect
+  ({ Outlet }) => Page.effect(myLayoutEffect(Outlet)), // or View.fromEffect
 )
 
 // DI when wanted — separate constructor

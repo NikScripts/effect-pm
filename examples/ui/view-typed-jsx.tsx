@@ -1,9 +1,10 @@
 /**
- * Typed Views — Service + Layer.succeed/effect + View.mount(Service).
+ * Typed Views — Service + Layer.succeed/effect + View.stamp(Last.provide(Service)).
  *
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
  */
 import { Effect, Layer } from "effect";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Greeter extends View.make<Greeter, { readonly name: string }>()(
@@ -50,8 +51,8 @@ class AppRoot extends View.make<AppRoot>()(
   ).pipe(Layer.provide(Hello.layer));
 }
 
-/** Yield* Services; mount the root Service. */
-export const App = View.mount(AppRoot);
+/** Yield* Services; fulfill the root Service at the edge. */
+export const App = View.stamp(Last.provide(AppRoot));
 
 App;
 // ^?

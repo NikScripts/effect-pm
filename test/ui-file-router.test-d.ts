@@ -17,7 +17,7 @@ expectTypeOf(urls.index()).toEqualTypeOf<string>();
 expectTypeOf(urls.docs_chapter("routing")).toEqualTypeOf<string>();
 
 const viaRouter = Route.make("fr2").add(
-  Route.group("root", { topLevel: true }).fromEffect(Router.fileSystem(table)),
+  Route.group("root", { topLevel: true }).effect(Router.fileSystem(table)),
 );
 expectTypeOf(Route.urlBuilder(viaRouter).docs_chapter("x")).toEqualTypeOf<
   string

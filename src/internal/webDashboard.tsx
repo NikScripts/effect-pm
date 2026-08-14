@@ -361,7 +361,7 @@ export const layer = DashboardViews.layer.pipe(
 
 const routesFor = (group: GroupNode) =>
   Route.make("dashboard").add(
-    Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(group)),
+    Route.group("hub", { topLevel: true }).effect(Group.asRoutes(group)),
   );
 
 /**

@@ -109,7 +109,7 @@ describe("Route.fileRoot / Router.fileSystem", () => {
     expect(urls.api_pkg("effect")).toBe("/api/effect");
 
     const fromRouter = Route.make("fr2").add(
-      Route.group("root", { topLevel: true }).fromEffect(
+      Route.group("root", { topLevel: true }).effect(
         Router.fileSystem(table),
       ),
     );

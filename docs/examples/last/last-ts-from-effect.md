@@ -15,8 +15,8 @@
 
 ## Value
 
-A **`Catalog` Context service class** owns URL grammar. `group.fromEffect` /
-`groupsFromEffect` read it into one `Router.make` catalog. Swap `layerAcme` vs
+A **`Catalog` Context service class** owns URL grammar. `group.effect` /
+`groupsEffect` read it into one `Router.make` catalog. Swap `layerAcme` vs
 `layerGlobex` — route table changes. `Catalog.Urls<Spec>` keeps links typed
 (narrow locales/versions, conditional branches, nested `docs.api.symbol`).
 

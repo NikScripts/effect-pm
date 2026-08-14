@@ -112,7 +112,7 @@ export const makeService = <A extends ApiConstraint>(
   api: A,
   engine: "Memory" | "History",
 ): Service<A> => {
-  // Materialize deferred fromEffect / groupsFromEffect when R = never.
+  // Materialize deferred effect / groupsEffect when R = never.
   // Context-backed catalogs are already resolved via RouterBuilder.Catalog.
   const concrete = materializeSync(api);
   const urls = Route.urlBuilder(concrete);

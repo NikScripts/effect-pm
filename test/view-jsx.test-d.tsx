@@ -1,10 +1,11 @@
 /**
- * View compose — Service + Layer; mount(Service) at the edge.
+ * View compose — Service + Layer; Last.provide(Service) at the edge.
  */
 import { expectTypeOf } from "vitest";
 import { Context, Effect, Layer } from "effect";
 import type * as React from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 type NotAny<T> = 0 extends 1 & T ? false : true;
@@ -55,7 +56,7 @@ class Both extends View.make<Both>()("test/jsx/Both") {
 expectTypeOf(Both.layer).toMatchTypeOf<Layer.Layer<Both>>();
 type _BothNotAny = Expect<NotAny<typeof Both.layer>>;
 
-const App = View.mount(Child);
+const App = View.stamp(Last.provide(Child));
 expectTypeOf(App).toMatchTypeOf<View.Component>();
 const _okAppJsx = <App />;
 
@@ -72,7 +73,7 @@ class Wrap extends View.make<Wrap>()("test/jsx/Wrap") {
     }),
   ).pipe(Layer.provide(Child.layer));
 }
-const Wrapped = View.mount(Wrap);
+const Wrapped = View.stamp(Last.provide(Wrap));
 expectTypeOf(Wrapped).toMatchTypeOf<View.Component>();
 
 const _okDialog = <Dialog open onOpenChange={(_open: boolean) => undefined} />;
@@ -86,7 +87,7 @@ const _badPlain = <Plain />;
 class Pure extends View.make<Pure>()("test/jsx/Pure") {
   static layer = Layer.succeed(Pure, (_props: {}) => <span>ok</span>);
 }
-const PureApp = View.mount(Pure);
+const PureApp = View.stamp(Last.provide(Pure));
 const _okPure = <PureApp />;
 
 void Effect.void;

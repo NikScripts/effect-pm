@@ -7,6 +7,7 @@
  */
 import * as React from "react";
 import { Effect, Layer } from "effect";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 import type { NavGroup } from "../lib/docs-content.js";
 
@@ -110,7 +111,7 @@ class StandardsShell extends View.make<StandardsShell, BookSidebarProps>()(
 }
 
 /** Main docs book — default {@link BookSidebar}. */
-export const MainBook = View.mount(BookShell);
+export const MainBook = View.stamp(Last.provide(BookShell));
 
 /** Standards book — Sidebar overridden for this tree. */
-export const StandardsBook = View.mount(StandardsShell);
+export const StandardsBook = View.stamp(Last.provide(StandardsShell));

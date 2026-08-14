@@ -6,6 +6,7 @@
  */
 import * as React from "react";
 import { Effect, Layer, pipe } from "effect";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Sidebar extends View.make<Sidebar>()(
@@ -60,8 +61,8 @@ class SettingsShell extends View.make<SettingsShell>()(
   );
 }
 
-const DefaultApp = View.mount(Shell);
-const SettingsApp = View.mount(SettingsShell);
+const DefaultApp = View.stamp(Last.provide(Shell));
+const SettingsApp = View.stamp(Last.provide(SettingsShell));
 
 export function ViewDemo(): React.ReactElement {
   const [mode, setMode] = React.useState<"default" | "settings">("default");

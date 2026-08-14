@@ -87,11 +87,11 @@ export const isGroup = (
 
 /**
  * Turn a Group tree into a **typed** Effect of {@link ./ui/Route} destinations
- * (flat leaf-only groups). Compose with `Route.group(…).fromEffect(…)`:
+ * (flat leaf-only groups). Compose with `Route.group(…).effect(…)`:
  *
  * ```ts
  * const site = Route.make("site").add(
- *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *   Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
  * )
  * Route.urlBuilder(site).Nwsl.HttpApi()
  * Router.unsafeService(site, "Memory").to((u) => u.nodeHealth("a"))

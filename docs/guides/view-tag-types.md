@@ -12,7 +12,7 @@ size chrome + bind live on `hyperlink-ts/ui/Views`.
 
 Plain (no Tag) Effect → component under `AtomReact.RuntimeProvider` (no runtime
 arg). Prefer **`View.gen(function* () { …; return (props) => … })`**, or
-`Layer.succeed(fn)` / `View.fromEffect(fx)`. Put `"use client"` on the app module
+`Layer.succeed(fn)` / `View.effect(fx)`. Put `"use client"` on the app module
 that exports the result.
 
 Prototype-managed metadata is a single **annotations** bag, stamped under a

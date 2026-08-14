@@ -1,8 +1,9 @@
 /**
- * Runtime mirror of the Service + Layer + View.mount Twoslash demo.
+ * Runtime mirror of the Service + Layer + Last.provide Twoslash demo.
  */
 import * as React from "react";
 import { Effect, Layer } from "effect";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Greeter extends View.make<Greeter, { readonly name: string }>()(
@@ -45,4 +46,4 @@ class AppRoot extends View.make<AppRoot>()("docs/site/view-typed-jsx/App") {
 }
 
 /** Mounted app — JSX-legal. */
-export const App = View.mount(AppRoot);
+export const App = View.stamp(Last.provide(AppRoot));

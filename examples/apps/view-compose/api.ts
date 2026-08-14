@@ -11,7 +11,7 @@ import type { Layer } from "effect";
  *
  * ```ts
  * const site = Route.make("site").add(
- *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *   Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
  * )
  * Router.history(site) // never Router.history(ServicesHub)
  * ```

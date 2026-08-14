@@ -30,8 +30,8 @@ const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
-if (!loaded.includes("View.mount") || !loaded.includes("Layer.effect")) {
-  throw new Error("demo must include View.mount and Layer.effect");
+if (!loaded.includes("Last.provide") || !loaded.includes("Layer.effect")) {
+  throw new Error("demo must include Last.provide and Layer.effect");
 }
 if (loaded.includes("View.gen(") || loaded.includes("View.succeed(")) {
   throw new Error("View.gen / View.succeed masks are removed — use Effect/Layer");

@@ -15,7 +15,7 @@ server** (`docs/last/site`) — not Hyperlink `docs/site`.
 | `last-ts/vite` `fileRouter` → `paths.gen.ts` | Typed file path table |
 | `Router.make` + `Route.get` | Typed catalog / `urls.*` |
 | `Last.provider(…)` + `last-ts/Waku` | Soft-nav provider |
-| `View.make` + `View.mount` | Client islands |
+| `View.make` + `Last.provide` | Client islands |
 
 Apps **never** `import` from `waku`. Host CLI filenames (`waku.config.ts`,
 `waku.server.tsx`) may remain; imports are `last-ts/config` / `last-ts/server`.
@@ -94,7 +94,7 @@ Waku is only the location Layer (`Waku.layer` / `Waku.fromApi`) — not a Link A
 
 ```ts
 class Sidebar extends View.make<Sidebar>()("app/Sidebar", () => <nav />) {}
-const App = View.mount(Shell)
+const App = View.stamp(Last.provide(Shell))
 // Prefer pipe(layer, Layer.provide(…)) over layer.pipe(…)
 ```
 

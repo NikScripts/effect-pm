@@ -83,7 +83,7 @@ const Parent = (): React.ReactElement => {
 };
 
 /** Layer (+ registry/runtime) baked — children only. */
-const Provider = Last.app(titleLayer).Provider;
+const Provider = Last.provider(titleLayer);
 
 export const App = (): React.ReactElement => (
   <Provider>

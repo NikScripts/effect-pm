@@ -68,7 +68,7 @@ GroupNav.up(ServicesHub, router)
 router.back()
 // Route catalog only — Group via asRoutes + fromEffect
 Router.history(Route.make("dash").add(
-  Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+  Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
 ))
 ```
 
@@ -124,7 +124,7 @@ Router may still say `openLogs(tag)` / `openSchedule(tag)` — that means “sho
 
 | Case | API |
 |---|---|
-| Web shell | `Router.history(site)` with `fromEffect(Group.asRoutes(group))` |
+| Web shell | `Router.history(site)` with `effect(Group.asRoutes(group))` |
 | Tests / embed / TUI | `Router.memory(site)` same pattern |
 
 ### J. Detail peel
@@ -198,7 +198,7 @@ const ui = View.compose({
   }),
   router: Router.history(
     Route.make("dash").add(
-      Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+      Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
     ),
   ),
   group: ServicesHub,

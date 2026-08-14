@@ -40,7 +40,7 @@ Escape hatch (same stack the one-liner uses):
 ```tsx
 import * as Views from "hyperlink-ts/ui/Views"
 const site = Route.make("dashboard").add(
-  Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+  Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
 )
 import * as Dashboard from "hyperlink-ts/web/Dashboard"
 const views = Layer.mergeAll(DashboardViews.layer, appViews).pipe(

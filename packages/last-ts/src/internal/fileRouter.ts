@@ -106,8 +106,8 @@ export const routeFileSystem = <
 ) => {
   const effect = fileSystem(entries);
   return options?.topLevel === true
-    ? catalog.group(id, { topLevel: true }).fromEffect(effect)
-    : catalog.group(id).fromEffect(effect);
+    ? catalog.group(id, { topLevel: true }).effect(effect)
+    : catalog.group(id).effect(effect);
 };
 
 /**

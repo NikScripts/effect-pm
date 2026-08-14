@@ -107,7 +107,7 @@ export const flatten: typeof catalog.flatten = catalog.flatten;
 export const reflect: typeof catalog.reflect = catalog.reflect;
 
 /**
- * Effect of endpoints from a file-router table (for `fromEffect` / tooling).
+ * Effect of endpoints from a file-router table (for `effect` / tooling).
  * Prefer {@link layerDestinations} with `group.from(Service)`.
  *
  * @public

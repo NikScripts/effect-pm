@@ -3,6 +3,7 @@
  */
 import * as React from "react";
 import { Effect, Layer } from "effect";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Sidebar extends View.make<Sidebar>()(
@@ -75,7 +76,7 @@ class SettingsShell extends View.make<SettingsShell>()(
 }
 
 /** Default sidebar (Reference default). */
-export const DefaultApp = View.mount(Shell);
+export const DefaultApp = View.stamp(Last.provide(Shell));
 
 /** Nested settings chrome — Sidebar overridden for this tree. */
-export const SettingsApp = View.mount(SettingsShell);
+export const SettingsApp = View.stamp(Last.provide(SettingsShell));

@@ -1,5 +1,5 @@
 /**
- * Context-backed `group.fromEffect` + `groupsFromEffect` — destinations only
+ * Context-backed `group.effect` + `groupsEffect` — destinations only
  * exist after Layer provides domain services (not static `.add`).
  */
 import { describe, expect, it } from "@effect/vitest";
@@ -28,7 +28,7 @@ class Modules extends Context.Service<
 
 const pluginsGroup = Route.group("plugins")
   .prefix("/x")
-  .fromEffect(
+  .effect(
     Effect.gen(function* () {
       const { items } = yield* Plugins;
       return items.map((p) =>
@@ -43,7 +43,7 @@ const pluginsGroup = Route.group("plugins")
 
 const Site = Router.make("from-effect-test")
   .add(Route.get("home", "/"), pluginsGroup)
-  .groupsFromEffect(
+  .groupsEffect(
     Effect.gen(function* () {
       const { admin } = yield* Modules;
       if (!admin) return [];
@@ -85,7 +85,7 @@ const app = (domain: Layer.Layer<Plugins | Modules>) =>
     ),
   );
 
-describe("group.fromEffect + groupsFromEffect (Context)", () => {
+describe("group.effect + groupsEffect (Context)", () => {
   it("materializes partner endpoints from the Layer-provided service", async () => {
     const domain = Layer.mergeAll(
       Layer.succeed(Plugins, {
@@ -114,7 +114,7 @@ describe("group.fromEffect + groupsFromEffect (Context)", () => {
     }
   });
 
-  it("groupsFromEffect adds a top-level group only when the flag is on", async () => {
+  it("groupsEffect adds a top-level group only when the flag is on", async () => {
     const domain = Layer.mergeAll(
       Layer.succeed(Plugins, { items: [{ id: "a", path: "/a" }] }),
       Layer.succeed(Modules, { admin: true }),
@@ -136,7 +136,7 @@ describe("group.fromEffect + groupsFromEffect (Context)", () => {
 
   it("materializes R=never fromEffect for sync urlBuilder / match", () => {
     const site = Route.make("sync").add(
-      Route.group("sync", { topLevel: true }).fromEffect(
+      Route.group("sync", { topLevel: true }).effect(
         Effect.succeed([Route.get("one", "/one"), Route.get("two", "/two")]),
       ),
     );

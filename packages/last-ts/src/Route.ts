@@ -21,7 +21,7 @@
  *     Route.params(Schema.Struct({ id: Schema.String })),
  *     Route.handle(({ params }) => <User id={params.id} />),
  *   ),
- *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *   Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
  * )
  *
  * Route.urlBuilder(site).home()
@@ -240,7 +240,7 @@ export const compilePath: typeof endpoint.compilePath = endpoint.compilePath;
 
 /**
  * Nested group of destinations — `HttpApiGroup` analogue (+ nested groups).
- * `R` = requirements from `from` / `fromEffect`.
+ * `R` = requirements from `from` / `effect`.
  *
  * @public
  */
@@ -252,7 +252,7 @@ export type Group<
   R = never,
 > = catalog.Group<Id, Routes, Groups, TopLevel, R>;
 
-/** Erased group constraint (nested catalogs / `fromEffect`). @public */
+/** Erased group constraint (nested catalogs / `effect`). @public */
 export type GroupTop = catalog.GroupTop;
 
 /** Erased catalog constraint. @public */
@@ -262,7 +262,7 @@ export type ApiConstraint = catalog.ApiConstraint;
  * Named group (`HttpApiGroup.make`). Pass `topLevel: true` so child methods
  * flatten onto the parent URL builder.
  *
- * `group.fromEffect(Effect.gen(…))` always defers; destinations + `R` surface
+ * `group.effect(Effect.gen(…))` always defers; destinations + `R` surface
  * on {@link ./RouterBuilder.layer}. Item types stay for {@link urlBuilder}.
  *
  * @public
@@ -278,7 +278,7 @@ export const isGroup: (u: unknown) => u is catalog.GroupTop = catalog.isGroup;
 
 /**
  * Route catalog — `HttpApi` analogue. Generics preserved through `.add`.
- * `R` = requirements (`fromEffect` / `groupsFromEffect` / `from`).
+ * `R` = requirements (`effect` / `groupsEffect` / `from`).
  *
  * @public
  */
@@ -292,7 +292,7 @@ export type Api<
 export declare namespace Api {
   /** Requirements for a catalog (`RouterBuilder.layer` `R`). */
   export type Context<A> = catalog.Api.Context<A>;
-  /** Groups from {@link catalog.Api.groupsFromEffect} only. */
+  /** Groups from {@link catalog.Api.groupsEffect} only. */
   export type DeferredGroups<A> = catalog.Api.DeferredGroups<A>;
 }
 

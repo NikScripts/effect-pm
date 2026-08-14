@@ -215,7 +215,7 @@ const registerHandler = (
   identifier: string,
   handler: unknown,
 ): Handlers<any, any> => {
-  // `group.from` / `fromEffect` defer destinations until RouterBuilder.layer —
+  // `group.from` / `effect` defer destinations until RouterBuilder.layer —
   // skip the static route-map check (HttpApi has no deferred endpoints).
   const deferred = catalog.hasDeferredDestinations(self.group);
   if (!deferred && !Object.hasOwn(self.group.routes, identifier)) {
@@ -469,7 +469,7 @@ export const group = <
 
 /**
  * Register catalog; requires every group Layer (`HttpApiBuilder.layer`).
- * Resolves `group.from` / `fromEffect` / `groupsFromEffect`, then provides
+ * Resolves `group.from` / `effect` / `groupsEffect`, then provides
  * {@link Catalog} + {@link Registry}.
  */
 export const layer = <

@@ -1,7 +1,7 @@
 /**
  * @module examples/last/from-effect/Catalog
  *
- * **Value of `fromEffect`:** one Router catalog; a {@link Catalog} service
+ * **Value of `effect`:** one Router catalog; a {@link Catalog} service
  * class owns URL grammar (params, query, which branches exist). Swap the Layer
  * — Acme storefront vs Globex docs — without rewriting `.add(Route.get…)`.
  * App code links through {@link Catalog.Urls} so wrong locale / arity / missing
@@ -157,7 +157,7 @@ const globexDocs = [
 // Router catalog — groups FROM Catalog Effect (not Effect→Router)
 // =============================================================================
 
-const content = Route.group("content").fromEffect(
+const content = Route.group("content").effect(
   Effect.gen(function* () {
     const catalog = yield* Catalog;
     return catalog._tag === "Storefront" ? acmeContent : globexContent;
@@ -166,7 +166,7 @@ const content = Route.group("content").fromEffect(
 
 export const Site = Router.make("catalog-from-effect")
   .add(Route.get("home", "/"), content)
-  .groupsFromEffect(
+  .groupsEffect(
     Effect.gen(function* () {
       const catalog = yield* Catalog;
       if (catalog._tag !== "DocsPortal") return [] as const;

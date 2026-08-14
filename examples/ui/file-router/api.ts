@@ -6,7 +6,7 @@
  * Dream compose (not wired into package exports yet):
  *
  * ```ts
- * Route.group("docs").fromEffect(Router.fileSystem("./pages/docs"))
+ * Route.group("docs").effect(Router.fileSystem("./pages/docs"))
  * Route.fileSystem("root", "/", { topLevel: true, dir: "./pages" })
  * Route.fileRoot()                    // ≡ fileSystem("root", "/", { topLevel: true })
  * Route.fileRoot({ dir: "./pages" })
@@ -105,15 +105,15 @@ export const routeFileSystem = <const Id extends string>(
   const topLevel = options?.topLevel === true;
   const dir = options?.dir ?? "./pages";
   return topLevel
-    ? Route.group(id, { topLevel: true }).fromEffect(fileSystem(dir, options))
-    : Route.group(id).fromEffect(fileSystem(dir, options));
+    ? Route.group(id, { topLevel: true }).effect(fileSystem(dir, options))
+    : Route.group(id).effect(fileSystem(dir, options));
 };
 
 /**
  * `Route.fileRoot` — the common triple: id `"root"`, base `"/"`, `topLevel: true`.
  */
 export const fileRoot = (options?: FileRootOptions) =>
-  Route.group("root", { topLevel: true }).fromEffect(
+  Route.group("root", { topLevel: true }).effect(
     fileSystem(options?.dir ?? "./pages", { ...options, topLevel: true }),
   );
 
@@ -122,7 +122,7 @@ export const fileRoot = (options?: FileRootOptions) =>
  *
  * ```ts
  * Route.make("app").add(Route.fileRoot({ dir: "./pages" }))
- * // or: Route.group("docs").fromEffect(Router.fileSystem("./pages/docs"))
+ * // or: Route.group("docs").effect(Router.fileSystem("./pages/docs"))
  * ```
  */
 export const protoSite = Route.make("fileRouterProto").add(fileRoot());

@@ -1,5 +1,5 @@
 /**
- * Brand shared by {@link ../Group.asRoutes} and {@link ./uiRoutes} `fromEffect`
+ * Brand shared by {@link ../Group.asRoutes} and {@link ./uiRoutes} `effect`
  * (kept tiny to avoid Group ↔ Route import cycles).
  */
 import type * as Effect from "effect/Effect";
@@ -21,7 +21,7 @@ export type AsRoutesBrand = {
 
 /**
  * Effect of route destinations, branded with the source Group and phantom
- * {@link AsRoutesItems} so {@link ./uiRoutes} `fromEffect` preserves UrlBuilder types.
+ * {@link AsRoutesItems} so {@link ./uiRoutes} `effect` preserves UrlBuilder types.
  */
 export type AsRoutesEffect<Items = never> = Effect.Effect<
   ReadonlyArray<unknown>,

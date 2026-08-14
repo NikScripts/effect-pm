@@ -2,4 +2,4 @@
 "last-ts": minor
 ---
 
-`Last.app(layer)` composes an Effect Layer (and optional `Last.router` / Waku `router`) into a single children-only React `Provider` — no `runtime` / `value` props at the call site.
+`Last.provider(layer)` (and optional `Last.context` class) builds a children-only React Provider — Atom runtime + optional router mount. Prefer this over deleted `Last.app` / `toProvider`.

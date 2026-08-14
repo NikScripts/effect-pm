@@ -1,5 +1,5 @@
 /**
- * Re-export of last-ts asRoutes brand — Group.asRoutes + group.fromEffect share it.
+ * Re-export of last-ts asRoutes brand — Group.asRoutes + group.effect share it.
  */
 export {
   AsRoutesTypeId,

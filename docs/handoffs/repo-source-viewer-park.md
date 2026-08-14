@@ -32,7 +32,7 @@ Router.group("repo").add(
 )
 
 // fromEffect sketch — allowlisted roots → typed urls or open splat + runtime check
-Router.group("repo").fromEffect(RepoFiles.fromRoots([
+Router.group("repo").effect(RepoFiles.fromRoots([
   "packages/last-ts/src",
   "src",
   "examples/last",
@@ -47,7 +47,7 @@ Page body (PoC): load file text → one Twoslash fence with `// @filename: <rel>
 |----------------|-----------|
 | `{.twoslash include="examples/…"}` | Proof that **real files are SSOT** for typed fences (`prepareExampleForTwoslash` + `@filename`) |
 | `fileRouter` `[...name]` → `*name` | Same splat shape for “rest of path including `/` and `.ts`” |
-| `group.fromEffect` | Enumerate / constrain the file set (roots, extensions) without hand-listing every `.ts` |
+| `group.effect` | Enumerate / constrain the file set (roots, extensions) without hand-listing every `.ts` |
 | Docs site Shiki/Twoslash pipeline | Render path already exists; widen the include glob beyond `examples/` |
 
 **Not** the same as today’s file-router product: file-router emits a **path table for app pages**. This idea is **source tree → one parameterized doc route**. Same *disk grammar instincts*; different job.
@@ -91,10 +91,10 @@ Docgen already touches most of these files for API reference (symbols, `file:lin
 
 Do not block the route on “every `Last.ts` hover is perfect.” Prefer fast colored source + links into `/api/…` over a cold Twoslash on click.
 
-### `fromEffect` vs hand `Route.get`
+### `effect` vs hand `Route.get`
 
 - **Hand route + runtime allowlist** — fastest PoC (`*path: string`, validate on handle).  
-- **`fromEffect` catalog of known files** — better typed `urls.repo.file("packages/last-ts/src/Last.ts")` and closed unions; closer to “file router of the library.” Worth it once PoC feels good.
+- **`effect` catalog of known files** — better typed `urls.repo.file("packages/last-ts/src/Last.ts")` and closed unions; closer to “file router of the library.” Worth it once PoC feels good.
 
 `Route.fileRoot` / page `paths.gen` stay for **app pages**; don’t overload them to mean “browse `packages/`.”
 

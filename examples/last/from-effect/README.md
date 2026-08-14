@@ -1,4 +1,4 @@
-# Catalog class → `fromEffect` routes
+# Catalog class → `effect` routes
 
 **Run:** `pnpm run example:last-from-effect`
 
@@ -18,7 +18,7 @@ compile error.
 ```ts
 import { Catalog, Site, layerAcme, type AcmeUrls } from "./Catalog";
 
-// fromEffect / groupsFromEffect read Catalog inside Site
+// fromEffect / groupsEffect read Catalog inside Site
 declare const urls: AcmeUrls;
 urls.content.variant("sku", "red", { query: { ref: "grid" } });
 // urls.docs — compile error (Acme has no docs)

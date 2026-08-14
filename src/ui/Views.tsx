@@ -714,7 +714,7 @@ const resolveComposeRouter = (
  *   group: ServicesHub,
  *   router: Router.history(
  *     Route.make("dash").add(
- *       Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *       Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
  *     ),
  *   ),
  * })

@@ -4,7 +4,7 @@
  *
  * Runtime emits **flat** leaf-only groups (nested Group nodes → sibling groups
  * with full path prefixes). Type-level {@link MembersRouteLikes} keeps the
- * UrlBuilder surface for `fromEffect(Group.asRoutes(hub))`.
+ * UrlBuilder surface for `effect(Group.asRoutes(hub))`.
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -178,10 +178,10 @@ export const routesOf = (
 
 /**
  * Effect that yields Route destinations for a Group tree — **typed** for
- * `Route.group(…).fromEffect(…)` / UrlBuilder.
+ * `Route.group(…).effect(…)` / UrlBuilder.
  *
  * ```ts
- * Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub))
+ * Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub))
  * // urls.Nwsl.HttpApi(), urls.nodeHealth(nodeId), …
  * ```
  */

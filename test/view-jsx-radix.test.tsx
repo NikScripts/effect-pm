@@ -6,6 +6,7 @@ import { Context, Effect, Layer } from "effect";
 import type * as React from "react";
 import { Dialog as DialogPrimitive, Label } from "radix-ui";
 import { renderToString } from "react-dom/server";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Greeter extends Context.Service<Greeter, string>()("test/jsx-rt/Greeter") {}
@@ -41,7 +42,7 @@ class Page extends View.make<Page>()("test/jsx-rt/Page") {
 
 describe("View.jsx + Radix", () => {
   it("renders under Radix Dialog Root + Label (SSR-safe)", () => {
-    const App = View.mount(Page);
+    const App = View.stamp(Last.provide(Page));
     const html = renderToString(<App />);
     expect(html).toContain("nik");
     expect(html).toContain("Hello");
@@ -60,7 +61,7 @@ describe("View.jsx + Radix", () => {
         }),
       );
     }
-    const App = View.mount(Empty);
+    const App = View.stamp(Last.provide(Empty));
     expect(renderToString(<App />)).toBe("");
   });
 
@@ -85,7 +86,7 @@ describe("View.jsx + Radix", () => {
         }),
       ).pipe(Layer.provide(Outside.layer));
     }
-    const App = View.mount(Wrap);
+    const App = View.stamp(Last.provide(Wrap));
     expect(renderToString(<App />)).toContain("radix-free");
   });
 });

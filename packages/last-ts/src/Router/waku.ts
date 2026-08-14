@@ -20,10 +20,6 @@
  */
 "use client";
 
-import * as React from "react";
-import { Function as Fn } from "effect";
-import type * as Last from "../Last";
-import * as appInternal from "../internal/app";
 import * as internal from "../internal/routerWaku";
 import type { ApiConstraint } from "../internal/routes";
 import type * as Route from "../Route";
@@ -64,31 +60,6 @@ export const setDefault: typeof internal.setDefault = internal.setDefault;
 /** @public */
 export const isWakuBinding: typeof internal.isWakuBinding =
   internal.isWakuBinding;
-
-/**
- * @deprecated Prefer {@link ../Waku.layer} / {@link ../Waku.fromApi} with
- * {@link ../Last.provider}.
- *
- * @public
- */
-export const router: {
-  (
-    binding: internal.WakuBinding<ApiConstraint, unknown>,
-  ): (self: Last.App) => Last.App;
-  (
-    self: Last.App,
-    binding: internal.WakuBinding<ApiConstraint, unknown>,
-  ): Last.App;
-} = Fn.dual(
-  2,
-  (
-    self: Last.App,
-    binding: internal.WakuBinding<ApiConstraint, unknown>,
-  ): Last.App =>
-    appInternal.withRouterInstall(self, (children) =>
-      React.createElement(internal.Provider, { value: binding, children }),
-    ),
-);
 
 // =============================================================================
 // React adapters (Waku peer)

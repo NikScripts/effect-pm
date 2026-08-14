@@ -1,18 +1,19 @@
 /**
- * Layer.succeed / Layer.effect + View.mount(Service).
+ * Layer.succeed / Layer.effect + Last.provide(Service).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
+import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 
 class Prefix extends Context.Service<Prefix, string>()(
   "hyperlink-ts/test/view-from-effect.test/Prefix",
 ) {}
 
-describe("Layer + View.mount", () => {
-  it("Layer.succeed(Service, impl) mounts via View.mount(Service)", () => {
+describe("Layer + Last.provide", () => {
+  it("Layer.succeed(Service, impl) fulfills via Last.provide(Service)", () => {
     class Greeter extends View.make<
       Greeter,
       { readonly name: string }
@@ -21,7 +22,7 @@ describe("Layer + View.mount", () => {
         React.createElement("h1", null, props.name),
       );
     }
-    const App = View.mount(Greeter);
+    const App = View.stamp(Last.provide(Greeter));
     expect(renderToString(React.createElement(App, { name: "nik" }))).toContain(
       "nik",
     );
@@ -41,7 +42,7 @@ describe("Layer + View.mount", () => {
         }),
       ).pipe(Layer.provide(Layer.succeed(Prefix, "hi ")));
     }
-    const App = View.mount(Greeter);
+    const App = View.stamp(Last.provide(Greeter));
     const html = renderToString(React.createElement(App, { name: "nik" }));
     expect(html).toContain("hi nik");
   });
