@@ -6,7 +6,8 @@
 <!-- docs-site-link:end -->
 # Effect Style
 
-How Effect code reads day to day — the platform surface and idioms, plus formatting and comments.
+How Effect code reads day to day — the platform surface and idioms, Layer/`Effect.provide`
+hygiene (entry points, nesting, lifetimes), plus formatting and comments.
 
 {#native-effect-subpaths .must appliesTo="src examples"}
 ## Reach for native Effect subpaths, not external packages
@@ -118,6 +119,67 @@ vendored `repos/effect/packages/effect/src`) and copy the real shape — don't g
 `repos/` is read-only reference: **never import from it, never edit it.** Application and package
 code import from the declared `effect` dependency.
 
+{#provide-at-entry-points .must appliesTo="src examples"}
+## `Effect.provide` with a Layer belongs at the application entry point
+
+Compose the Layer graph with `Layer.provide` / `provideMerge` wherever you build dependencies.
+**Close `R` with `Effect.provide(program, layer)` (or `ManagedRuntime` / the app's one bake) only at
+an application entry point** — the Effect LSP `strictEffectProvide` rule. Scatter provide through
+helpers, workers, Views, or page sections and you break scope lifetimes.
+
+Internals **declare** (`yield* Tag`). The edge **provides**. Same seam as *Hyperlink Services →
+Declare dependencies in the worker; provide at the serve boundary*.
+
+``` ts
+// ✅ good — compose the graph; provide once at the entry point
+const AppLive = pipe(HttpLive, Layer.provide(Db.layer), Layer.provide(Config.layer))
+ManagedRuntime.make(AppLive) // or Effect.provide(main, AppLive) at main / server boot
+
+// ❌ bad — mid-program provide of a Layer (strictEffectProvide)
+const handler = (req) =>
+  program.pipe(Effect.provide(Db.layer)) // new scope / instance per call
+```
+
+{#nest-provide-for-scope .must appliesTo="src examples"}
+## Nest provide only to open a new requirement or resource scope
+
+Nesting is not free and not constant. Nest `Effect.provide` / a React provider **only when the
+inner program has a different `R` or resource lifetime than the outer** — a real dependency
+boundary for that subtree (request scope, matched route kit, feature region with its own
+resources). Outer keeps its bag; inner gets the nested bag for that region.
+
+Do **not** nest to re-provide the same application Layer, spin a second app runtime per leaf, or
+"make a View work" under an already-baked edge. That is scattering provide, not scoping.
+
+`Layer.provide` while **building** a Layer is graph composition — fine anywhere. Nesting
+**runtime** provide is the lifetime decision.
+
+{#provide-site-sets-lifetime .must appliesTo="src examples"}
+## The provide site owns lifetime and instance identity
+
+Where you provide decides how long layered resources live, when finalizers run, and whether
+descendants share **one** instance or get a **new** one per nest.
+
+| Provide site | Lifetime / identity |
+|--------------|---------------------|
+| Process / server / CLI `main` | Lives for the process |
+| Web **page root** (document / app shell provider) | Lives for the page |
+| Route / group / feature subtree | Opens and tears down with that match / region |
+
+Wrong place → duplicate runtimes, leaked or prematurely killed resources, or children missing
+services. Compose the graph anywhere; pick the provide site on purpose.
+
+{#web-page-entry-point .must appliesTo="src examples"}
+## On a web page, the entry point is the page root
+
+For a page, the application entry point is the **document / app shell bake** — one provider around
+the tree (e.g. `Last.provider(layer)`). Provide the Layer **there**. Everything under that root
+**declares** and renders (`yield*`, `Last.use`, …). It does not provide the app Layer again per
+View, per link, or per section.
+
+Nested providers on a page are only for a **new scope bag** under that one bake (active router
+context, a region with different requirements) — same rule as *Nest provide only to open a new
+requirement or resource scope*. They are not a second entry point.
 
 {#no-nested-yield .must appliesTo="src examples test"}
 ## Never nest a `yield*` inside another expression

@@ -244,6 +244,42 @@
           "title": "Read the resolved Effect source before guessing"
         },
         {
+          "id": "effect-style.provide-at-entry-points",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "`Effect.provide` with a Layer belongs at the application entry point"
+        },
+        {
+          "id": "effect-style.nest-provide-for-scope",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Nest provide only to open a new requirement or resource scope"
+        },
+        {
+          "id": "effect-style.provide-site-sets-lifetime",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "The provide site owns lifetime and instance identity"
+        },
+        {
+          "id": "effect-style.web-page-entry-point",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "On a web page, the entry point is the page root"
+        },
+        {
           "id": "effect-style.no-nested-yield",
           "severity": "must",
           "appliesTo": [
@@ -1142,6 +1178,24 @@
           "title": "No code until an explicit go"
         },
         {
+          "id": "working-agreement.confirm-handoff-actions",
+          "severity": "must",
+          "appliesTo": [
+            "process"
+          ],
+          "title": "Confirm handoff actions before taking them"
+        },
+        {
+          "id": "working-agreement.no-waku-app-imports",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples",
+            "docs"
+          ],
+          "title": "Never import `waku` in apps — only `last-ts`"
+        },
+        {
           "id": "working-agreement.decisions-doc-is-ssot",
           "severity": "must",
           "appliesTo": [
@@ -1216,5 +1270,5 @@
       ]
     }
   ],
-  "ruleCount": 134
+  "ruleCount": 140
 }

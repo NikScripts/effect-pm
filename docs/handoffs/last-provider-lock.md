@@ -6,7 +6,9 @@
 
 ## One-sentence lock
 
-**Bake one fulfilled Layer into one children-only React provider — `Last.provider(layer)`. No nested product providers.**
+**Bake one fulfilled Layer into one children-only React provider — `Last.provider(layer)`. That is the page entry point.**
+
+Provide hygiene (where to provide, when to nest a scope, lifetimes): [`docs/standards/effect-style.md`](../standards/effect-style.md) — *provide-at-entry-points*, *nest-provide-for-scope*, *provide-site-sets-lifetime*, *web-page-entry-point*. Do **not** invent a second product provider zoo (`RegistryProvider` taught as app API, soft-nav wrappers as separate product paths). Nesting a **new scope bag** under the one bake (router context, etc.) is allowed when `R` / lifetime differs — same as Effect.
 
 ## Recipe
 
