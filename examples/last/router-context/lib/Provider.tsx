@@ -8,7 +8,7 @@ import * as Last from "last-ts/Last";
 import * as Memory from "last-ts/Memory";
 import { routes } from "./routes";
 
-/** `provideMerge` keeps kit services from `Last.contextProvide` in the runtime Context. */
+/** `provideMerge` keeps kit services from `Last.provideContext` in the runtime Context. */
 export const Provider = Last.provider(
   pipe(Memory.layer, Layer.provideMerge(routes)),
 );

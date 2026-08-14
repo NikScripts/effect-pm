@@ -28,7 +28,7 @@ examples/last/router-context/
     Site.ts / DocsKit.ts nested Last.context bags
     AppTree / DocsTree   composition only (Last.use(App…))
     AppLayout / DocsLayout  Layout.make — place trees only (no HTML)
-    routes.tsx           Layout.provide + Last.contextProvide
+    routes.tsx           Layout.provide + Last.provideContext
     Provider.tsx         Last.provider(layer) — no second Site arg
   App.tsx                Provider > Router.Outlet
   main.ts                renderToString harness
@@ -37,7 +37,7 @@ examples/last/router-context/
 ## Value
 
 - **Declare** kits on the catalog / group (`.context`)
-- **Fulfill** on the builder with `Last.contextProvide` (Layout dual)
+- **Fulfill** on the builder with `Last.provideContext` (Layout dual)
 - **Mount** active-path bag bridges in `Router.Outlet`
 - **`Last.use(App)`** / `Last.use(App, "docs")` under the match
 - Leaf Views own DOM; composition / Layout / Tree = **zero HTML**
@@ -117,6 +117,6 @@ examples/last/router-context/
 
 ## Notes
 
-- Edge bake uses `Layer.provideMerge` (Memory ↔ routes) so `Last.contextProvide` kit
+- Edge bake uses `Layer.provideMerge` (Memory ↔ routes) so `Last.provideContext` kit
   services stay in the Atom runtime Context for `Last.use`.
 - Group layers are also `provideMerge`d into `RouterBuilder.layer` for the same reason.

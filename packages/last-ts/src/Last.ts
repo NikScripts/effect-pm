@@ -7,7 +7,7 @@
  * ```ts
  * export class Site extends Last.context({ NavBar: NavBar.NavBarContext }) {}
  * // Track 1: Last.provider(layer, Site)
- * // Track 2: catalog .context(Site) + Last.contextProvide(siteLayer); Last.use(App)
+ * // Track 2: catalog .context(Site) + Last.provideContext(siteLayer); Last.use(App)
  * const DocsLink = Last.link(SiteCatalog, { to: (u) => u.docs })
  * ```
  *
@@ -63,13 +63,13 @@ export type ServicesOf<C> = lastContext.ServicesOf<C>;
  *
  * @example
  * ```ts
- * pipe(RouterBuilder.group(App, "docs", …), Layout.provide(DocsLayout), Last.contextProvide(docsKitLayer))
+ * pipe(RouterBuilder.group(App, "docs", …), Layout.provide(DocsLayout), Last.provideContext(docsKitLayer))
  * ```
  *
  * @public
  */
-export const contextProvide: typeof lastContext.contextProvide =
-  lastContext.contextProvide;
+export const provideContext: typeof lastContext.provideContext =
+  lastContext.provideContext;
 
 /**
  * Wrap a component (or children) with soft-nav ({@link ./Router.UnboundLink}).

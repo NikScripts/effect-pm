@@ -1,7 +1,7 @@
 /**
  * @module examples/last/router-context/lib/routes
  *
- * Handlers + Layout.provide + Last.contextProvide (builder debt).
+ * Handlers + Layout.provide + Last.provideContext (builder debt).
  */
 import * as React from "react";
 import { Layer, pipe } from "effect";
@@ -37,7 +37,7 @@ const docs = pipe(
     h.handle("index", DocsIndex).handle("chapter", Chapter),
   ),
   Layout.provide(DocsLayout.DocsLayout),
-  Last.contextProvide(DocsKit.DocsKit, DocsCopy.layer),
+  Last.provideContext(DocsKit.DocsKit, DocsCopy.layer),
 );
 
 /**
@@ -47,5 +47,5 @@ const docs = pipe(
 export const routes = pipe(
   RouterBuilder.layer(App.App),
   Layer.provideMerge(Layer.mergeAll(main, docs)),
-  Last.contextProvide(Site.Site, SiteCopy.layer),
+  Last.provideContext(Site.Site, SiteCopy.layer),
 );

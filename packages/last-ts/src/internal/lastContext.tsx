@@ -1,5 +1,5 @@
 /**
- * Last.context / Last.use / Last.provider(context) / Last.contextProvide —
+ * Last.context / Last.use / Last.provider(context) / Last.provideContext —
  * React bag over Effect services + router-scoped mount.
  *
  * @internal
@@ -369,13 +369,13 @@ export function use(
  * Discharge router `.context` Layer debt (Layout.provide dual).
  * Merges kit outputs into the Layer graph so services stay available at runtime.
  *
- * - `Last.contextProvide(kit)` — excludes `Layer` outputs from `R`
- * - `Last.contextProvide(Site, kit)` — excludes {@link ServicesOf}`<Site>` (View
+ * - `Last.provideContext(kit)` — excludes `Layer` outputs from `R`
+ * - `Last.provideContext(Site, kit)` — excludes {@link ServicesOf}`<Site>` (View
  *   Reference defaults need not appear in `kit`)
  *
  * @internal
  */
-export const contextProvide: {
+export const provideContext: {
   <Out, E2, R2>(
     kit: Layer.Layer<Out, E2, R2>,
   ): <A, E, R>(
@@ -409,7 +409,7 @@ export const contextProvide: {
     // Type-level discharge of ServicesOf<Ctx>; runtime is provideMerge only.
     return merged;
   };
-}) as typeof contextProvide;
+}) as typeof provideContext;
 
 const providerCache = new WeakMap<
   LastContextClass,

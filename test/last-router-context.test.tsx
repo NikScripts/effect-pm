@@ -1,5 +1,5 @@
 /**
- * Track 2 — router-scoped Last.context / Last.contextProvide / Last.use(App).
+ * Track 2 — router-scoped Last.context / Last.provideContext / Last.use(App).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer, pipe } from "effect";
@@ -96,7 +96,7 @@ const docs = pipe(
     ),
   ),
   Layout.provide(DocsLayout),
-  Last.contextProvide(
+  Last.provideContext(
     DocsKit,
     Layer.succeed(DocsCopy, { sidebarTitle: "Guides" }),
   ),
@@ -105,7 +105,7 @@ const docs = pipe(
 const routes = pipe(
   RouterBuilder.layer(App),
   Layer.provideMerge(Layer.mergeAll(main, docs)),
-  Last.contextProvide(Site, Layer.succeed(SiteCopy, { brand: "last.ts" })),
+  Last.provideContext(Site, Layer.succeed(SiteCopy, { brand: "last.ts" })),
 );
 
 const Provider = Last.provider(
@@ -123,7 +123,7 @@ const At = (props: {
   return React.createElement(Router.Outlet);
 };
 
-describe("Last.contextProvide + Last.use(App)", () => {
+describe("Last.provideContext + Last.use(App)", () => {
   it("mounts root Site on / and renders from Last.use(App)", () => {
     const html = renderToString(
       React.createElement(

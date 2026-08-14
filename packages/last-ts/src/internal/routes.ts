@@ -195,7 +195,7 @@ export interface Group<
   prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel, R, Ctx>;
   /**
    * Scope a {@link ../Last.context} kit to this group — builder owes its services;
-   * fulfill with {@link ../Last.contextProvide}.
+   * fulfill with {@link ../Last.provideContext}.
    */
   context<C>(
     ctx: C,
@@ -323,7 +323,7 @@ export interface Api<
   prefix(prefix: Path): Api<Id, Groups, R, DeferredGroups, Ctx>;
   /**
    * Root-scoped {@link ../Last.context} — every match under this catalog.
-   * `RouterBuilder.layer` owes the kit services; fulfill with {@link ../Last.contextProvide}.
+   * `RouterBuilder.layer` owes the kit services; fulfill with {@link ../Last.provideContext}.
    */
   context<C>(
     ctx: C,

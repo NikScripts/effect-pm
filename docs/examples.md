@@ -580,7 +580,7 @@ Closed `FilePath` / `RoutePath` unions → `Route.fileRoot` → typed `urls.*`.
 ### [last-ts router context](/docs/last-ts-router-context)
 
 `examples/last/router-context/` · `pnpm run example:last-router-context`  
-Catalog / group `.context` + `Last.contextProvide` + `Last.use(App, …)` (track 2).
+Catalog / group `.context` + `Last.provideContext` + `Last.use(App, …)` (track 2).
 
 ### [last-ts fromEffect Catalog](/docs/last-ts-from-effect)
 

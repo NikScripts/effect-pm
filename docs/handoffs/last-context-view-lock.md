@@ -15,7 +15,7 @@
 | # | Track | Status |
 |---|--------|--------|
 | **1** | `Last.context` + `Last.provider(Context)` + `Last.use` + **`Last.link`** + base `Link` `to`/`out` | **Eng’d + tip-synced** |
-| **2** | Adapt context tools to the **router/builder** (provide per catalog / group / route; `Last.use` active scope) | **Eng’d** — `.context` + `Last.contextProvide` + Outlet mounts + `Last.use(App, …)` |
+| **2** | Adapt context tools to the **router/builder** (provide per catalog / group / route; `Last.use` active scope) | **Eng’d** — `.context` + `Last.provideContext` + Outlet mounts + `Last.use(App, …)` |
 
 ---
 
@@ -395,13 +395,13 @@ const docs = pipe(
     h.handle("chapter", Chapter),
   ),
   Layout.provide(DocsLayout),
-  Last.contextProvide(DocsKit, docsKitLayer),
+  Last.provideContext(DocsKit, docsKitLayer),
 )
 
 const root = pipe(
   RouterBuilder.layer(App), // still requires every group Layer
   Layer.provideMerge(Layer.mergeAll(main, docs)), // keep kit services
-  Last.contextProvide(Site, siteLayer), // discharges root Site debt
+  Last.provideContext(Site, siteLayer), // discharges root Site debt
 )
 
 // 3) One edge bake — no Last.provider(layer, Site); provideMerge keeps kit services
@@ -416,7 +416,7 @@ const chapterBag = Last.use(App, (r) => r.docs.chapter)
 const { Root } = Last.use(NavBar.NavBarContext)  // track 1 still works
 ```
 
-Until `Last.contextProvide` fulfills each declared scope, **`routesLayer` keeps those services in `R`** — you cannot bake a clean Layer with open debt (same loudness as missing `Layout.provide` on a page group).
+Until `Last.provideContext` fulfills each declared scope, **`routesLayer` keeps those services in `R`** — you cannot bake a clean Layer with open debt (same loudness as missing `Layout.provide` on a page group).
 
 ### Declare (definition site — not a free-floating Provider)
 
@@ -446,15 +446,15 @@ class Site extends Router.make("app")
 | Piece | Layout today | Context dream |
 |-------|--------------|---------------|
 | Declare need | page group implies `Layout.Slot` | `.context(Ctx)` stamps scope + `ServicesOf<Ctx>` into `R` |
-| Discharge | `pipe(group, Layout.provide(AppLayout))` | `pipe(group, Last.contextProvide(Ctx, implLayer))` |
+| Discharge | `pipe(group, Layout.provide(AppLayout))` | `pipe(group, Last.provideContext(Ctx, implLayer))` |
 | Loud failure | open `Layout.Slot` → can’t bake clean Layer | open context services → can’t bake clean Layer |
-| Override | later `Layout.provide` / `yield*` | later `Last.contextProvide` wins for that scope |
-| Defaults | View Reference defaults + `Layer.succeed` for required Services | same — `Last.contextProvide(Site, siteCopyLayer)` discharges `ServicesOf<Site>` while Views use Reference defaults |
+| Override | later `Layout.provide` / `yield*` | later `Last.provideContext` wins for that scope |
+| Defaults | View Reference defaults + `Layer.succeed` for required Services | same — `Last.provideContext(Site, siteCopyLayer)` discharges `ServicesOf<Site>` while Views use Reference defaults |
 
 **Fulfill shape (picked):**
 
-1. **`Last.contextProvide(kit)`** — excludes Layer outputs from `R`  
-2. **`Last.contextProvide(Ctx, kit)`** — excludes `ServicesOf<Ctx>` (preferred when Views are References with defaults)
+1. **`Last.provideContext(kit)`** — excludes Layer outputs from `R`  
+2. **`Last.provideContext(Ctx, kit)`** — excludes `ServicesOf<Ctx>` (preferred when Views are References with defaults)
 
 Catalog attach stays on the router definition; **fulfill stays on the builder** so handler modules own the heavy imports (codesplit-friendly).
 
@@ -504,7 +504,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 ### Resolved at Eng
 
 1. **`Last.use(Router)` alone** — active merge of mounted scopes.  
-2. **Fulfill name** — `Last.contextProvide` (not Effect `Context.provide` / `Last.provide`).  
+2. **Fulfill name** — `Last.provideContext` (not Effect `Context.provide` / `Last.provide`).  
 3. **Attach API** — `.context(Ctx)` on catalog/group (+ route annotation ready) + builder fulfill.  
 4. **Per-route** — `ContextScope` on route annotations works at runtime; typed route `.context` can follow.
 
