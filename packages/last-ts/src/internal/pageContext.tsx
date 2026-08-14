@@ -124,7 +124,7 @@ export const useDocument = (): DocumentValue => {
 };
 
 /**
- * Effect Document API from the React bridge (for baked views).
+ * Effect Document API from the React bridge (for views under the provider).
  *
  * @internal
  */

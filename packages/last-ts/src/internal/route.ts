@@ -64,7 +64,7 @@ export const isRoute = (u: unknown): u is Constraint =>
 
 /**
  * Page destination — dynamic by default (SSR). Same {@link RequestOptions} bag
- * as {@link ../Page.make}. Static bake is owned by Route/Page API — never
+ * as {@link ../Page.make}. Static mode is owned by Route/Page API — never
  * `getConfig` (see `docs/handoffs/last-ts-api-corrections.md`).
  */
 export const get = <

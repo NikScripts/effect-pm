@@ -1,5 +1,5 @@
 /**
- * App shell — bake Layer (+ optional router install) into one children-only Provider.
+ * Build one children-only Provider from a Layer (+ optional router install).
  *
  * @internal
  */
@@ -27,7 +27,7 @@ import type { Service } from "./router";
 type RouterInstall = (children: React.ReactNode) => React.ReactElement;
 
 /**
- * Composed app shell. Read {@link App.Provider} — no runtime / binding props.
+ * Composed provider. Read {@link App.Provider} — no runtime / binding props.
  *
  * @public
  */
@@ -41,7 +41,7 @@ export interface App extends Pipeable.Pipeable {
    */
   readonly installRouter: RouterInstall | undefined;
   /**
-   * Single React provider — children only; Layer / router already baked in.
+   * Single React provider — children only; Layer / router already provided.
    *
    * @public
    */
@@ -97,7 +97,7 @@ export const make = <R, E = never>(
 };
 
 /**
- * Start an app shell from a fulfilled Layer (`R` discharged).
+ * Start a provider from a fulfilled Layer (`R` discharged).
  *
  * @example
  * ```tsx
@@ -112,7 +112,7 @@ export const app = <R, E = never>(
 ): App => make(layer);
 
 /**
- * Bake a lite {@link Router.Service} into the shell (Memory / History).
+ * Install a lite {@link Router.Service} into the provider (Memory / History).
  *
  * @example
  * ```tsx
@@ -259,8 +259,7 @@ const makeLayerProvider = <R, E = never>(
 };
 
 /**
- * Bake a fulfilled Layer and/or a {@link ./lastContext} into a children-only
- * React provider.
+ * Build a children-only React provider from a fulfilled Layer and/or a {@link ./lastContext}.
  *
  * - `Last.provider(layer)` — Layer → Atom runtime (existing)
  * - `Last.provider(Site)` — bridge Effect services → `Last.use` bags

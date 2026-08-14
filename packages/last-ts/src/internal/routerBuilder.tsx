@@ -354,17 +354,17 @@ type RoutesHavePage<Routes extends Record<string, unknown>> = true extends {
 }[keyof Routes] ? true
   : false;
 
-/** Empty route map (typical `group.from(Service)`) or any Page route → layout debt. */
+/** Empty route map (typical `group.from(Service)`) or any Page route → layout requirements. */
 type GroupNeedsLayout<G extends { readonly routes: Record<string, unknown> }> =
   [keyof G["routes"]] extends [never] ? true
     : RoutesHavePage<G["routes"]> extends true ? true
     : false;
 
-type GroupLayoutDebt<G extends { readonly routes: Record<string, unknown> }> =
+type GroupLayoutRequirements<G extends { readonly routes: Record<string, unknown> }> =
   GroupNeedsLayout<G> extends true ? Layout.Slot : never;
 
-/** Bake + context-kit services carried on the group (`from` / `.context`). */
-type GroupBakeR<G> = G extends {
+/** Group Layer requirements (`from` / `.context`). */
+type GroupRequirements<G> = G extends {
   readonly routes: Record<string, unknown>;
 } ? G extends catalog.Group<string, any, any, any, infer RX> ? RX
   : never
@@ -431,8 +431,8 @@ export const group = <
   catalog.Group.Service<ApiIdOf<A>, Identifier>,
   Handlers.Error<Return>,
   | Exclude<Handlers.Context<Return>, never>
-  | GroupLayoutDebt<A["groups"][Identifier]>
-  | GroupBakeR<A["groups"][Identifier]>
+  | GroupLayoutRequirements<A["groups"][Identifier]>
+  | GroupRequirements<A["groups"][Identifier]>
 > =>
   Layer.effectContext(
     Effect.gen(function* () {
@@ -463,8 +463,8 @@ export const group = <
     catalog.Group.Service<ApiIdOf<A>, Identifier>,
     Handlers.Error<Return>,
     | Exclude<Handlers.Context<Return>, never>
-    | GroupLayoutDebt<A["groups"][Identifier]>
-    | GroupBakeR<A["groups"][Identifier]>
+    | GroupLayoutRequirements<A["groups"][Identifier]>
+    | GroupRequirements<A["groups"][Identifier]>
   >;
 
 /**

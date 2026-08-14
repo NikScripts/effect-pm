@@ -20,13 +20,13 @@ import * as lastContext from "./internal/lastContext";
 import * as lastLink from "./internal/lastLink";
 
 // =============================================================================
-// Provider shell (Layer → children-only React component)
+// Provider (Layer → children-only React component)
 // =============================================================================
 
 export type App = appInternal.App;
 
 /**
- * Bake a fulfilled Layer and/or a {@link context} into a children-only React provider.
+ * Build a children-only React provider from a fulfilled Layer and/or a {@link context}.
  *
  * @public
  */
@@ -52,14 +52,14 @@ export const context: typeof lastContext.context = lastContext.context;
 export const use: typeof lastContext.use = lastContext.use;
 
 /**
- * Layer / runtime service debt for a {@link context} class.
+ * Layer / runtime service requirements for a {@link context} class.
  *
  * @public
  */
 export type ServicesOf<C> = lastContext.ServicesOf<C>;
 
 /**
- * Discharge router `.context` Layer debt (dual of {@link ./Layout.provide}).
+ * Discharge router `.context` Layer requirements (dual of {@link ./Layout.provide}).
  *
  * @example
  * ```ts

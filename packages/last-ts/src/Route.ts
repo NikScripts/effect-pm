@@ -176,7 +176,7 @@ export const Page: typeof endpoint.pageSuccess.Page = endpoint.pageSuccess.Page;
  * Declare a page destination (`HttpApiEndpoint.get` + Page success schema).
  *
  * Catalog path declaration — fileRouter owns disk paths for Page mints.
- * Bake mode: {@link static_} / `Page.static`. Never `getConfig`.
+ * Render mode: {@link static_} / `Page.static`. Never `getConfig`.
  *
  * @public
  */
@@ -186,7 +186,7 @@ export const get: typeof endpoint.get = endpoint.get;
 export type RequestOptions = endpoint.RequestOptions;
 
 /**
- * Mark an existing {@link ./Page} mint as static bake.
+ * Mark an existing {@link ./Page} mint as static mode.
  *
  * Class form: define the class, then pipe (not inside `extends`):
  * `export const aboutStatic = About.pipe(Route.static)`.
@@ -240,7 +240,7 @@ export const compilePath: typeof endpoint.compilePath = endpoint.compilePath;
 
 /**
  * Nested group of destinations — `HttpApiGroup` analogue (+ nested groups).
- * `R` = bake requirements from `from` / `fromEffect`.
+ * `R` = requirements from `from` / `fromEffect`.
  *
  * @public
  */
@@ -278,7 +278,7 @@ export const isGroup: (u: unknown) => u is catalog.GroupTop = catalog.isGroup;
 
 /**
  * Route catalog — `HttpApi` analogue. Generics preserved through `.add`.
- * `R` = bake requirements (`fromEffect` / `groupsFromEffect` / `from`).
+ * `R` = requirements (`fromEffect` / `groupsFromEffect` / `from`).
  *
  * @public
  */
@@ -290,7 +290,7 @@ export type Api<
 > = catalog.Api<Id, Groups, R, DeferredGroups>;
 
 export declare namespace Api {
-  /** Bake requirements for a catalog (`RouterBuilder.layer` `R`). */
+  /** Requirements for a catalog (`RouterBuilder.layer` `R`). */
   export type Context<A> = catalog.Api.Context<A>;
   /** Groups from {@link catalog.Api.groupsFromEffect} only. */
   export type DeferredGroups<A> = catalog.Api.DeferredGroups<A>;

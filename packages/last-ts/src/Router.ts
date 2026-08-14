@@ -229,7 +229,7 @@ export const fileSystem: typeof fileRouter.fileSystem = fileRouter.fileSystem;
 const RouterReactContext = React.createContext<Service | null>(null);
 
 /**
- * Provide a live {@link Service} to descendant View provides / shells.
+ * Provide a live {@link Service} to descendant Views.
  *
  * @public
  */

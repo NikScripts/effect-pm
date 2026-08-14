@@ -41,7 +41,7 @@ export type AnyLayout = {
 };
 
 /**
- * Page-group Layer debt — fulfill with {@link provide}.
+ * Page-group Layer requirements — fulfill with {@link provide}.
  *
  * @public
  */

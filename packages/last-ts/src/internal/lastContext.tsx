@@ -55,7 +55,7 @@ export type TypeOfSpec<S extends Spec> = {
   readonly [K in keyof S]: ServiceValue<S[K]>;
 };
 
-/** Flattened service union for Layer debt. */
+/** Flattened service union for Layer requirements. */
 export type ServicesOfSpec<S extends Spec> = {
   [K in keyof S]: S[K] extends LastContextClass<infer Nested>
     ? ServicesOfSpec<Nested>
@@ -366,7 +366,7 @@ export function use(
 }
 
 /**
- * Discharge router `.context` Layer debt (Layout.provide dual).
+ * Discharge router `.context` Layer requirements (Layout.provide dual).
  * Merges kit outputs into the Layer graph so services stay available at runtime.
  *
  * - `Last.provideContext(kit)` — excludes `Layer` outputs from `R`

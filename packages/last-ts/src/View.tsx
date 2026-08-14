@@ -17,7 +17,7 @@
  * Prototype metadata: {@link annotations} / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
  *
- * Bake an Effect into a component with {@link effect} (no `<Run effect={…} />`).
+ * Turn an Effect into a component with {@link effect} (no `<Run effect={…} />`).
  * Plain React JSX (`react/jsx-runtime`) — no custom `jsxImportSource`.
  */
 import * as React from "react";
@@ -56,7 +56,7 @@ export const annotationsSym: unique symbol = Symbol.for(
 );
 
 /**
- * Layout / shell hints for a provided component (width, selection, …).
+ * Layout hints for a provided component (width, selection, …).
  *
  * @public
  */
@@ -272,7 +272,7 @@ const ServiceRenderer = (props: {
 };
 
 /**
- * Bake an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
+ * Turn an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
  *
  * Under {@link ./Router.Outlet}, provides {@link ./Page.Request} /
  * {@link ./Page.Document} from the React bridges when present.
@@ -294,7 +294,7 @@ const ServiceRenderer = (props: {
 export const effect = <E = never, R = never>(
   program: Effect.Effect<React.ReactNode, E, R>,
 ): React.ComponentType<Record<string, never>> => {
-  const Baked = (): React.ReactElement | null => {
+  const Comp = (): React.ReactElement | null => {
     const runtime = AtomReact.useRuntime();
     const request = pageContext.useRequestOption();
     const documentApi = pageContext.useDocumentApiOption();
@@ -326,8 +326,8 @@ export const effect = <E = never, R = never>(
     }
     return null;
   };
-  Baked.displayName = "View.effect";
-  return Baked;
+  Comp.displayName = "View.effect";
+  return Comp;
 };
 
 // =============================================================================
@@ -346,7 +346,7 @@ type NextRequirement<
 > = Annotations extends Requirement ? {} : Requirement;
 
 /**
- * Merge open debt with debt declared on this chain step.
+ * Merge open Requirement with Requirement declared on this chain step.
  * @internal
  */
 type MergeRequirement<
@@ -418,7 +418,7 @@ export const getAnnotations = <A extends AnyAnnotations>(self: {
 }): A => self[annotationsSym];
 
 /**
- * Open {@link Prototype} Requirement (debt). `{}` means fulfilled.
+ * Open {@link Prototype} Requirement. `{}` means fulfilled.
  *
  * @public
  */
@@ -495,11 +495,11 @@ export type ViewHandleDefault<
 export type Type<T> = T extends { readonly Type: infer P } ? P : never;
 
 /**
- * Props + annotations + an R-style **Requirement** type param (debt until discharged).
+ * Props + annotations + an R-style **Requirement** type param (open until discharged).
  *
  * Requirement may be declared on the root {@link Prototype} factory **or** on any
  * later `.Prototype<Props, Requirement>()` step (additive). Annotations discharge
- * debt when they satisfy the merged Requirement (`{}` = fulfilled).
+ * open Requirement when they satisfy the merged Requirement (`{}` = fulfilled).
  *
  * The builder exposes {@link Prototype.annotations} while chaining; minted services
  * stamp the bag under {@link annotationsSym} instead.
@@ -514,8 +514,8 @@ export interface Prototype<
   /** Accumulator while chaining — not present on minted services. */
   readonly annotations: Annotations;
   /**
-   * Extend props / open more Requirement debt (type args) and/or annotations (value).
-   * New Requirement merges with any still-open debt; discharges when merged
+   * Extend props / open more Requirement (type args) and/or annotations (value).
+   * New Requirement merges with any still-open Requirement; discharges when merged
    * annotations satisfy the result.
    *
    * @example
@@ -630,7 +630,7 @@ const makePrototype = <
 
 /**
  * Start a prototype chain: `View.Prototype<Props, Requirement>()(annotations?)`.
- * Further debt: `.Prototype<NewProps, NewRequirement>()(annotations?)` at any step.
+ * Further Requirement: `.Prototype<NewProps, NewRequirement>()(annotations?)` at any step.
  *
  * @public
  */

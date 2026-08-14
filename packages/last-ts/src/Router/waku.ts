@@ -2,7 +2,7 @@
  * @module ui/RouterWaku
  *
  * **Waku layer only** for the one {@link ./Router} service — not a second Router
- * namespace. Prefer {@link ../Waku.layer} / {@link ../Waku.fromApi} baked with
+ * namespace. Prefer {@link ../Waku.layer} / {@link ../Waku.fromApi} provided via
  * {@link ../Last.provider}. The paramful {@link Provider} remains for escape
  * hatches.
  *

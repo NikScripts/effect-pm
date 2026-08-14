@@ -173,7 +173,7 @@ export interface Group<
    *
    * Infer from `Eff` — do **not** overload `AsRoutesEffect` ahead of plain
    * `Effect` (the Effect half of that intersection matches and binds
-   * `Items = never`, wiping UrlBuilder + bake `R`).
+   * `Items = never`, wiping UrlBuilder + requirements `R`).
    */
   fromEffect<Eff extends Effect.Effect<any, never, any>>(
     effect: Eff,
@@ -248,7 +248,7 @@ export declare namespace Group {
 export type GroupConstraint = Group.Constraint;
 
 /**
- * Bake requirements carried by a {@link Group} (`from` / `fromEffect`).
+ * Requirements carried by a {@link Group} (`from` / `fromEffect`).
  *
  * Infer every {@link Group} slot — `Routes` / nested `Groups` are `in out`;
  * `any` in those positions fails the `extends` check and drops `RX`.
@@ -305,7 +305,7 @@ export interface Api<
     api: HttpApi.HttpApi<Id2, ApiGroups>,
   ): Api<Id, MergeApiAdds<Groups, GroupTop>, R, DeferredGroups, Ctx>;
   /**
-   * Top-level groups from an Effect. Typed for {@link UrlBuilder}; bake `R`
+   * Top-level groups from an Effect. Typed for {@link UrlBuilder}; requirements `R`
    * unions the Effect context. Not added to {@link Group.ToService} (handlers
    * via destination {@link ../Route.handle} or a later builder API).
    */
@@ -362,7 +362,7 @@ export interface ApiConstraint {
 export declare namespace Api {
   export type Constraint = ApiConstraint;
   /**
-   * Bake requirements (`fromEffect` / `groupsFromEffect` / `from`).
+   * Requirements (`fromEffect` / `groupsFromEffect` / `from`).
    *
    * Infer every slot — `Groups` is `in out`; using `any` there makes the
    * `extends Api<…>` check fail and collapses `R` to `never`.
@@ -1383,7 +1383,7 @@ export const resolveGroup = (
 
 /**
  * Resolve every deferred `from` / `fromEffect` / `groupsFromEffect` on a
- * catalog. `R` is the catalog’s bake requirements.
+ * catalog. `R` is the catalog’s requirements.
  *
  * @internal
  */
