@@ -1,5 +1,5 @@
 /**
- * Typed Views — Service + Layer.succeed/effect + View.stamp(Last.provide(Service)).
+ * Typed Views — Service + Layer.succeed/effect + View.stamp(Last.provide(Service, Service.layer)).
  *
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
  */
@@ -52,7 +52,7 @@ class AppRoot extends View.make<AppRoot>()(
 }
 
 /** Yield* Services; fulfill the root Service at the edge. */
-export const App = View.stamp(Last.provide(AppRoot));
+export const App = View.stamp(Last.provide(AppRoot, AppRoot.layer));
 
 App;
 // ^?

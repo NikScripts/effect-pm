@@ -61,8 +61,8 @@ class SettingsShell extends View.make<SettingsShell>()(
   );
 }
 
-const DefaultApp = View.stamp(Last.provide(Shell));
-const SettingsApp = View.stamp(Last.provide(SettingsShell));
+const DefaultApp = View.stamp(Last.provide(Shell, Shell.layer));
+const SettingsApp = View.stamp(Last.provide(SettingsShell, SettingsShell.layer));
 
 export function ViewDemo(): React.ReactElement {
   const [mode, setMode] = React.useState<"default" | "settings">("default");

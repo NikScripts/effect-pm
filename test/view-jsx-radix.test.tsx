@@ -42,7 +42,7 @@ class Page extends View.make<Page>()("test/jsx-rt/Page") {
 
 describe("View.jsx + Radix", () => {
   it("renders under Radix Dialog Root + Label (SSR-safe)", () => {
-    const App = View.stamp(Last.provide(Page));
+    const App = View.stamp(Last.provide(Page, Page.layer));
     const html = renderToString(<App />);
     expect(html).toContain("nik");
     expect(html).toContain("Hello");
@@ -61,7 +61,7 @@ describe("View.jsx + Radix", () => {
         }),
       );
     }
-    const App = View.stamp(Last.provide(Empty));
+    const App = View.stamp(Last.provide(Empty, Empty.layer));
     expect(renderToString(<App />)).toBe("");
   });
 
@@ -86,7 +86,7 @@ describe("View.jsx + Radix", () => {
         }),
       ).pipe(Layer.provide(Outside.layer));
     }
-    const App = View.stamp(Last.provide(Wrap));
+    const App = View.stamp(Last.provide(Wrap, Wrap.layer));
     expect(renderToString(<App />)).toContain("radix-free");
   });
 });

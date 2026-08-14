@@ -31,7 +31,7 @@ class Shell extends View.make<Shell>()("test/view-default/Shell") {
 
 describe("View.make default (Reference)", () => {
   it("yields the default component with no Layer for the slot", () => {
-    const App = View.stamp(Last.provide(Shell));
+    const App = View.stamp(Last.provide(Shell, Shell.layer));
     const html = renderToString(React.createElement(App));
     expect(html).toContain("data-sidebar=\"default\"");
     expect(html).toContain("Menu");
@@ -67,7 +67,7 @@ describe("View.make default (Reference)", () => {
       );
     }
 
-    const App = View.stamp(Last.provide(SettingsShell));
+    const App = View.stamp(Last.provide(SettingsShell, SettingsShell.layer));
     const html = renderToString(React.createElement(App));
     expect(html).toContain("data-sidebar=\"settings\"");
     expect(html).toContain("Settings nav");
@@ -105,7 +105,7 @@ describe("View.make default (Reference)", () => {
       );
     }
 
-    const App = View.stamp(Last.provide(ThemedShell));
+    const App = View.stamp(Last.provide(ThemedShell, ThemedShell.layer));
     const html = renderToString(React.createElement(App));
     expect(html).toContain("data-sidebar=\"theme\"");
     expect(html).toContain("Themed");

@@ -111,7 +111,7 @@ class StandardsShell extends View.make<StandardsShell, BookSidebarProps>()(
 }
 
 /** Main docs book — default {@link BookSidebar}. */
-export const MainBook = View.stamp(Last.provide(BookShell));
+export const MainBook = View.stamp(Last.provide(BookShell, BookShell.layer));
 
 /** Standards book — Sidebar overridden for this tree. */
-export const StandardsBook = View.stamp(Last.provide(StandardsShell));
+export const StandardsBook = View.stamp(Last.provide(StandardsShell, StandardsShell.layer));

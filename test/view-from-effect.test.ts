@@ -1,5 +1,5 @@
 /**
- * Layer.succeed / Layer.effect + Last.provide(Service).
+ * Layer.succeed / Layer.effect + Last.provide(Service, Service.layer).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
@@ -13,7 +13,7 @@ class Prefix extends Context.Service<Prefix, string>()(
 ) {}
 
 describe("Layer + Last.provide", () => {
-  it("Layer.succeed(Service, impl) fulfills via Last.provide(Service)", () => {
+  it("Layer.succeed(Service, impl) fulfills via Last.provide(Service, Service.layer)", () => {
     class Greeter extends View.make<
       Greeter,
       { readonly name: string }
@@ -22,7 +22,7 @@ describe("Layer + Last.provide", () => {
         React.createElement("h1", null, props.name),
       );
     }
-    const App = View.stamp(Last.provide(Greeter));
+    const App = View.stamp(Last.provide(Greeter, Greeter.layer));
     expect(renderToString(React.createElement(App, { name: "nik" }))).toContain(
       "nik",
     );
@@ -42,7 +42,7 @@ describe("Layer + Last.provide", () => {
         }),
       ).pipe(Layer.provide(Layer.succeed(Prefix, "hi ")));
     }
-    const App = View.stamp(Last.provide(Greeter));
+    const App = View.stamp(Last.provide(Greeter, Greeter.layer));
     const html = renderToString(React.createElement(App, { name: "nik" }));
     expect(html).toContain("hi nik");
   });

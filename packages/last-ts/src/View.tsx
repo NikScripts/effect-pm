@@ -7,12 +7,12 @@
  * - **Mint:** {@link make} — Context slot; service shape is a {@link ViewFn}
  * - **Build:** `Layer.succeed` / `Layer.effect` + `Effect.gen`
  * - **Default Layer:** `static layer = Layer.succeed(This, impl)` (compose deps there)
- * - **Edge:** {@link Last.provide}`(Tag)` → {@link ViewFn}; stamp with {@link stamp}
- *   for a JSX-legal {@link Component} (`R` must be `never`)
+ * - **Edge:** {@link Last.provide}`(Tag, Tag.layer)` → {@link ViewFn}; stamp with {@link stamp}
+ *   for a JSX-legal {@link Component} (`layer` `R` must be `never`)
  * - **Page runtime:** {@link Last.provider}`(layer)` when Atom / router context is needed
  *
  * There is no freestanding View value you call as JSX. Always `yield*` a
- * minted view (or {@link Last.provide} one at the app edge). Name is {@link make}
+ * minted view (or {@link Last.provide}`(Tag, Tag.layer)` at the app edge). Name is {@link make}
  * (HttpApi-shaped), not `Service`.
  *
  * Prototype metadata: {@link annotations} / {@link getAnnotations}.
@@ -162,7 +162,7 @@ export type ViewPropsOf<V> = V extends {
 /**
  * Brand a plain component fn as a fulfilled {@link Component} (type-level;
  * no runtime change). Pair with {@link Last.provide} at the edge:
- * `View.stamp(Last.provide(Hello))`.
+ * `View.stamp(Last.provide(Hello, Hello.layer))`.
  *
  * @public
  */
@@ -592,7 +592,7 @@ export const Prototype =
  *   () => <nav data-sidebar="default">Menu</nav>,
  * ) {}
  *
- * const App = View.stamp(Last.provide(Hello))
+ * const App = View.stamp(Last.provide(Hello, Hello.layer))
  * ```
  *
  * Prefer `pipe(layer, Layer.provide(…))` over `layer.pipe(…)`.

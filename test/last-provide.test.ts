@@ -1,5 +1,5 @@
 /**
- * Last.provide — entry-point fulfill (Service / Effect → value).
+ * Last.provide — entry-point Effect.provide + run (Services are Effects).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
@@ -15,17 +15,19 @@ class Greeter extends Context.Service<Greeter, string>()(
 }
 
 describe("Last.provide", () => {
-  it("fulfills a Service with closed layer", () => {
-    expect(Last.provide(Greeter)).toBe("hello");
+  it("fulfills a Service via Effect.provide(Service, Service.layer)", () => {
+    expect(Last.provide(Greeter, Greeter.layer)).toBe("hello");
   });
 
-  it("fulfills a Service with requirements", () => {
+  it("composes open-R Service.layer with requirements", () => {
     class Open extends Context.Service<Open, string>()(
       "hyperlink-ts/test/last-provide.test/Open",
     ) {
       static layer = Layer.effect(Open, Greeter);
     }
-    expect(Last.provide(Open, Greeter.layer)).toBe("hello");
+    expect(
+      Last.provide(Open, Layer.provide(Open.layer, Greeter.layer)),
+    ).toBe("hello");
   });
 
   it("runs an Effect with R=never", () => {
@@ -43,7 +45,7 @@ describe("Last.provide", () => {
         React.createElement("h1", null, "body"),
       );
     }
-    const App = View.stamp(Last.provide(Page));
+    const App = View.stamp(Last.provide(Page, Page.layer));
     expect(renderToString(React.createElement(App))).toContain("body");
   });
 });

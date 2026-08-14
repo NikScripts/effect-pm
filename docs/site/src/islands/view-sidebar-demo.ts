@@ -76,7 +76,7 @@ class SettingsShell extends View.make<SettingsShell>()(
 }
 
 /** Default sidebar (Reference default). */
-export const DefaultApp = View.stamp(Last.provide(Shell));
+export const DefaultApp = View.stamp(Last.provide(Shell, Shell.layer));
 
 /** Nested settings chrome — Sidebar overridden for this tree. */
-export const SettingsApp = View.stamp(Last.provide(SettingsShell));
+export const SettingsApp = View.stamp(Last.provide(SettingsShell, SettingsShell.layer));

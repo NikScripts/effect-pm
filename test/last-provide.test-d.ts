@@ -1,5 +1,5 @@
 /**
- * Last.provide — entry-point fulfill type surface.
+ * Last.provide — entry-point Effect.provide + run type surface.
  */
 import { expectTypeOf } from "vitest";
 import { Context, Effect, Layer } from "effect";
@@ -12,7 +12,7 @@ class Greeter extends Context.Service<Greeter, string>()(
   static layer = Layer.succeed(Greeter, "hello");
 }
 
-const greeting = Last.provide(Greeter);
+const greeting = Last.provide(Greeter, Greeter.layer);
 expectTypeOf(greeting).toEqualTypeOf<string>();
 
 const one = Last.provide(Effect.succeed(1));
@@ -24,9 +24,10 @@ class Open extends Context.Service<Open, string>()(
   static layer = Layer.effect(Open, Greeter);
 }
 
-expectTypeOf(Last.provide(Open, Greeter.layer)).toEqualTypeOf<string>();
+expectTypeOf(
+  Last.provide(Open, Layer.provide(Open.layer, Greeter.layer)),
+).toEqualTypeOf<string>();
 
-// Open.layer still requires Greeter — single-arg provide is a type error (overload).
 expectTypeOf(Open.layer).toMatchTypeOf<Layer.Layer<Open, never, Greeter>>();
 
 class Hello extends View.make<Hello, { readonly who: string }>()(
@@ -38,5 +39,5 @@ class Hello extends View.make<Hello, { readonly who: string }>()(
   });
 }
 
-const Root = View.stamp(Last.provide(Hello));
+const Root = View.stamp(Last.provide(Hello, Hello.layer));
 expectTypeOf(Root).toMatchTypeOf<View.Component<{ readonly who: string }>>();

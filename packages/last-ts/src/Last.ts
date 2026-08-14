@@ -9,13 +9,14 @@
  * // Track 1: Last.provider(layer, Site)
  * // Track 2: catalog .context(Site) + Last.provideContext(siteLayer); Last.use(App)
  * const DocsLink = Last.link(SiteCatalog, { to: (u) => u.docs })
- * const HelloView = Last.provide(Hello) // Service Layer → value (ViewFn, …)
+ * // Services are Effects — same seam as Effect.provide + run
+ * const HelloView = Last.provide(Hello, Hello.layer)
  * ```
  *
  * SSOT: `docs/handoffs/last-context-view-lock.md` · Effect Style → provide at entry points.
  */
 
-import { Context, Effect, Layer } from "effect";
+import { Effect, Layer } from "effect";
 import * as appInternal from "./internal/app";
 import * as lastContext from "./internal/lastContext";
 import * as lastLink from "./internal/lastLink";
@@ -104,96 +105,38 @@ export const kindOf = (tag: unknown): string | undefined => {
 };
 
 // =============================================================================
-// Last.provide — entry-point fulfill (Effect / Service + requirements → A)
+// Last.provide — entry-point Effect.provide + run (Services are Effects)
 // =============================================================================
 
-type ServiceWithLayer = {
-  readonly layer: Layer.Layer<any, any, any>;
-  readonly key?: string;
-};
-
-type ServiceValueOf<S> = S extends Context.Key<infer _I, infer A> ? A
-  : S extends { readonly Type: infer A } ? A
-  : unknown;
-
-const isServiceWithLayer = (u: unknown): u is ServiceWithLayer =>
-  (typeof u === "object" || typeof u === "function") &&
-  u !== null &&
-  "layer" in u &&
-  Layer.isLayer((u as ServiceWithLayer).layer);
-
-const buildService = <S extends ServiceWithLayer>(
-  service: S,
-  requirements?: Layer.Layer<any, any, never>,
-): ServiceValueOf<S> => {
-  const layer =
-    requirements !== undefined
-      ? Layer.provide(service.layer, requirements)
-      : service.layer;
-  const ctx = Effect.runSync(
-    Effect.scoped(Layer.build(layer as Layer.Layer<any, any, never>)),
-  );
-  return Context.get(
-    ctx,
-    service as unknown as Context.Key<unknown, ServiceValueOf<S>>,
-  );
-};
-
-const runEffect = <A, E, R>(
-  program: Effect.Effect<A, E, R>,
-  requirements?: Layer.Layer<R, any, never>,
-): A => {
-  const effect =
-    requirements !== undefined
-      ? Effect.provide(program, requirements)
-      : (program as Effect.Effect<A, E, never>);
-  return Effect.runSync(effect as Effect.Effect<A, E, never>);
-};
-
 /**
- * Entry-point fulfill: discharge `R` and return the value.
+ * Entry-point fulfill: {@link Effect.provide} then `runSync`.
  *
- * - {@link provide}`(Service)` — build `Service.layer` (`R` must be `never`)
- * - {@link provide}`(Service, requirements)` — `Layer.provide` then build
- * - {@link provide}`(effect)` — run when `R` is `never`
- * - {@link provide}`(effect, requirements)` — `Effect.provide` then run
- *
- * Same seam as Effect Style → provide at entry points. Does **not** open
- * {@link provider} (React page bake). For a View service, `A` is the render fn.
+ * Services are Effects — pass the tag and the Layer that installs it
+ * (usually `Service.layer`, composed with `Layer.provide` when `R` is open).
+ * Does **not** open {@link provider} (React page bake).
  *
  * @example
  * ```ts
- * const App = Last.provide(Hello)
- * const App = Last.provide(Open, Greeter.layer)
+ * const App = Last.provide(Hello, Hello.layer)
+ * const App = Last.provide(Open, Layer.provide(Open.layer, Greeter.layer))
  * const n = Last.provide(Effect.succeed(1))
  * ```
  *
  * @public
  */
 export const provide: {
-  <S extends { readonly layer: Layer.Layer<any, any, never> }>(
-    service: S,
-  ): ServiceValueOf<S>;
-  <S extends { readonly layer: Layer.Layer<any, any, any> }, R, E = never>(
-    service: S & { readonly layer: Layer.Layer<any, any, R> },
-    requirements: Layer.Layer<R, E, never>,
-  ): ServiceValueOf<S>;
-  <A, E>(
-    effect: Effect.Effect<A, E, never> & { readonly layer?: never },
-  ): A;
+  <A, E>(effect: Effect.Effect<A, E, never>): A;
   <A, E, R, E2 = never>(
-    effect: Effect.Effect<A, E, R> & { readonly layer?: never },
+    effect: Effect.Effect<A, E, R>,
     requirements: Layer.Layer<R, E2, never>,
   ): A;
 } = ((
-  first: ServiceWithLayer | Effect.Effect<any, any, any>,
+  effect: Effect.Effect<any, any, any>,
   requirements?: Layer.Layer<any, any, never>,
 ) => {
-  if (isServiceWithLayer(first)) {
-    return buildService(first, requirements);
-  }
-  return runEffect(
-    first as Effect.Effect<any, any, any>,
-    requirements,
-  );
+  const fulfilled =
+    requirements === undefined
+      ? (effect as Effect.Effect<any, any, never>)
+      : Effect.provide(effect, requirements);
+  return Effect.runSync(fulfilled);
 }) as typeof provide;
