@@ -56,5 +56,5 @@ class Open extends View.make<Open>()("test/view-service/Open") {
     }),
   );
 }
-// @ts-expect-error open-R layer is not fulfillable without requirements
-View.stamp(Last.provide(Open));
+// Open.layer still requires Hello — not fulfillable without requirements.
+expectTypeOf(Open.layer).not.toEqualTypeOf<Layer.Layer<Open>>();

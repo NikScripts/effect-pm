@@ -107,8 +107,7 @@ const makeLayerProvider = <R, E = never>(
         { runtime: boot.runtime },
         React.createElement(
           lastContext.EffectContextProvider,
-          { context: boot.ctx },
-          withDocument,
+          { context: boot.ctx, children: withDocument },
         ),
       ),
     );

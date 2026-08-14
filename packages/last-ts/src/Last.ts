@@ -19,7 +19,6 @@ import { Context, Effect, Layer } from "effect";
 import * as appInternal from "./internal/app";
 import * as lastContext from "./internal/lastContext";
 import * as lastLink from "./internal/lastLink";
-import * as View from "./View";
 
 // =============================================================================
 // Provider (Layer → children-only React component) — page entry point
@@ -118,7 +117,7 @@ type ServiceValueOf<S> = S extends Context.Key<infer _I, infer A> ? A
   : unknown;
 
 const isServiceWithLayer = (u: unknown): u is ServiceWithLayer =>
-  typeof u === "object" &&
+  (typeof u === "object" || typeof u === "function") &&
   u !== null &&
   "layer" in u &&
   Layer.isLayer((u as ServiceWithLayer).layer);
@@ -179,9 +178,11 @@ export const provide: {
     service: S & { readonly layer: Layer.Layer<any, any, R> },
     requirements: Layer.Layer<R, E, never>,
   ): ServiceValueOf<S>;
-  <A, E>(effect: Effect.Effect<A, E, never>): A;
+  <A, E>(
+    effect: Effect.Effect<A, E, never> & { readonly layer?: never },
+  ): A;
   <A, E, R, E2 = never>(
-    effect: Effect.Effect<A, E, R>,
+    effect: Effect.Effect<A, E, R> & { readonly layer?: never },
     requirements: Layer.Layer<R, E2, never>,
   ): A;
 } = ((

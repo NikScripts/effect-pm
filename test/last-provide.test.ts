@@ -23,12 +23,7 @@ describe("Last.provide", () => {
     class Open extends Context.Service<Open, string>()(
       "hyperlink-ts/test/last-provide.test/Open",
     ) {
-      static layer = Layer.effect(
-        Open,
-        Effect.gen(function* () {
-          return yield* Greeter;
-        }),
-      );
+      static layer = Layer.effect(Open, Greeter);
     }
     expect(Last.provide(Open, Greeter.layer)).toBe("hello");
   });
@@ -38,10 +33,8 @@ describe("Last.provide", () => {
   });
 
   it("runs an Effect with requirements", () => {
-    const program = Effect.gen(function* () {
-      return yield* Greeter;
-    });
-    expect(Last.provide(program, Greeter.layer)).toBe("hello");
+    const program = Effect.map(Greeter, (s) => s.toUpperCase());
+    expect(Last.provide(program, Greeter.layer)).toBe("HELLO");
   });
 
   it("fulfills a View Service to a render fn", () => {
