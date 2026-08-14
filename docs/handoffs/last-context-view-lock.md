@@ -354,7 +354,9 @@ const DocsItem = Last.link(Site.Site, Item.Item, { to: (u) => u.docs })
 <DocsItem to={(docs) => docs.chapter("routing")}>Routing</DocsItem>
 ```
 
-Base component props merge with link props (`children`, `className`, …).
+Base component props **intersect** link-channel props on the result. At runtime,
+link keys (`to` / `out` / route params / anchor chrome) feed the anchor; the rest
+go to the wrapped component.
 
 ---
 

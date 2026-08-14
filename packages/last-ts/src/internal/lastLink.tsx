@@ -2,25 +2,30 @@
  * Last.link — wrap a component (or bare children) with {@link Router.UnboundLink}.
  * Prefer {@link Router.link}`(YourCatalog)` for app navigation.
  *
+ * Props: component props + link-channel props are **intersected** on the result.
+ * At runtime, link keys feed the anchor; the rest go to the wrapped component.
+ *
  * @internal
  */
 import * as React from "react";
 import { Context } from "effect";
 import * as Router from "../Router";
-import type * as Route from "../Route";
 import {
   type ApiConstraint,
+  type ToHref,
   type UrlBuilder,
+  type UrlBuilderLoose,
+  type UrlMethodLoose,
+  type UrlQueryOptions,
 } from "./routes";
 import * as lastContext from "./lastContext";
 
 const pathKeysSym = "~last-ts/pathKeys" as const;
 
-type UrlQuery = {
-  readonly [key: string]: string | undefined;
-};
+type UrlQuery = NonNullable<UrlQueryOptions["query"]>;
 
-type LinkCommon = {
+/** Anchor chrome shared by every linked result. */
+export type LinkChromeProps = {
   readonly children?: React.ReactNode;
   readonly className?: string;
   readonly title?: string;
@@ -37,13 +42,13 @@ export type LinkOpts<A extends ApiConstraint = ApiConstraint> = {
 
 type AnyComponent = React.ComponentType<any>;
 
-type UrlMethod = ((...args: Array<any>) => string) & {
+type UrlMethod = UrlMethodLoose & {
   readonly [pathKeysSym]?: ReadonlyArray<string>;
 };
 
 const isUrlMethod = (u: unknown): u is UrlMethod => typeof u === "function";
 
-const isGroupBuilder = (u: unknown): u is Route.UrlBuilderLoose =>
+const isGroupBuilder = (u: unknown): u is UrlBuilderLoose =>
   typeof u === "object" && u !== null && !Array.isArray(u);
 
 const buildHrefFromParams = (
@@ -65,18 +70,21 @@ const buildHrefFromParams = (
   return method(...pathArgs);
 };
 
+type AnchorProps = {
+  readonly to?: string | ((urls: UrlBuilderLoose) => string);
+  readonly out?: string;
+  readonly className?: string;
+  readonly title?: string;
+  readonly replace?: boolean;
+  readonly "data-kind"?: string;
+  readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  readonly "aria-current"?: React.AriaAttributes["aria-current"];
+  readonly children?: React.ReactNode;
+};
+
 const wrapWithLink = (
   inner: React.ReactNode,
-  linkProps: {
-    readonly to?: string | ((urls: Route.UrlBuilderLoose) => string);
-    readonly out?: string;
-    readonly className?: string;
-    readonly title?: string;
-    readonly replace?: boolean;
-    readonly "data-kind"?: string;
-    readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
-    readonly "aria-current"?: React.AriaAttributes["aria-current"];
-  },
+  linkProps: AnchorProps,
 ): React.ReactElement =>
   React.createElement(Router.UnboundLink, { ...linkProps, children: inner });
 
@@ -88,11 +96,11 @@ type Mode =
       readonly allowTo: boolean;
       readonly allowOut: boolean;
     }
-  | { readonly _tag: "attrGroup"; readonly group: Route.UrlBuilderLoose }
+  | { readonly _tag: "attrGroup"; readonly group: UrlBuilderLoose }
   | { readonly _tag: "attrRoute"; readonly method: UrlMethod };
 
 const resolveMode = (
-  urls: Route.UrlBuilderLoose,
+  urls: UrlBuilderLoose,
   opts: LinkOpts<any>,
 ): Mode => {
   if (typeof opts.out === "string") {
@@ -127,6 +135,54 @@ const resolveMode = (
   };
 };
 
+/** Keys consumed by the link channel for this mode (not forwarded to the component). */
+const linkOwnedKeys = (mode: Mode): ReadonlySet<string> => {
+  const keys = new Set<string>([
+    "to",
+    "out",
+    "replace",
+    "query",
+    "className",
+    "title",
+    "onClick",
+    "data-kind",
+    "aria-current",
+  ]);
+  if (mode._tag === "attrRoute") {
+    for (const key of mode.method[pathKeysSym] ?? []) {
+      keys.add(key);
+    }
+  }
+  return keys;
+};
+
+const splitProps = (
+  mode: Mode,
+  props: Record<string, unknown>,
+  hasComponent: boolean,
+): {
+  readonly componentProps: Record<string, unknown>;
+  readonly linkRest: Record<string, unknown>;
+} => {
+  const owned = linkOwnedKeys(mode);
+  const componentProps: Record<string, unknown> = {};
+  const linkRest: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(props)) {
+    if (key === "children") {
+      if (hasComponent) {
+        componentProps.children = value;
+      }
+      continue;
+    }
+    if (owned.has(key)) {
+      linkRest[key] = value;
+    } else {
+      componentProps[key] = value;
+    }
+  }
+  return { componentProps, linkRest };
+};
+
 const renderLinked = (
   mode: Mode,
   props: Record<string, unknown>,
@@ -159,7 +215,7 @@ const renderLinked = (
       if (mode.allowTo && to !== undefined && to !== null) {
         return wrapWithLink(body, {
           ...common,
-          to: to as string | ((urls: Route.UrlBuilderLoose) => string),
+          to: to as string | ((urls: UrlBuilderLoose) => string),
         });
       }
       throw new Error("Last.link: pass to or out");
@@ -171,7 +227,7 @@ const renderLinked = (
           "Last.link: group-narrowed link expects to={(group) => …}",
         );
       }
-      const href = (to as (g: Route.UrlBuilderLoose) => string)(mode.group);
+      const href = (to as (g: UrlBuilderLoose) => string)(mode.group);
       return wrapWithLink(body, { ...common, to: href });
     }
     case "attrRoute": {
@@ -195,16 +251,71 @@ const isContextKey = (u: unknown): u is Context.Key<any, any> =>
     typeof (u as { readonly key: unknown }).key === "string");
 
 /** Props for a wrapped component or View/Service render fn. */
-type PropsOfLinked<C> = Context.Service.Shape<C> extends (
-  props: infer P extends object,
-) => any ? P
-  : C extends React.ComponentType<infer P extends object> ? P
+export type PropsOfLinked<C> = C extends React.ComponentType<infer P extends object>
+  ? P
+  : Context.Service.Shape<C> extends (props: infer P extends object) => any ? P
   : {};
+
+type PathKeysOf<M> = M extends {
+  readonly "~last-ts/pathKeys": infer K extends readonly string[];
+} ? K
+  : readonly never[];
+
+type PathParamProps<M> = {
+  readonly [K in PathKeysOf<M>[number]]: string;
+} & {
+  readonly query?: UrlQuery;
+};
+
+type GroupToProp<G> = {
+  readonly to: (group: G) => string;
+};
+
+type AttrFullProps<A extends ApiConstraint> = {
+  readonly to?: ToHref<A> | ((urls: UrlBuilder<A>) => ToHref<A>);
+  readonly out?: string;
+};
+
+/**
+ * Extra props from {@link LinkOpts} mode (destination channel only).
+ *
+ * @internal
+ */
+export type DestPropsFromOpts<
+  A extends ApiConstraint,
+  O extends LinkOpts<A>,
+> = [O] extends [{ readonly out: string }] ? {}
+  : [O] extends [{ readonly to: (urls: UrlBuilder<A>) => infer R }] ? (
+      [R] extends [string] ? {}
+        : [R] extends [{ readonly "~last-ts/pathKeys": readonly string[] }]
+          ? PathParamProps<R>
+        : [R] extends [object] ? GroupToProp<R>
+        : AttrFullProps<A>
+    )
+  : [O] extends [{ readonly to: true }] ? AttrFullProps<A>
+  : [O] extends [{ readonly out: true }] ? { readonly out: string }
+  : AttrFullProps<A>;
+
+type LinkedProps<
+  A extends ApiConstraint,
+  O extends LinkOpts<A>,
+  C = {},
+> = PropsOfLinked<C> & LinkChromeProps & DestPropsFromOpts<A, O>;
 
 /**
  * @internal
  */
-export const link = ((
+export const link: {
+  <A extends ApiConstraint, const O extends LinkOpts<A>>(
+    api: A,
+    opts: O,
+  ): (props: LinkedProps<A, O>) => React.ReactElement;
+  <A extends ApiConstraint, C, const O extends LinkOpts<A> = LinkOpts<A>>(
+    api: A,
+    component: C,
+    opts?: O,
+  ): (props: LinkedProps<A, O, C>) => React.ReactElement;
+} = ((
   _api: unknown,
   second?: unknown,
   third?: unknown,
@@ -218,31 +329,32 @@ export const link = ((
   const Linked = (props: Record<string, unknown>): React.ReactElement => {
     const router = Router.useRouter();
     const mode = resolveMode(
-      router.urls as Route.UrlBuilderLoose,
+      router.urls as UrlBuilderLoose,
       resolvedOpts,
     );
-    let body: React.ReactNode = props.children as React.ReactNode;
+    const hasComponent = Component !== undefined;
+    const { componentProps, linkRest } = splitProps(mode, props, hasComponent);
+
+    let body: React.ReactNode = hasComponent
+      ? undefined
+      : (props.children as React.ReactNode);
+
     if (Component !== undefined) {
       const resolved = isContextKey(Component)
         ? Context.get(lastContext.useEffectContext(), Component)
         : Component;
       body = React.createElement(
         resolved as React.ComponentType<Record<string, unknown>>,
-        props,
+        componentProps,
       );
     }
-    return renderLinked(mode, props, body);
+
+    return renderLinked(
+      mode,
+      { ...linkRest, ...(hasComponent ? {} : { children: props.children }) },
+      body,
+    );
   };
   Linked.displayName = "Last.link";
   return Linked;
-}) as {
-  <A extends ApiConstraint>(
-    api: A,
-    opts: LinkOpts<A>,
-  ): React.FC<LinkCommon & Record<string, any>>;
-  <A extends ApiConstraint, C>(
-    api: A,
-    component: C,
-    opts?: LinkOpts<A>,
-  ): React.FC<PropsOfLinked<C> & LinkCommon & Record<string, any>>;
-};
+}) as typeof link;

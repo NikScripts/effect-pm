@@ -144,6 +144,65 @@ describe("Last.link + Link out", () => {
     expect(html).toContain("Routing");
   });
 
+  it("wraps a component — Item props stay on Item; to stays on the anchor", () => {
+    const Item = (props: {
+      readonly marker: string;
+      readonly children?: React.ReactNode;
+    }): React.ReactElement =>
+      React.createElement(
+        "span",
+        { "data-marker": props.marker, "data-has-to": "to" in props ? "1" : "0" },
+        props.children,
+      );
+
+    const DocsItem = Last.link(Catalog, Item, { to: (u) => u.docs });
+
+    const Tree = (): React.ReactElement =>
+      React.createElement(
+        DocsItem,
+        {
+          marker: "ok",
+          to: (d: { readonly chapter: (s: string) => string }) =>
+            d.chapter("routing"),
+        },
+        "Routing",
+      );
+
+    const html = renderToString(
+      React.createElement(Provider, null, React.createElement(Tree)),
+    );
+    expect(html).toContain('href="/docs/routing"');
+    expect(html).toContain('data-marker="ok"');
+    expect(html).toContain('data-has-to="0"');
+    expect(html).toContain("Routing");
+  });
+
+  it("uncalled route — path params are link-owned (not forwarded when wrapping)", () => {
+    const Item = (props: {
+      readonly children?: React.ReactNode;
+    } & Record<string, unknown>): React.ReactElement =>
+      React.createElement(
+        "span",
+        {
+          "data-slug": typeof props.slug === "string" ? props.slug : "none",
+        },
+        props.children,
+      );
+
+    const ChapterItem = Last.link(Catalog, Item, {
+      to: (u) => u.docs.chapter,
+    });
+
+    const Tree = (): React.ReactElement =>
+      React.createElement(ChapterItem, { slug: "routing" }, "Routing");
+
+    const html = renderToString(
+      React.createElement(Provider, null, React.createElement(Tree)),
+    );
+    expect(html).toContain('href="/docs/routing"');
+    expect(html).toContain('data-slug="none"');
+  });
+
   it("group-narrowed DocsLink", () => {
     const DocsLink = Last.link(Catalog, { to: (u) => u.docs });
 

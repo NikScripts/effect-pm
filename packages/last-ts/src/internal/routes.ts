@@ -995,9 +995,11 @@ export type ToHref<A> =
   | `${PathsOf<A> & string}?${string}`;
 
 /** Loose builder for erased / runtime contexts. */
-export type UrlMethodLoose = (
+export type UrlMethodLoose = ((
   ...args: ReadonlyArray<string | UrlQueryOptions>
-) => string;
+) => string) & {
+  readonly "~last-ts/pathKeys"?: ReadonlyArray<string>;
+};
 
 export type UrlBuilderLoose = {
   readonly [key: string]: UrlBuilderLoose | UrlMethodLoose;
@@ -1050,15 +1052,19 @@ type UrlMethodArgsFromBags<
 
 type UrlMethod<E extends uiRoute.Constraint> = E extends
   { readonly "~ParamBags": infer Bags extends { readonly [key: string]: string } }
-  ? (
+  ? ((
     ...args: UrlMethodArgsFromBags<Bags, PathKeys<E["path"]>>
-  ) => PathHref<E["path"]>
+  ) => PathHref<E["path"]>) & {
+    readonly "~last-ts/pathKeys": PathKeys<E["path"]>;
+  }
   // Prefer literal `path` — Effect codecs in the Params slot mean concrete
   // endpoints often no longer `extends uiRoute.Route<…>`. Widened
   // `path: string` (e.g. after `Route.params`) stays {@link UrlMethodLoose}.
   : E extends { readonly path: infer PathType extends string }
     ? string extends PathType ? UrlMethodLoose
-    : (...args: UrlMethodArgs<PathKeys<PathType>>) => PathHref<PathType>
+    : ((...args: UrlMethodArgs<PathKeys<PathType>>) => PathHref<PathType>) & {
+      readonly "~last-ts/pathKeys": PathKeys<PathType>;
+    }
   : UrlMethodLoose;
 
 const isUrlQueryOptions = (value: unknown): value is UrlQueryOptions =>
