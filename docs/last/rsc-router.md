@@ -79,12 +79,16 @@ export const Provider = Last.provider(
 ## Soft-nav
 
 ```ts
-import { Link } from "last-ts/Waku"
-import { urls } from "../lib/site"
+import * as Router from "last-ts/Router"
+import { Site, urls } from "../lib/site"
+
+export const Link = Router.link(Site)
 
 <Link to={urls.index()}>Home</Link>
 <Link to={urls.guides_slug("routing")}>Guide</Link>
 ```
+
+Waku is only the location Layer (`Waku.layer` / `Waku.fromApi`) — not a Link API.
 
 ## View DI
 

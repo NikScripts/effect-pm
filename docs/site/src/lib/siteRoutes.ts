@@ -289,7 +289,7 @@ export const requireSitePath = (href: string): SitePath => {
 
 /**
  * Narrow a runtime href for catalog {@link ./../ui/Router.Link} `to`
- * (`Waku.link(site)` — PathsOf only, no bare `string`).
+ * (`Router.link(site)` — PathsOf only, no bare `string`).
  */
 export const asLinkTo = (href: string): import("last-ts/Route").ToHref<Site> =>
   requireSitePath(href);

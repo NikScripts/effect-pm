@@ -250,7 +250,7 @@ export class Body extends Layout.make()(
 
 ```ts
 export class App extends Router.make("app").add(…) {}
-export const Link = Router.link(App) // or Waku.link(App)
+export const Link = Router.link(App)
 ```
 
 At each use site: **`to` xor `out`**. Prefer **`Last.link`** wrappers when narrowing; otherwise the derived `Link`.

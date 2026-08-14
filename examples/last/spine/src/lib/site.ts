@@ -20,6 +20,9 @@ export class Site extends Router.make("last-ts/spine").add(
 
 export const urls = Route.urlBuilder(Site);
 
+/** Typesafe soft-nav — Waku Layer only swaps the location engine. */
+export const Link = Router.link(Site);
+
 const app = pipe(
   RouterBuilder.group(Site, "__top", (h) =>
     h

@@ -121,7 +121,7 @@ behavior onto Router.
 |-----|----------|
 | `router.to((u) => u.docs("x"))` | Push (default); `{ replace: true }` ok |
 | `router.go("/path?q=1")` | Push/replace raw href |
-| `Router.link(catalog)` / `Waku.link(catalog)` | Soft-nav link derived beside the router (lite: `<a>`; Waku: Waku `Link`) |
+| `Router.link(catalog)` | Soft-nav link derived beside the router (`Service.go` — Memory / History / Waku Layer) |
 | `router.back()` | Memory stack or `history.back()` / Waku back |
 | `router.toRoot()` | Replace to `/` |
 | `router.prefetch(href)` | Waku layer; no-op on lite |

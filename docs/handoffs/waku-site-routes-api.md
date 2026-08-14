@@ -67,7 +67,7 @@ void r.to((u) => u.search({ query: { q: "WorkPool" } }))
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| `hyperlink-ts/ui/Router/waku` | Waku layer — `waku` / `Provider` / `Link` / `useRouter` |
+| `hyperlink-ts/ui/Router/waku` | Waku **layer** — `waku` / `Provider` / `useRouter` (soft-nav: `Router.link(catalog)`) |
 | Site `ui/Router.tsx` | Skin: default binding + no-op Outlet |
 | Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` |
 | Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` via `urls` |

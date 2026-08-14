@@ -1,8 +1,9 @@
 /**
  * @module Waku
  *
- * Waku location transport — own namespace because of the `waku` peer
- * (`History` / `Memory` stay on lite modules).
+ * Waku **location Layer** — own namespace because of the `waku` peer
+ * (`History` / `Memory` stay on lite modules). Soft-nav is still
+ * {@link ./Router.link}`(catalog)` — this module only swaps the engine.
  *
  * ```ts
  * // SPA / Outlet — RouterBuilder registry + Waku engine
@@ -13,6 +14,9 @@
  * // RSC file routes — catalog soft-nav only (no Outlet handlers)
  * export const provider = Last.provider(Waku.fromApi(Site))
  * // <provider>…</provider>
+ *
+ * // Same module as the catalog:
+ * export const Link = Router.link(Site)
  * ```
  *
  * Lower-level binding helpers re-export from the former `Router/waku` entry.
@@ -31,8 +35,6 @@ export {
   useRouter,
   useHasRouter,
   useMatch,
-  Link,
-  link,
   type WakuBinding,
 } from "./Router/waku";
 

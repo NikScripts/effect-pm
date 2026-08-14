@@ -312,6 +312,8 @@ export type LinkProps<A extends ApiConstraint> = {
 
 /**
  * Soft-nav / external link component closed over catalog `A`.
+ * Soft-nav goes through the live {@link Service} (`go`) — Memory, History, or
+ * Waku Layer all share this API.
  *
  * @public
  */

@@ -1,8 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { Link } from "last-ts/Waku";
-import { urls } from "../lib/site";
+import { Link, urls } from "../lib/site";
 
 export function Nav(): ReactElement {
   return (

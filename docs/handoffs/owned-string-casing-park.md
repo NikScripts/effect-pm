@@ -38,9 +38,9 @@ Do **not** Eng without a dedicated cutover.
 ### 4. `Route.Href` brand — **superseded**
 
 Tried `effect/Brand` on `urlBuilder` returns — UrlBuilder types collapsed to
-`never` in `.test-d.ts`. **Eng'd instead:** `Router.link(catalog)` /
-`Waku.link(catalog)` closes `to` over {@link Route.PathsOf} (no brand). Free-form
-URLs use `out`.
+`never` in `.test-d.ts`. **Eng'd instead:** `Router.link(catalog)` closes `to` over {@link Route.PathsOf}
+(no brand). Soft-nav uses the live Router Service; `Waku.layer` is location only.
+Free-form URLs use `out`.
 
 ## Done this track
 

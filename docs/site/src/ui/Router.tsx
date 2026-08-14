@@ -1,12 +1,13 @@
 /**
  * @module ui/Router (docs site)
  *
- * Soft-nav: branded `urls` + Waku **layer** + {@link Link} from
- * `Waku.link(site)` (same catalog as soft-nav).
+ * Waku **layer** for location + catalog-derived {@link Link} via
+ * `Router.link(site)` (not a Waku Link API).
  */
 "use client";
 
 import type { Service as LastRouterService } from "last-ts/Router";
+import * as Router from "last-ts/Router";
 import * as Waku from "hyperlink-ts/ui/Router/waku";
 import {
   site as defaultSite,
@@ -40,7 +41,8 @@ export const Provider = Waku.Provider;
 export const useRouter = Waku.useRouter as () => LiveRouter;
 export const useHasRouter = Waku.useHasRouter;
 export const useMatch = Waku.useMatch;
-export const Link = Waku.link(defaultSite);
+/** Catalog Link — soft-nav through the live Service (Waku layer supplies `go`). */
+export const Link = Router.link(defaultSite);
 /** Waku layer only (`layer.waku`). */
 export const layer = Waku.layer;
 
