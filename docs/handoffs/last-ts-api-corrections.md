@@ -51,7 +51,8 @@ Follow **[`router-httpapi-lock.md`](./router-httpapi-lock.md)** for Router / Rou
 - Handlers: `Effect → ReactNode` (and documented overloads)
 - `Page.Request` / `Page.document` (+ `Document.*` / `Page/react` bridges) for request + **document title**
 - `Last.provider(layer)` — one children-only provider baked from the Layer graph
-- `View.make` + `Last.provide(Service, Service.layer)` + Layers for DI components
+- `View.make` + const `Layer.effect` / `Last.provide(Tag, layer)` + Layers for DI components
+  (no `static layer` / `Tag.layer` teaching)
 - `History` / `Memory` / `Waku` as transport namespaces (`fromApi` / `.layer`)
 
 ### Eng’d locks (do not invent past these)

@@ -10,7 +10,7 @@
  * // Track 2: catalog .context(Site) + Last.provideContext(siteLayer); Last.use(App)
  * const DocsLink = Last.link(SiteCatalog, { to: (u) => u.docs })
  * // Services are Effects — same seam as Effect.provide + run
- * const HelloView = Last.provide(Hello, Hello.layer)
+ * const HelloView = Last.provide(Hello, helloLayer)
  * ```
  *
  * SSOT: `docs/handoffs/last-context-view-lock.md` · Effect Style → provide at entry points.
@@ -113,13 +113,13 @@ export const kindOf = (tag: unknown): string | undefined => {
  * Entry-point fulfill: {@link Effect.provide} then `runSync`.
  *
  * Services are Effects — pass the tag and the Layer that installs it
- * (usually `Service.layer`, composed with `Layer.provide` when `R` is open).
- * Does **not** open {@link provider} (React page bake).
+ * (a const Layer, composed with `Layer.provide` when `R` is open — not
+ * `static layer` on the class). Does **not** open {@link provider} (React page bake).
  *
  * @example
  * ```ts
- * const App = Last.provide(Hello, Hello.layer)
- * const App = Last.provide(Open, Layer.provide(Open.layer, Greeter.layer))
+ * const App = Last.provide(Hello, helloLayer)
+ * const App = Last.provide(Open, Layer.provide(openLayer, greeterLayer))
  * const n = Last.provide(Effect.succeed(1))
  * ```
  *

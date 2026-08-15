@@ -25,13 +25,16 @@ const compilerOptions: ts.CompilerOptions = {
   },
 };
 
-const include = "examples/ui/view-typed-jsx.tsx";
+const include = "examples/ui/view-typed-jsx/App.tsx";
 const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
-if (!loaded.includes("Last.provide") || !loaded.includes("Layer.effect")) {
-  throw new Error("demo must include Last.provide and Layer.effect");
+if (!loaded.includes("Last.provide") || !loaded.includes("appLayer")) {
+  throw new Error("demo must include Last.provide and appLayer");
+}
+if (loaded.includes("static layer") || loaded.includes("AppRoot.layer")) {
+  throw new Error("demo must not teach static layer / Tag.layer");
 }
 if (loaded.includes("View.gen(") || loaded.includes("View.succeed(")) {
   throw new Error("View.gen / View.succeed masks are removed — use Effect/Layer");
@@ -54,8 +57,8 @@ const app = queries.find((q) => q.includes("const App:"));
 if (!app) {
   throw new Error(`missing App query:\n${joined}`);
 }
-if (app.includes("Greeter")) {
-  throw new Error(`App should have discharged Greeter, got: ${app}`);
+if (app.includes("Greeter") || app.includes("Hello")) {
+  throw new Error(`App should have discharged deps, got: ${app}`);
 }
 if (joined.includes("<{}, any>") || joined.includes(": any")) {
   throw new Error(`queries must not show any:\n${joined}`);

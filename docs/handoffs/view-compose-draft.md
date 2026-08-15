@@ -49,4 +49,4 @@ Compose deps on `static layer`. Call site is only `View.mount(RootService)`.
 ## Verification
 
 - `pnpm exec tsc -p packages/last-ts`
-- view / last-provide tests; `examples/ui/view-typed-jsx.tsx`
+- view / last-provide tests; `examples/ui/view-typed-jsx/` (ui/ + lib/; Twoslash SSOT)

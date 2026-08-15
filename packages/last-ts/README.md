@@ -23,7 +23,7 @@ import { fileRouter } from "last-ts/vite"
 yield* Page.document(Document.title("Chapter"))
 
 // Page edge
-const App = Last.provide(Hello, Hello.layer)
+const App = Last.provide(Hello, helloLayer)
 export const provider = Last.provider(Waku.fromApi(Site))
 ```
 

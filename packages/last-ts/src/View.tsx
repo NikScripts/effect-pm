@@ -5,14 +5,13 @@
  *
  * Use Effect/Layer directly — no View-shaped Layer masks:
  * - **Mint:** {@link make} — Context slot; service shape is a {@link ViewFn}
- * - **Build:** `Layer.succeed` / `Layer.effect` + `Effect.gen`
- * - **Default Layer:** `static layer = Layer.succeed(This, impl)` (compose deps there)
- * - **Edge:** {@link Last.provide}`(Tag, Tag.layer)` → {@link ViewFn}
- *   (`layer` `R` must be `never`)
+ * - **Leaf defaults:** pass a default component as the 2nd arg (Reference) — HTML lives there
+ * - **Build:** const `Layer.succeed` / `Layer.effect` + `Effect.gen` + `yield*` (never `static layer`)
+ * - **Edge:** {@link Last.provide}`(Tag, layer)` → {@link ViewFn} (`layer` `R` must be `never`)
  * - **Page runtime:** {@link Last.provider}`(layer)` when Atom / router context is needed
  *
  * There is no freestanding View value you call as JSX. Always `yield*` a
- * minted view (or {@link Last.provide}`(Tag, Tag.layer)` at the app edge). Name is {@link make}
+ * minted view (or {@link Last.provide}`(Tag, layer)` at the app edge). Name is {@link make}
  * (HttpApi-shaped), not `Service`.
  *
  * Prototype metadata: {@link annotations} / {@link getAnnotations}.
@@ -58,7 +57,7 @@ export const annotationsSym: unique symbol = Symbol.for(
 
 /**
  * Plain render function — what {@link Layer.succeed} / {@link Layer.effect}
- * install into a Service. Edge: {@link Last.provide}`(Tag, Tag.layer)`.
+ * install into a Service. Edge: {@link Last.provide}`(Tag, layer)`.
  *
  * @public
  */
@@ -336,7 +335,8 @@ export interface Prototype<
    * - `Service()(key, default, annotations)` — optional + annotations
    *
    * Does **not** discharge Requirement — fulfill via `.Prototype()` first when needed.
-   * Add `static layer = Layer.succeed(This, …)` (or `Layer.effect`) for a default Layer.
+   * Leaf HTML / optional slots: pass a default as the 2nd arg. Required Services:
+   * install with a const `Layer.succeed` / `Layer.effect` (never `static layer`).
    */
   readonly Service: <Self, NewProps extends object = {}>() => {
     <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
@@ -436,33 +436,29 @@ export const Prototype =
 
 /**
  * View service handle — Effect v4 `Context.Service` / `Context.Reference`.
- * `yield*` to get the {@link ViewFn}. Attach a default Layer with
- * `static layer = Layer.succeed(This, …)` (camelCase `layer`, never `*Live`).
+ * `yield*` to get the {@link ViewFn}. Prefer a **const** Layer at the edge —
+ * never `static layer` on the class.
  *
- * Pass a default component as the second argument for an optional slot
- * (Reference) — override with `Effect.provideService` / Layer for themes,
- * sidebars, nested settings layout, etc.
+ * Pass a default component as the second argument for leaf HTML / optional slots
+ * (Reference) — override with `Effect.provideService` / `Layer.provideMerge` for
+ * themes, sidebars, nested settings layout, etc.
  *
  * @example
  * ```ts
  * class Greeter extends View.make<Greeter, { readonly name: string }>()(
  *   "app/view/greeter",
- * ) {
- *   static layer = Layer.succeed(Greeter, ({ name }) => <h1>{name}</h1>)
- * }
+ *   ({ name }) => <h1>{name}</h1>,
+ * ) {}
  *
- * class Hello extends View.make<Hello, { who: string }>()("app/Hello") {
- *   static layer = pipe(
- *     Layer.effect(
- *       Hello,
- *       Effect.gen(function* () {
- *         const G = yield* Greeter
- *         return (props: { who: string }) => <G name={props.who} />
- *       }),
- *     ),
- *     Layer.provide(Greeter.layer),
- *   )
- * }
+ * class Hello extends View.make<Hello, { who: string }>()("app/Hello") {}
+ *
+ * const helloLayer = Layer.effect(
+ *   Hello,
+ *   Effect.gen(function* () {
+ *     const G = yield* Greeter
+ *     return (props: { who: string }) => <G name={props.who} />
+ *   }),
+ * )
  *
  * // Optional slot — default sidebar; pages can swap
  * class Sidebar extends View.make<Sidebar>()(
@@ -470,7 +466,7 @@ export const Prototype =
  *   () => <nav data-sidebar="default">Menu</nav>,
  * ) {}
  *
- * const App = Last.provide(Hello, Hello.layer)
+ * const App = Last.provide(Hello, helloLayer)
  * ```
  *
  * Prefer `pipe(layer, Layer.provide(…))` over `layer.pipe(…)`.
