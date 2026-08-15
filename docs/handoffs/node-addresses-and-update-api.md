@@ -371,6 +371,56 @@ revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 | D18 | Dream = Update compose; forward-proxy = substrate |
 | D19 | Plan tags must match serve; infer later |
 | D20 | Eng order: S14 → config/policy → stream/ref → Update β → dream |
+| **D21** | **Bag keys camelCase**; option **strings** stay PascalCase; References stay PascalCase |
+| **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
+
+#### D21 — camelCase keys (overrides prior PascalCase bag keys)
+
+**Choice:** Product **object keys** are **camelCase** everywhere we stamp bags
+(`Node.configure`, `LookupConfig.make`, plan-ish structs). **Owned string values**
+stay **PascalCase** (`"Primary"`, `"Refuse"`, `"Accept"`, `"First"`). **Context
+References / Services** stay **PascalCase** (`LookupPolicy.Sticky`,
+`LookupPolicy.Yield`) — those are types/bindings, not bag keys.
+
+```ts
+Node.configure(MyNode, { listen: "Primary", active: "A", as: "A" })
+LookupConfig.make({ sticky: true, verify: "Reject", streamGap: "Stall" })
+LookupPolicy.yield("Refuse") // string option — PascalCase
+yield* LookupPolicy.Sticky   // Reference — PascalCase
+```
+
+**Why:** Owner override 2026-08-15 — keys camelCase despite earlier PascalCase bag
+locks. Matches normal TS/Effect option objects; keeps wire/mode literals loud.
+
+**Rejected:** PascalCase bag keys (`{ Listen: "Primary" }`); camelCase option
+strings (`"refuse"`).
+
+**Implies:** Tip `LookupPolicy.make({ Sticky: true })` and dock sketches that used
+PascalCase keys retarget on Eng. `_tag` on fragments: prefer PascalCase policy
+name still (`{ _tag: "Sticky", value }`) as the sum tag — not the bag key.
+Confirm fragment `_tag` casing if you want it camelCase too (default: leave
+`_tag` PascalCase as the Reference identity).
+
+#### D22 — `Node.configure`, not `Node.config`
+
+**Choice:** The stamp function is **`Node.configure(node, partial)`**. Module name
+for the knobs remains **`NodeConfig`** (types / References). Reject `Node.config`
+as the method name.
+
+**Why:** In Effect, **`Config`** is already a first-class module (`effect/Config` —
+env/file providers, `Config.string`, `Config.unwrap`, …). A method named `.config`
+reads like “attach Effect Config” or collides in headspace with
+`ConfigProvider` / `Node.assumeTokenConfig`. `configure` is the verb for “apply
+this partial knob bag to this node” and sits next to `Node.policy` without
+stealing Effect’s noun.
+
+**Rejected:** `Node.config` (collision); `Node.withConfig` (already rejected);
+reusing Effect `Config` as the Node knob carrier (wrong abstraction — these are
+Context/Layer stamps, not env decode).
+
+**Implies:** Dream sketches and D10 use `Node.configure`. Layer helpers stay
+camelCase (`listen`, `active`). Docs say “Node config” in prose for the concept;
+API symbol is `configure` + `NodeConfig`.
 
 #### D1 — Product A/B bar = S5 (Shape β)
 
@@ -519,25 +569,25 @@ handlers only where behavior is invoked; mode enums stay config.
 **Implies:** Tip’s merged Policy bags rename on Eng; Conflict *mode* is config,
 Yield *handler* is policy (askIncumbent config selects that Yield runs).
 
-#### D10 — Node.config + Node.policy
+#### D10 — Node.configure + Node.policy
 
 **Choice:**
 
 ```ts
-Node.config(MyNode, { Listen: "Primary", Active: "A" }) // partial bag, last-write
-Node.policy(MyNode, LookupPolicy.yield("Refuse"), LookupPolicy.pickFirst) // varargs
+Node.configure(MyNode, { listen: "Primary", active: "A" }) // camelCase keys (D21)
+Node.policy(MyNode, LookupPolicy.yield("Refuse"), LookupPolicy.pickFirst)
 ```
 
-Reject product names `withPolicy` / `withConfig`. Address widen stays `.pipe(Address.*)`.
+Reject product names `withPolicy` / `withConfig` / **`Node.config`** (see D22).
+Address widen stays `.pipe(Address.*)`.
 
-**Why:** Owner gave this API. Bags fit structural knobs; varargs fit Layer-shaped
-policy fragments (same composability as today).
+**Why:** Owner gave bag + policy split; D21/D22 refine casing and Effect-safe naming.
 
 **Rejected:** Policy as a partial bag of strings only; config as varargs Layers
-only; keeping `withPolicy` as the name.
+only; keeping `withPolicy` / `Node.config` as the name.
 
-**Implies:** `Node.config` merge semantics = last-write per key; lists like
-`Listen: ["A"]` replace, they don’t union unless we later add explicit add APIs.
+**Implies:** Merge = last-write per key; lists like `listen: ["A"]` replace, they
+don’t union unless we later add explicit add APIs.
 
 #### D11 — Both-ways options
 
