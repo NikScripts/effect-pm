@@ -393,45 +393,37 @@ dream demos that need a novel to explain.
 | D20 | Eng order: S14 → config/policy → stream/ref → Update β → dream |
 | **D21** | **Bag keys camelCase**; option **strings** stay PascalCase; References stay PascalCase |
 | **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
-| **D23** | **Auto address pool** for proxy cutover (not hard-coded A/B names); optional **key-derived range**; narrow by concrete address or explicit range |
+| **D23** | **Auto address pool** for proxy; labels = plain strings (no special A/B); optional key-derived range |
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
 
 #### D23 — Auto address pool for proxy cutover (revised 2026-08-15)
 
 **Choice:** For Shape β, apps declare **protocols** + **proxy**, and get an
-**available address pool** the runtime can use the way we use A/B today (bring
-one up, activate/flip, drain the other) — **not** a requirement to name labels
-`"A"` / `"B"`. Optional: a **standard range derived from the node key** (port
-band / sock namespace) so two nodes don’t collide without hand-minting. Narrow
-when needed with a concrete address or an explicit range.
+**available address pool** the runtime can flip/drain across — **not** a special
+A/B address system. **Labels are just strings** — `"A"` / `"B"` are not
+privileged, not required, and not a separate address kind. Call them whatever
+you want (`"blue"`, `"1"`, …) or use an unlabeled/auto pool and activate by
+slot/dial id. Optional: a **standard range derived from the node key** (port
+band / sock namespace). Narrow with a concrete address or an explicit range.
 
 ```ts
-// Intent (sketch) — protocols + proxy → pool of usable dials
-Node.configure(Worker, { proxy: "Prefer" /*, protocols: ["Http", "Ipc"] */ })
-// runtime: primary + N available backend dials from key-derived range (or defaults)
-
-// Narrow
-Node.configure(Worker, { /* range: … */ })
-Address.unix("/explicit/path.sock") // pin / add concrete
+// Intent — protocols + proxy → pool of usable dials (no A/B special case)
+Node.configure(Worker, { proxy: "Prefer" })
+Node.activate(Worker, "blue")   // any label string — or slot id if unlabeled pool
+Address.unix("canary", "/path") // label = string, nothing magic
 ```
 
-**Not chosen:** “Auto mint `Address.unix({ A, B })` from key” as the story —
-owner did not ask for key→A/B socks; A/B is the *usage pattern* (active/standby
-slots), not the required label vocabulary. Labeled `"A"`/`"B"` remain valid when
-apps want explicit names.
+**Why:** Owner — labels are strings; no need for special A/B addresses unless we
+deliberately build a branded A/B product mode (we are not). Cutover = pick among
+available dials / Active target, not an A/B type system.
 
-**Why:** Owner correction — available addresses used *like* A/B; key only as a
-possible **range** seed, not as hard-wired A/B paths.
+**Rejected:** Privileged `"A"`/`"B"` vocabulary; `Address.unix({ A, B })` as a
+special constructor meaning “the A/B system”; key→A.sock/B.sock as the model.
 
-**Rejected:** Hard-coding product DX around labels `"A"`/`"B"`; requiring
-hand-minted socks for the default proxy pool; random non-ranged `/tmp` UUIDs as
-the only auto story (range-from-key preferred when auto).
-
-**Implies:** `Node.activate` / Active config speak in **pool slot / address
-identity** (label if present, else stable pool index / dial id). Dream examples
-can still show `"A"`/`"B"` as one way to name slots, not the only way.
-`unixFromKey` bind stays useful for **single** key-derived primary; pool range
-is a separate mechanism (may share slug/root Config).
+**Implies:** Examples may still write `"A"`/`"B"` as arbitrary demo strings.
+`Active` / `as` / `activate` take `string` (or pool slot id). Dual-slot cutover
+is a **usage pattern** over the normal address list + proxy, not a feature flag
+named A/B.
 
 #### D24 — Type-catch conflicting addresses
 
