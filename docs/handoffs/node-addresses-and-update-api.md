@@ -294,24 +294,24 @@ no second `make`.
 | Path | When | Semantics (target) |
 |------|------|--------------------|
 | **`.pipe(Address.*)`** | Class hierarchy / type widen after `make` | Addresses **append** |
-| **`Node.config(MyNode, { …partial })`** | Process roles / knobs after the class exists | Partial `NodeConfig` bag — last-write merge; overlay shell (not a new Tag/make). **Reject** `withConfig` / `withPolicy` as the name |
-| **`Node.policy(MyNode, …fragments)`** | Handler-shaped policy overlays on a node | **Varargs merge** (like today’s `withPolicy`); policy only (Yield / Pick / …) — not mode dials. Bag stays on `Node.config` |
+| **`Node.configure(MyNode, { …partial })`** | Process roles / knobs after the class exists | Partial `NodeConfig` bag — **camelCase keys**, PascalCase string values (D21); last-write merge. **Reject** `Node.config` / `withConfig` / `withPolicy` (D22) |
+| **`Node.policy(MyNode, …fragments)`** | Handler-shaped policy overlays on a node | **Varargs merge**; policy only. Bag stays on `Node.configure` |
 | **`LookupConfig.provide` on layers** | Client / peers / serve composition | Layer override of ambient Lookup config — not stamped into the Node forever |
 
 ```ts
 // Target DX (not Eng’d)
-const edge = Node.config(WorkerPrivate, {
-  Listen: "Primary",
-  Active: "A",
-  Advertise: "Primary",
+const edge = Node.configure(WorkerPrivate, {
+  listen: "Primary",
+  active: "A",
+  advertise: "Primary",
 })
-const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
+const backendA = Node.configure(WorkerPrivate, { as: "A", listen: ["A"] })
 Node.policy(MyNode, LookupPolicy.yield("Refuse"))
 Node.policy(MyNode, LookupPolicy.yield("Accept"))
 ```
 
 `Node.activate` remains the live flip for Active (runtime retarget), separate from
-stamping Listen/As/Advertise via `Node.config`.
+stamping listen/as/advertise via `Node.configure`.
 
 **Policy handlers (locked 2026-08-13):** **both forms for every option** — the
 parameter helper **and** named sugar. Neither is second-class.
@@ -760,14 +760,14 @@ class WorkerPrivate extends Worker.pipe(
   Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
 )
 
-const edge = Node.config(WorkerPrivate, {
-  Listen: "Primary",
-  Advertise: "Primary",
-  Proxy: "Prefer",
-  Active: "A",
+const edge = Node.configure(WorkerPrivate, {
+  listen: "Primary",
+  advertise: "Primary",
+  proxy: "Prefer",
+  active: "A",
 })
-const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
-const backendB = Node.config(WorkerPrivate, { As: "B", Listen: ["B"] })
+const backendA = Node.configure(WorkerPrivate, { as: "A", listen: ["A"] })
+const backendB = Node.configure(WorkerPrivate, { as: "B", listen: ["B"] })
 
 Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])])
 
@@ -778,7 +778,7 @@ Node.unix(backendA, [
 
 Hyperlink.client(Probe, Worker)
 Hyperlink.client(Jobs, Worker).pipe(
-  LookupConfig.provide(LookupConfig.make({ Sticky: true })),
+  LookupConfig.provide(LookupConfig.make({ sticky: true })),
 )
 
 Node.policy(backendA, LookupPolicy.yield("Refuse"))
