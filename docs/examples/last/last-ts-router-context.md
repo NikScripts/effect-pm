@@ -1,4 +1,4 @@
-{#last-ts-router-context title="last-ts — router context" status="draft" appliesTo=all}
+{#last-ts-router-context title="last-ts — router context" status="stable" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > Rendered docs (Tailscale):
@@ -6,13 +6,12 @@
 <!-- docs-site-link:end -->
 # last-ts — router-scoped Last.context
 
-{.draft}
-**Draft** — Twoslash fences include the **full** runnable files under
+Twoslash fences include the **full** runnable files under
 `examples/last/router-context/` (no `---cut---`); each fence shows its path.
 
 **App:** [`examples/last/router-context/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/router-context/)  
 **Run:** `pnpm run example:last-router-context`  
-**Lock:** [`last-context-view-lock.md`](../../handoffs/last-context-view-lock.md) (track 2)
+**Guide:** [Last.context](/docs/last-context) · **Lock:** [`last-context-view-lock.md`](../../handoffs/last-context-view-lock.md) (track 2)
 
 ## Layout
 

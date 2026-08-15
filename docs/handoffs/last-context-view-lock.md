@@ -1,6 +1,6 @@
 # Last.context + View UI kits (owner lock)
 
-**Status:** LOCK — **track 1 + track 2 Eng’d** (tip-sync after this cut)  
+**Status:** LOCK — **track 1 + track 2 + T2e/T2f Eng’d** (tip-synced)  
 
 **Branch:** `cursor/agent-k-page-route-6d0e` (same tip as `integration` after sync)  
 **Package:** `last-ts`  
@@ -508,7 +508,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 | **T2c — runtime mount** | Soft-nav match → mount catalog→group→route bag bridges (active path only) | memory router test: `Last.use` sees bags; sibling group not mounted |
 | **T2d — `Last.use(Router, …)`** | bare = active merge; string group; `(r) => group \| route` selectors | type + runtime tests |
 | **T2e — dogfood** | Port context-link demo off hand `Last.provider(layer, Site)` (+ spine/Last site already `Last.provider(layer)` only) | **Eng’d** — context-link uses `.context` + `Last.provideContext`; home SSR has no `data-docs` |
-| **T2f — docs** | Twoslash dream page; lock status → Eng’d | Examples hub |
+| **T2f — docs** | Twoslash dream page; lock status → Eng’d; Examples hub | **Eng’d** — guide [`last-context.md`](../guides/last-context.md) · hub [Examples → UI](../examples.md#ui) |
 
 **Do not** Eng T2c before T2a/b — runtime without debt is how apps silently ship half-provided kits.
 
@@ -550,6 +550,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 | Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Eng’d** — `test/last-context-link.test.tsx` · demo [`examples/last/context-link/`](../../examples/last/context-link/) · twoslash [`last-ts-context-link`](../examples/last/last-ts-context-link.md) |
 | Track 2: router/builder-scoped provide | **Eng’d** — `test/last-router-context.test.tsx` · demo [`examples/last/router-context/`](../../examples/last/router-context/) · twoslash [`last-ts-router-context`](../examples/last/last-ts-router-context.md) |
 | **T2e dogfood** | **Eng’d** — context-link edge is `Last.provider(layer)` only; docs kit mounts on `/docs` |
+| **T2f docs** | **Eng’d** — guide [`../guides/last-context.md`](../guides/last-context.md) |
 
 ---
 

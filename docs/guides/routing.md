@@ -174,7 +174,8 @@ catalog. No auto-merge into `Router.make` or host `createPages`.
 
 ## last-ts — RSC + Router
 
-→ **[RSC + Router](/docs/rsc-router)** (`docs/last/rsc-router.md`)
+→ **[RSC + Router](/docs/rsc-router)** (`docs/last/rsc-router.md`)  
+→ **[Last.context](/docs/last-context)** — View kits + router scopes
 
 ```bash
 pnpm run docs:last-site   # docs/last/site
