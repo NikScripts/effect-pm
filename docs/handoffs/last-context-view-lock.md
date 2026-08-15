@@ -243,8 +243,18 @@ export class Body extends Layout.make()(
 
 | Prop | Role |
 |------|------|
-| `to` | In-app only — **typesafe**: {@link Route.PathsOf} literal, urlBuilder result, or `(urls) => urls.group.route(…)`. **Bare `string` banned.** |
-| `out` | External / free-form URL — not soft-nav (service for how `out` is handled: **next**) |
+| `to` | In-app only — **typesafe**: {@link Route.PathsOf} literal, urlBuilder result, or `(urls) => urls.group.route(…)`. **Bare `string` banned.** Runs {@link Link.To}. |
+| `out` | External / free-form URL — runs {@link Link.Out} (default: follow `<a href>`). |
+
+**Handlers + View** (`last-ts/Link`):
+
+| Key | Role |
+|-----|------|
+| `Link.To` | `Context.Reference<Handler>` — in-app activation (default: `Router.go`) |
+| `Link.Out` | `Context.Reference<Handler>` — external activation (default: no soft-nav) |
+| `Link.View` | `View.make` with default `<a>` — clickable chrome |
+
+Override with `Layer.succeed` on `Last.provider` / `RouterBuilder` compose / `Last.link(…, layer)`.
 
 **Canonical:** derive Link in the **same module as the router**:
 
@@ -272,6 +282,7 @@ At each use site: **`to` xor `out`**. Prefer **`Last.link`** wrappers when narro
 - Pass a **regular component** → returns a **regular component**
 - Pass an **effect-based component** → returns an **effect-based component**
 - Pass **no component** → returns a narrowed **`Link`** that still wraps `children`
+- Optional trailing **`Layer`** — local `Link.To` / `Out` / `View` overrides
 
 Name: **`Last.link`** (not `View.link`) — sits with `Last.use` / `Last.provider`; does not mint a View tag.
 

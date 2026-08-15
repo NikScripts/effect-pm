@@ -13,6 +13,7 @@ export * as Document from "./Document";
 export * as History from "./History";
 export * as Last from "./Last";
 export * as Layout from "./Layout";
+export * as Link from "./Link";
 export * as Memory from "./Memory";
 export * as Page from "./Page";
 export * as RootLayout from "./RootLayout";

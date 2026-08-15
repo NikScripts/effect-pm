@@ -33,6 +33,7 @@ import * as outlet from "./internal/outlet";
 import * as internal from "./internal/router";
 import * as catalog from "./internal/routes";
 import type { ApiConstraint } from "./internal/routes";
+import * as linkRender from "./internal/linkRender";
 import * as Route from "./Route";
 
 // =============================================================================
@@ -180,9 +181,7 @@ export type ForApi<A extends ApiConstraint> = Service<A>;
  *
  * @public
  */
-export class Router extends Context.Service<Router, Service>()(
-  "last-ts/Router",
-) {}
+export { Router } from "./internal/routerTag";
 
 /**
  * Typed destinations from a file-router path table.
@@ -283,67 +282,14 @@ export type LinkProps<A extends ApiConstraint> = {
 
 /**
  * Soft-nav / external link component closed over catalog `A`.
- * Soft-nav goes through the live {@link Service} (`go`) — Memory, History, or
- * Waku Layer all share this API.
+ * Soft-nav runs {@link ./Link.To}; external runs {@link ./Link.Out}; chrome is
+ * {@link ./Link.View}.
  *
  * @public
  */
 export type LinkComponent<A extends ApiConstraint> = (
   props: LinkProps<A>,
 ) => React.ReactElement;
-
-const renderLink = <A extends ApiConstraint>(
-  props: LinkProps<A>,
-  urls: Route.UrlBuilder<A>,
-  go: (href: string, options?: { readonly replace?: boolean }) => void,
-): React.ReactElement => {
-  if (props.out !== undefined) {
-    return React.createElement(
-      "a",
-      {
-        href: props.out,
-        className: props.className,
-        title: props.title,
-        "data-kind": props["data-kind"],
-        "aria-current": props["aria-current"],
-        rel: "noopener noreferrer",
-        onClick: props.onClick,
-      },
-      props.children,
-    );
-  }
-  if (props.to === undefined) {
-    throw new Error("Router.link: pass to or out");
-  }
-  const href =
-    typeof props.to === "function" ? props.to(urls) : props.to;
-  return React.createElement(
-    "a",
-    {
-      href,
-      className: props.className,
-      title: props.title,
-      "data-kind": props["data-kind"],
-      "aria-current": props["aria-current"],
-      onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
-        props.onClick?.(event);
-        if (
-          event.defaultPrevented ||
-          event.button !== 0 ||
-          event.metaKey ||
-          event.altKey ||
-          event.ctrlKey ||
-          event.shiftKey
-        ) {
-          return;
-        }
-        event.preventDefault();
-        go(href, { replace: props.replace });
-      },
-    },
-    props.children,
-  );
-};
 
 /**
  * Derive a typesafe Link for a catalog — same module as the router.
@@ -367,10 +313,10 @@ export const link = <A extends ApiConstraint>(
 ): LinkComponent<A> => {
   const Link = (props: LinkProps<A>): React.ReactElement => {
     const router = useRouter();
-    return renderLink(
-      props,
+    return linkRender.useRenderLink(
+      props as linkRender.RenderLinkProps<A>,
       router.urls as Route.UrlBuilder<A>,
-      (href, options) => router.go(href, options),
+      router,
     );
   };
   Link.displayName = `Router.link(${api.identifier})`;
@@ -402,10 +348,10 @@ export type UnboundLinkProps = {
  */
 export const UnboundLink = (props: UnboundLinkProps): React.ReactElement => {
   const router = useRouter();
-  return renderLink(
-    props as LinkProps<ApiConstraint>,
-    router.urls as Route.UrlBuilder<ApiConstraint>,
-    (href, options) => router.go(href, options),
+  return linkRender.useRenderLink(
+    props,
+    router.urls as Route.UrlBuilderLoose,
+    router,
   );
 };
 

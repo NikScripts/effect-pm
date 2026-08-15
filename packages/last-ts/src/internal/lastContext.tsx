@@ -76,9 +76,9 @@ type BagsStore = {
 const BagsReactContext = React.createContext<BagsStore | null>(null);
 
 /** Effect Context from `Last.provider(layer)` for sync service lookup. */
-const EffectReactContext = React.createContext<Context.Context<any> | null>(
-  null,
-);
+export const EffectReactContext = React.createContext<
+  Context.Context<any> | null
+>(null);
 
 export const EffectContextProvider = (props: {
   readonly context: Context.Context<any>;

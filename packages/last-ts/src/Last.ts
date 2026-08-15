@@ -68,8 +68,9 @@ export const provideContext: typeof lastContext.provideContext =
   lastContext.provideContext;
 
 /**
- * Wrap a component (or children) with soft-nav ({@link ./Router.UnboundLink}).
- * Prefer {@link ./Router.link}`(YourCatalog)` beside the router for typed `to`.
+ * Wrap a component (or children) with soft-nav ({@link ./Link.View} +
+ * {@link ./Link.To} / {@link ./Link.Out}). Prefer {@link ./Router.link}`(YourCatalog)`
+ * beside the router for typed `to`. Optional Layer overrides handlers / View.
  *
  * @public
  */

@@ -83,6 +83,10 @@
       "types": "./src/Last.ts",
       "default": "./src/Last.ts"
     },
+    "./Link": {
+      "types": "./src/Link.tsx",
+      "default": "./src/Link.tsx"
+    },
     "./vite": {
       "types": "./src/vite/fileRouter.ts",
       "default": "./src/vite/fileRouter.ts"

@@ -7,6 +7,7 @@ import * as React from "react";
 import { renderToString } from "react-dom/server";
 import * as Last from "last-ts/Last";
 import * as Layout from "last-ts/Layout";
+import * as LinkModule from "last-ts/Link";
 import * as Memory from "last-ts/Memory";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
@@ -220,5 +221,29 @@ describe("Last.link + Link out", () => {
       React.createElement(Provider, null, React.createElement(Tree)),
     );
     expect(html).toContain('href="/docs/routing"');
+  });
+
+  it("Last.link Layer overrides Link.View", () => {
+    const Custom = Last.link(
+      Catalog,
+      { to: (u) => u.home() },
+      Layer.succeed(LinkModule.View, (props) =>
+        React.createElement(
+          "a",
+          { href: props.href, "data-custom-link": "1" },
+          props.children,
+        ),
+      ),
+    );
+
+    const html = renderToString(
+      React.createElement(
+        Provider,
+        null,
+        React.createElement(Custom, null, "Home"),
+      ),
+    );
+    expect(html).toContain('data-custom-link="1"');
+    expect(html).toContain('href="/"');
   });
 });

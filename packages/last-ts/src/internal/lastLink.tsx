@@ -8,8 +8,9 @@
  * @internal
  */
 import * as React from "react";
-import { Context } from "effect";
+import { Context, Layer } from "effect";
 import * as Router from "../Router";
+import * as linkRender from "./linkRender";
 import {
   type ApiConstraint,
   type ToHref,
@@ -82,11 +83,28 @@ type AnchorProps = {
   readonly children?: React.ReactNode;
 };
 
+const LinkedAnchor = (props: {
+  readonly linkProps: AnchorProps;
+  readonly layer?: Layer.Layer<unknown, never, never>;
+}): React.ReactElement => {
+  const router = Router.useRouter();
+  return linkRender.useRenderLink(
+    props.linkProps,
+    router.urls as UrlBuilderLoose,
+    router,
+    props.layer,
+  );
+};
+
 const wrapWithLink = (
   inner: React.ReactNode,
   linkProps: AnchorProps,
+  layer?: Layer.Layer<unknown, never, never>,
 ): React.ReactElement =>
-  React.createElement(Router.UnboundLink, { ...linkProps, children: inner });
+  React.createElement(LinkedAnchor, {
+    linkProps: { ...linkProps, children: inner },
+    layer,
+  });
 
 type Mode =
   | { readonly _tag: "direct"; readonly to: string }
@@ -187,6 +205,7 @@ const renderLinked = (
   mode: Mode,
   props: Record<string, unknown>,
   body: React.ReactNode,
+  layer?: Layer.Layer<unknown, never, never>,
 ): React.ReactElement => {
   const common = {
     className: props.className as string | undefined,
@@ -203,20 +222,24 @@ const renderLinked = (
 
   switch (mode._tag) {
     case "direct":
-      return wrapWithLink(body, { ...common, to: mode.to });
+      return wrapWithLink(body, { ...common, to: mode.to }, layer);
     case "directOut":
-      return wrapWithLink(body, { ...common, out: mode.out });
+      return wrapWithLink(body, { ...common, out: mode.out }, layer);
     case "attrFull": {
       const out = props.out;
       const to = props.to;
       if (mode.allowOut && typeof out === "string") {
-        return wrapWithLink(body, { ...common, out });
+        return wrapWithLink(body, { ...common, out }, layer);
       }
       if (mode.allowTo && to !== undefined && to !== null) {
-        return wrapWithLink(body, {
-          ...common,
-          to: to as string | ((urls: UrlBuilderLoose) => string),
-        });
+        return wrapWithLink(
+          body,
+          {
+            ...common,
+            to: to as string | ((urls: UrlBuilderLoose) => string),
+          },
+          layer,
+        );
       }
       throw new Error("Last.link: pass to or out");
     }
@@ -228,11 +251,11 @@ const renderLinked = (
         );
       }
       const href = (to as (g: UrlBuilderLoose) => string)(mode.group);
-      return wrapWithLink(body, { ...common, to: href });
+      return wrapWithLink(body, { ...common, to: href }, layer);
     }
     case "attrRoute": {
       const href = buildHrefFromParams(mode.method, props);
-      return wrapWithLink(body, { ...common, to: href });
+      return wrapWithLink(body, { ...common, to: href }, layer);
     }
   }
 };
@@ -309,21 +332,39 @@ export const link: {
   <A extends ApiConstraint, const O extends LinkOpts<A>>(
     api: A,
     opts: O,
+    layer?: Layer.Layer<unknown, never, never>,
   ): (props: LinkedProps<A, O>) => React.ReactElement;
   <A extends ApiConstraint, C, const O extends LinkOpts<A> = LinkOpts<A>>(
     api: A,
     component: C,
     opts?: O,
+    layer?: Layer.Layer<unknown, never, never>,
   ): (props: LinkedProps<A, O, C>) => React.ReactElement;
 } = ((
   _api: unknown,
   second?: unknown,
   third?: unknown,
+  fourth?: unknown,
 ): AnyComponent => {
   const Component = isComponent(second) ? second : undefined;
-  const opts = (
-    Component !== undefined ? third : second
-  ) as LinkOpts<any> | undefined;
+  let opts: LinkOpts<any> | undefined;
+  let layer: Layer.Layer<unknown, never, never> | undefined;
+  if (Component !== undefined) {
+    if (Layer.isLayer(third)) {
+      opts = undefined;
+      layer = third as Layer.Layer<unknown, never, never>;
+    } else {
+      opts = third as LinkOpts<any> | undefined;
+      layer = Layer.isLayer(fourth)
+        ? (fourth as Layer.Layer<unknown, never, never>)
+        : undefined;
+    }
+  } else if (Layer.isLayer(third)) {
+    opts = second as LinkOpts<any>;
+    layer = third as Layer.Layer<unknown, never, never>;
+  } else {
+    opts = second as LinkOpts<any> | undefined;
+  }
   const resolvedOpts: LinkOpts<any> = opts ?? { to: true };
 
   const Linked = (props: Record<string, unknown>): React.ReactElement => {
@@ -353,6 +394,7 @@ export const link: {
       mode,
       { ...linkRest, ...(hasComponent ? {} : { children: props.children }) },
       body,
+      layer,
     );
   };
   Linked.displayName = "Last.link";
