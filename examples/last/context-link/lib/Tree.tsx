@@ -1,19 +1,13 @@
 /**
  * @module examples/last/context-link/lib/Tree
  *
- * Main-group composition — zero DOM tags. Root scope via `Last.use(App)`.
+ * Composition only — zero DOM tags; place region Views from `Last.use(Site)`.
  */
 import * as React from "react";
 import * as Last from "last-ts/Last";
-import * as Layout from "last-ts/Layout";
-import * as App from "./App";
+import * as Site from "./Site";
 
 export const Tree = (): React.ReactElement => {
-  const { NavBar } = Last.use(App.App);
-  return (
-    <>
-      <NavBar.View />
-      <Layout.Outlet />
-    </>
-  );
+  const { NavBar } = Last.use(Site.Site);
+  return <NavBar.View />;
 };

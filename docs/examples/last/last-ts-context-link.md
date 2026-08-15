@@ -11,7 +11,7 @@
 
 **App:** [`examples/last/context-link/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/context-link/)  
 **Run:** `pnpm run example:last-context-link`  
-**Lock:** [`last-context-view-lock.md`](../../handoffs/last-context-view-lock.md) (track 1 + T2e dogfood)
+**Lock:** [`last-context-view-lock.md`](../../handoffs/last-context-view-lock.md)
 
 ## Layout
 
@@ -19,38 +19,28 @@
 examples/last/context-link/
   ui/
     NavBar.tsx           leaves + Last.link + composition + NavBarContext
-    DocsSidebar.tsx      docs-only region kit
   lib/
-    Catalog.ts           path catalog for Last.link (no Site import)
-    App.ts               .context(Site) + docs.context(DocsKit)
-    SiteCopy / DocsCopy  content bags
-    Site.ts / DocsKit.ts nested Last.context
-    Tree / DocsTree      composition only (Last.use(App…))
-    AppLayout / DocsLayout  Layout.make — place trees only
-    routes.tsx           Layout.provide + Last.provideContext
-    Provider.tsx         Last.provider(layer) — no second Site arg
-  App.tsx                Provider > Router.Outlet
+    Catalog.ts           Router catalog (main / docs groups)
+    SiteCopy.ts          Context.Service content bag
+    Site.ts              nested Last.context
+    Tree.tsx             composition only (Last.use → Views)
+    routes.tsx           RouterBuilder handlers
+    Provider.tsx         Last.provider(layer, Site)
+  App.tsx                Provider > Tree
   main.ts                renderToString harness
 ```
 
 ## Value
 
 - **Views** for every component slot (leaf DOM + composition)
+- **`Last.context`** groups a region (`NavBarContext`) and nests under `Site`
+- **`Last.use`** in composition / `Tree` (no DOM in those layers)
 - **`Last.link`**: direct home brand, group-narrowed `DocsLink`, uncalled
   `ChapterLink` (`slug` + `query` props), external `out`
-- **T2e:** declare kits on the catalog (`.context`); fulfill with
-  `Last.provideContext`; **no** `Last.provider(layer, Site)`
-- Home mounts root Site only — docs kit stays off `/` (`data-docs` absent)
 
-## Catalog (paths for Last.link)
+## Catalog
 
 {.twoslash include="examples/last/context-link/lib/Catalog.ts"}
-``` ts
-```
-
-## App (scopes)
-
-{.twoslash include="examples/last/context-link/lib/App.ts"}
 ``` ts
 ```
 
@@ -74,43 +64,19 @@ Leaf Views, `Last.link` wrappers, composition View, `NavBarContext`.
 ``` ts
 ```
 
-## Docs kit
-
-{.twoslash include="examples/last/context-link/lib/DocsKit.ts"}
-``` ts
-```
-
-{.twoslash include="examples/last/context-link/ui/DocsSidebar.tsx"}
-``` tsx
-```
-
-## Trees + layouts
+## Tree
 
 {.twoslash include="examples/last/context-link/lib/Tree.tsx"}
 ``` tsx
 ```
 
-{.twoslash include="examples/last/context-link/lib/DocsTree.tsx"}
-``` tsx
-```
-
-{.twoslash include="examples/last/context-link/lib/AppLayout.tsx"}
-``` tsx
-```
-
-{.twoslash include="examples/last/context-link/lib/DocsLayout.tsx"}
-``` tsx
-```
-
-## Routes + Provider + App
-
-{.twoslash include="examples/last/context-link/lib/routes.tsx"}
-``` tsx
-```
+## Provider
 
 {.twoslash include="examples/last/context-link/lib/Provider.tsx"}
 ``` tsx
 ```
+
+## App
 
 {.twoslash include="examples/last/context-link/App.tsx"}
 ``` tsx
