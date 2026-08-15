@@ -243,11 +243,9 @@ yield* Node.activate(WorkerPrivate, "B")
 
 class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
 
-class DualHttp extends Node.make("fleet/Edge", [
-  Address.http(":8080"),
+class DualHttp extends Node.make("fleet/Edge", Address.http(":8080")).pipe(
   Address.http(":8081"),
-]).pipe(
-  NodePolicy.advertise("All"),              // publish every declared address
+  // advertise all via configure — not an address array on make
 ) {}
 // multi-primary pick → LookupPolicy.pick / ColdAmbiguous, not NodePolicy
 ```
@@ -1069,42 +1067,33 @@ Open: slug rules, directory root Config, Windows named-pipe story — behind bin
 
 ### 3.4.4 `Node.make` — address / address array as second arg; keep pipe + options (parked)
 
-**Arity locked (2026-08-09):** `Node.make(key, Address | Address[], options?)`.
+**Arity (D25, supersedes 2026-08-09 array lock):** `Node.make(key, Address?, options?)`
+— **no** `Address[]`. Empty make + pipe, or one address then pipe more.
 
 ```ts
-// SKETCH — locked shape (class extends — not const)
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
-
-class WorkerPorts extends Node.make("fleet/Worker", [
-  Address.http(":8080"),
-  Address.unix("A", "/var/run/w.a.sock"),
-  Address.unix("B", "/var/run/w.b.sock"),
-]) {}
-
+class Worker extends Node.make("fleet/Worker") {}
+class WorkerHttp extends Node.make("fleet/Worker", Address.http(":8080")) {}
+class WorkerPorts extends WorkerHttp.pipe(
+  Address.unix("/var/run/w.sock"),
+) {}
 class WorkerKey extends Node.make("fleet/Worker", Address.unixFromKey) {}
-
-class WorkerOpts extends Node.make("fleet/Worker", Address.http(":8080"), {
-  /* non-address options */
-}) {}
 ```
+
+~~Former lock: `(key, Address|Address[], options?)`~~ — **rejected** (D25).
 
 **Keep the piped form** for widening after the fact. **Owner prefer: pipe `Address.*`
 directly** onto the Node — not wrapped in `Node.withAddresses([…])`:
 
 ```ts
-// Preferred — public class, then private dials via Public.pipe (HttpApi-shaped)
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
 class WorkerPrivate extends Worker.pipe(
-  Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
+  Address.unix("/var/run/w.sock"), // label if you want: Address.unix("blue", path)
 ) {}
 ```
 
-Do **not** put A/B private addresses on the public `Node.make`. `Address` values are
-pipeable fragments. A `withAddresses` bag remains optional sugar at most — **not** the
-preferred DX.
-
-`…rest` args for addresses were considered; owner expects we **still have uses for an
-options arg**, so don’t make the signature rest-only.
+Do **not** put a pile of addresses on `make` as an array. `Address` values are
+pipeable fragments. A `withAddresses` bag remains optional sugar at most — **not**
+the preferred DX.
 
 ### 3.4.5 Address policies — define knobs, then defaults (parked)
 
@@ -1579,7 +1568,7 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 11. ~~Manual `addressFromKey`~~ / ~~address-less Address~~ — **rejected**.
     **`Address.unixFromKey`** sentinel (no `()`) — **lean** (§3.3).
 12. ~~Where `Address` lives~~ — **locked: `hyperlink-ts/Address`** (own subpath).
-12b. ~~`Node.make` arity~~ — **locked: `(key, Address|Address[], options?)`** (§3.4).
+12b. ~~`Node.make` arity~~ — **D25: `(key, Address?, options?)` — no `Address[]`** (§3.3.3 / §3.4).
 12c. Multi-primary client pick — Policy default when several primaries exist.
 12d. Same label+protocol, different dials — how Policy names/disambiguates them.
 12e. ~~`withAddresses` wrapper~~ — **prefer pipe `Address.*` directly** (§3.4);
