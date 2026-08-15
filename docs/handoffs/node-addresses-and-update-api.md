@@ -347,6 +347,26 @@ surface when owner says Eng.
 All open A/B / policy / dream calls **agent-decided** below. Change an id → we
 revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
+**Quality bar (owner 2026-08-15):** D1–D22 stand. On top of them — every Eng’d
+surface must be **as easy to set up and as extendable as the best A/B / rollout
+tools** (k8s Deployments + Services, Envoy/edge VIP flip, Nomad/systemd + LB).
+If a step is harder than “declare identity → role overlays → plan/simulate/execute”
+or less extendable than “new labeled backend / new policy handler / new plan step
+without forging identities,” it fails the bar even if it matches a D#. Ease and
+extension win tie-breaks when Enging.
+
+| Easy (DX) | Extendable (growth) |
+|-----------|---------------------|
+| One `Node.make` + `configure` / `policy` — no forged A/B keys | New label (C) = another address + `configure({ as, listen })` |
+| Stable client dial; cutover is `Update.plan`→`simulate`→`execute` | New policy = one Service + both-ways options + default Layer |
+| Both-ways options + camelCase bags — readable, guessable | New config knob = Reference + camelCase bag field — not a new module |
+| Ready/handoff/activate inside execute — not a script | S6 dual-public and S5 β share plan/simulate; execute strategy varies |
+| Defaults work (Accept, Primary advertise, verify on) | Call-site → stamp → ambient precedence; Layer `provide` for clients |
+
+**Fail the bar:** manual queue copy, `verifyOff` as the story, duplicated worker
+files, options-bag `restartSuccessor` as SSOT, three `make`s for one key,
+dream demos that need a novel to explain.
+
 **Summary table**
 
 | Id | Choice (short) |
