@@ -4,6 +4,8 @@
  * Presentational nav (plain anchors + shared `.nav-*` classes). Soft-nav /
  * collapse stay on `GroupedNav` in the mobile overlay; this slot dogfoods
  * View.make defaults without pulling Waku into the chrome layer.
+ *
+ * Const Layers at the edge — no `static layer`.
  */
 import * as React from "react";
 import { Effect, Layer } from "effect";
@@ -88,30 +90,30 @@ export const standardsSidebar = (
 
 class BookShell extends View.make<BookShell, BookSidebarProps>()(
   "docs/site/BookShell",
-) {
-  static layer = Layer.effect(
-    BookShell,
-    Effect.gen(function* () {
-      const Side = yield* BookSidebar;
-      return (props: BookSidebarProps) => React.createElement(Side, props);
-    }),
-  );
-}
+) {}
+
+const bookShellLayer = Layer.effect(
+  BookShell,
+  Effect.gen(function* () {
+    const Side = yield* BookSidebar;
+    return (props: BookSidebarProps) => React.createElement(Side, props);
+  }),
+);
 
 class StandardsShell extends View.make<StandardsShell, BookSidebarProps>()(
   "docs/site/StandardsShell",
-) {
-  static layer = Layer.effect(
-    StandardsShell,
-    Effect.gen(function* () {
-      const Side = yield* BookSidebar;
-      return (props: BookSidebarProps) => React.createElement(Side, props);
-    }).pipe(Effect.provideService(BookSidebar, standardsSidebar)),
-  );
-}
+) {}
+
+const standardsShellLayer = Layer.effect(
+  StandardsShell,
+  Effect.gen(function* () {
+    const Side = yield* BookSidebar;
+    return (props: BookSidebarProps) => React.createElement(Side, props);
+  }).pipe(Effect.provideService(BookSidebar, standardsSidebar)),
+);
 
 /** Main docs book — default {@link BookSidebar}. */
-export const MainBook = Last.provide(BookShell, BookShell.layer);
+export const MainBook = Last.provide(BookShell, bookShellLayer);
 
 /** Standards book — Sidebar overridden for this tree. */
-export const StandardsBook = Last.provide(StandardsShell, StandardsShell.layer);
+export const StandardsBook = Last.provide(StandardsShell, standardsShellLayer);

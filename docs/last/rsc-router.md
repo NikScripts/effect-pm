@@ -59,5 +59,5 @@ export const provider = Last.provider(Waku.fromApi(Site))
 ## Client island
 
 ```ts
-const App = Last.provide(Shell, Shell.layer)
+const App = Last.provide(Shell, shellLayer)
 ```

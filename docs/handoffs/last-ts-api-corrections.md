@@ -39,7 +39,7 @@ stale — fix on sight.
 | **`Page.modeOf` / `optionsOf` / `extract` / `paramBagsOf` / `configOf`** (+ `WakuConfig` helper surface) | Adapter/test helpers for the inject/`getConfig` bridge and catalog merge | Unapproved public API — **deleted**. Revisit only via owner lock + correct process |
 | **`Route.fromEffect` / `staticFromEffect` / `mixedFromEffect` / `Route.fromPage`** (top-level Page-class catalog bake) | Catalog bake / Page-class merge invented on the branch | Unapproved — **deleted**. **Not** `Group.fromEffect` / `group.from` — those stay core public (HttpApi dual; fileRouter / `Route.fileRoot` builds on them). |
 | **`Route.fileRootFromPages` / `Router.fileSystemFromPages` / `destinationsFromPages` / `pagesByIdFromModules`** (and siblings that exist only to merge **Page classes** into the file table) | Dogfood shortcut | Unapproved — **deleted**. Distinct from path-table `Route.fileRoot` / `group.fromEffect`. |
-| Teaching **`Shell.layer.pipe(Layer.provide(…))`** as the house style | Reads as a triple chain | Prefer `pipe(Shell.layer, Layer.provide(…))` (or other rearrangement). Avoid long `.a.b.pipe` chains without a visual break |
+| Teaching **`static layer` / `Tag.layer` / `Shell.layer.pipe(…)`** | Forbidden / reads as a chain | Const `shellLayer` + `Last.provide(Shell, shellLayer)`; prefer `pipe(layer, Layer.provide(…))` when composing |
 
 ---
 
