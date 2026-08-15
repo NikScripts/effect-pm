@@ -220,34 +220,30 @@ LookupPolicy.make({ Sticky: true, Verify: "reject" })
 //      pnpm run example:launcher-dream-redeploy
 //
 // ── ONE Node.make per identity — never make the same key twice ─────
-// Public class = client-facing dials only (no A/B on construction).
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
+class Worker extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
 
-// Private view = Public.pipe(Address…) — same key, HttpApi-shaped.
-class WorkerPrivate extends Worker.pipe(
-  Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
-  NodePolicy.proxy("Prefer"),
-) {}
+// Private view = .add(Address) — same key, HttpApi-shaped (not .pipe)
+class WorkerPrivate extends Worker.add(Address.unix("/var/run/w.sock")) {}
 
-// Process roles = Node.config overlays (same key + address list)
-const edge = Node.config(WorkerPrivate, {
-  Listen: "Primary",
-  Active: "A",
+// Process roles = Node.configure overlays (same key)
+const edge = Node.configure(WorkerPrivate, {
+  listen: "Primary",
+  active: "blue",
+  proxy: "Prefer",
 })
-const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
+const backend = Node.configure(WorkerPrivate, { as: "blue", listen: "As" })
 
 Node.http(edge, [Node.forward(edge, Probe)])
-Node.unix(backendA, [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })])
+Node.unix(backend, [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })])
 Hyperlink.client(Probe, Worker) // public
-yield* Node.activate(WorkerPrivate, "B")
+yield* Node.activate(WorkerPrivate, "green")
 
-class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
+class Local extends Node.make("fleet/Local").add(Address.unixFromKey) {}
 
-class DualHttp extends Node.make("fleet/Edge", Address.http(":8080")).pipe(
-  Address.http(":8081"),
-  // advertise all via configure — not an address array on make
-) {}
-// multi-primary pick → LookupPolicy.pick / ColdAmbiguous, not NodePolicy
+class DualHttp extends Node.make("fleet/Edge")
+  .add(Address.http(":8080"))
+  .add(Address.http(":8081")) {}
+// multi-primary pick → LookupConfig / LookupPolicy.pick, not NodeConfig
 ```
 
 **Defaults:** `PrimaryAddress` = `"AllUnlabeled"` (every unlabeled address — several
@@ -291,7 +287,7 @@ no second `make`.
 
 | Path | When | Semantics (target) |
 |------|------|--------------------|
-| **`.pipe(Address.*)`** | Class hierarchy / type widen after `make` | Addresses **append** |
+| **`.add(Address)`** | Class hierarchy / type widen after `make` (HttpApi-style; **not** `.pipe`) | Addresses **append** |
 | **`Node.configure(MyNode, { …partial })`** | Process roles / knobs after the class exists | Partial `NodeConfig` bag — **camelCase keys**, PascalCase string values (D21); last-write merge. **Reject** `Node.config` / `withConfig` / `withPolicy` (D22) |
 | **`Node.policy(MyNode, …fragments)`** | Handler-shaped policy overlays on a node | **Varargs merge**; policy only. Bag stays on `Node.configure` |
 | **`LookupConfig.provide` on layers** | Client / peers / serve composition | Layer override of ambient Lookup config — not stamped into the Node forever |
@@ -393,55 +389,55 @@ dream demos that need a novel to explain.
 | **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
 | **D23** | **protocols + proxy → auto dials**; narrow optional; no Address.ipc / no pool-index ritual as DX |
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
-| **D25** | **`Node.make` does not take `Address[]`** — `make(key)` or `make(key, one Address)` + `.pipe(Address.*)` |
-| **D26** | **Nodes = HttpApi constructable direction** — immutable widen via `extends` / `.pipe`; never mutate a made Node/class in place |
+| **D25** | **`Node.make` does not take `Address[]`** — `make(key)` or chain **`.add(Address)`**; no array arity |
+| **D26** | **Nodes = HttpApi constructable** — `make` + **`.add`** / `class extends X.add(…)`; **not** `.pipe` |
 
 #### D26 — Node direction = HttpApi constructable (locked 2026-08-15)
 
-**Choice:** Nodes follow the same shape as `HttpApi.make` → `.add` / class
-`extends`: declare with `Node.make`, **widen by returning a new value**
-(`.pipe(Address.*)` / `class B extends A.pipe(…)`), never mutate the original
-class or make-result in place.
+**Choice:** Same as `HttpApi.make` → **`.add`** → `class extends …`. Widen by
+**method chain / new class extending the add result**. **Not** `.pipe`.
 
 ```ts
 class Worker extends Node.make("fleet/Worker") {}
-class WorkerHttp extends Worker.pipe(Address.http(":8080")) {}
-// Worker unchanged — like MyApi.add(Posts) leaving MyApi alone
+class WorkerHttp extends Worker.add(Address.http(":8080")) {}
+// or inline: class Worker extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
 
-class WorkerUnix extends WorkerHttp.pipe(Address.unix("/tmp/w.sock")) {}
+class WorkerUnix extends WorkerHttp.add(Address.unix("/tmp/w.sock")) {}
+// Worker / WorkerHttp unchanged — .add returns a new value (like HttpApi.add)
 ```
 
-`Node.configure` / `Node.policy` are **role overlays** on a made identity (process
-knobs), not “mutate the Api.” Same key; new shell — still no in-place edit of
-the class’s address list.
+`Node.configure` / `Node.policy` stay **role overlays** (process knobs on a made
+identity) — not HttpApi `.add`, and not `.pipe`.
 
-**Why:** Owner — this is the new direction for nodes (side quest → product lock).
+**Why:** Owner — HttpApi direction for nodes; explicitly **not** `.pipe`.
 
-**Rejected:** Mutating a `Node.make` result / class after the fact; growing
-addresses by assigning into the existing class; array-on-make (D25).
+**Rejected:** `.pipe(Address.*)` as the widen API; mutating a made Node in place;
+array-on-make (D25).
 
-**Implies:** Docs and Eng treat `make` + `pipe` + `extends` as the SSOT story,
-matching Effect HttpApi. Tip `withPolicy` → `configure`/`policy` overlays stay
-overlay-shaped, not HttpApi `.add` clones of the whole catalog unless we later
-unify.
+**Implies:** Tip’s `Node.make(…).pipe(Address…)` retargets to **`.add`** on Eng.
+Docs drop pipe-as-SSOT for address widen.
 
 #### D25 — No address array on `Node.make`
 
-**Choice:** `Node.make` is **not** `make(key, Address[])`. More than one address
-goes on via **`.pipe(Address.*)`**. Preferred with D23: **`make(key)` +
-`configure({ protocols, proxy })`**.
+**Choice:** `Node.make` is **not** `make(key, Address[])`. Add addresses with
+**`.add(Address)`** (one at a time), HttpApi-style. Preferred with D23:
+**`make(key)` + `configure({ protocols, proxy })`**.
 
 ```ts
 class Worker extends Node.make("fleet/Worker") {}
-class WorkerHttp extends Node.make("fleet/Worker", Address.http(":8080")) {}
-class WorkerMore extends WorkerHttp.pipe(Address.unix("/tmp/w.sock")) {}
+class WorkerHttp extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
+class WorkerMore extends WorkerHttp.add(Address.unix("/tmp/w.sock")) {}
 ```
 
-**Why:** Owner — array-on-make is wrong.
+Optional: `make(key, one Address)` as sugar for `make(key).add(that)` — Eng
+detail; **never** an array second arg.
 
-**Rejected:** `Node.make(key, […addresses])` as product API.
+**Why:** Owner — array-on-make is wrong; widen is `.add` (D26), not pipe.
 
-**Implies:** Tip still accepts `Address[]` — remove on Eng. §3.4.4 updated.
+**Rejected:** `Node.make(key, […addresses])`; `.pipe` as the address API.
+
+**Implies:** Tip still has `pipe` + `Address[]` — remove/replace on Eng. §3.4.4
+updated.
 
 #### D23 — Auto addresses from protocols + proxy (revised again 2026-08-15)
 
@@ -479,9 +475,8 @@ Hyperlink.client(Probe, Worker) // stable primary
 
 ```ts
 Node.configure(Worker, { protocols: ["Http", "Unix"], proxy: "Prefer" })
-// pin primary
-.pipe(Address.http(":8080"))
-// or constrain — optional; app can also build its own list
+// pin primary when you care
+Worker.add(Address.http(":8080"))
 ```
 
 **Ties to addressless (already Eng’d on legacy `Node.Service`):** serve with no
@@ -664,9 +659,8 @@ Implicit revive hides custody and Ready.
 #### D7 — One identity, role overlays
 
 **Choice:** Exactly one `Node.make` per `nodeKey` for client-facing construction.
-Private dials = `Public.pipe(Address…)`. Edge vs backend A/B =
-`Node.config(…, { Listen, As, Active, … })`. Never three `make`s with the same
-key; never put A/B on the public make.
+More addresses via **`.add(Address)`** (D26). Roles via `Node.configure`. Never
+three `make`s with the same key.
 
 **Why:** Owner correction already locked this (HttpApi-shaped). Forged sibling
 makes are the identity lie in §2.
@@ -715,7 +709,7 @@ Node.policy(MyNode, LookupPolicy.yield("Refuse"), LookupPolicy.pickFirst)
 ```
 
 Reject product names `withPolicy` / `withConfig` / **`Node.config`** (see D22).
-Address widen stays `.pipe(Address.*)`.
+Address widen is **`.add(Address)`** (D26) — **not** `.pipe`.
 
 **Why:** Owner gave bag + policy split; D21/D22 refine casing and Effect-safe naming.
 
@@ -893,10 +887,10 @@ import * as Node from "hyperlink-ts/Node"
 import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
-class WorkerPrivate extends Worker.pipe(
-  Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
-)
+class Worker extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
+class WorkerPrivate extends Worker.add(
+  Address.unix("/var/run/w.a.sock"), // label optional: Address.unix("blue", path)
+) {}
 
 const edge = Node.configure(WorkerPrivate, {
   listen: "Primary",
@@ -1116,33 +1110,25 @@ Open: slug rules, directory root Config, Windows named-pipe story — behind bin
 
 ### 3.4.4 `Node.make` — address / address array as second arg; keep pipe + options (parked)
 
-**Arity (D25, supersedes 2026-08-09 array lock):** `Node.make(key, Address?, options?)`
-— **no** `Address[]`. Empty make + pipe, or one address then pipe more.
+**Arity (D25/D26):** `Node.make(key)` then **`.add(Address)`** — **no** `Address[]`,
+**no** `.pipe` for address widen.
 
 ```ts
 class Worker extends Node.make("fleet/Worker") {}
-class WorkerHttp extends Node.make("fleet/Worker", Address.http(":8080")) {}
-class WorkerPorts extends WorkerHttp.pipe(
-  Address.unix("/var/run/w.sock"),
-) {}
-class WorkerKey extends Node.make("fleet/Worker", Address.unixFromKey) {}
+class WorkerHttp extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
+class WorkerPorts extends WorkerHttp.add(Address.unix("/var/run/w.sock")) {}
+class WorkerKey extends Node.make("fleet/Worker").add(Address.unixFromKey) {}
 ```
 
-~~Former lock: `(key, Address|Address[], options?)`~~ — **rejected** (D25).
-
-**Keep the piped form** for widening after the fact. **Owner prefer: pipe `Address.*`
-directly** onto the Node — not wrapped in `Node.withAddresses([…])`:
+~~Former locks: `(key, Address|Address[], options?)` / `.pipe(Address.*)`~~ —
+**rejected** (D25/D26). `make(key, one Address)` optional sugar only.
 
 ```ts
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
-class WorkerPrivate extends Worker.pipe(
-  Address.unix("/var/run/w.sock"), // label if you want: Address.unix("blue", path)
-) {}
+class Worker extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
+class WorkerPrivate extends Worker.add(Address.unix("/var/run/w.sock")) {}
 ```
 
-Do **not** put a pile of addresses on `make` as an array. `Address` values are
-pipeable fragments. A `withAddresses` bag remains optional sugar at most — **not**
-the preferred DX.
+Do **not** put a pile of addresses on `make` as an array. Widen with `.add`.
 
 ### 3.4.5 Address policies — define knobs, then defaults (parked)
 
@@ -1617,10 +1603,10 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 11. ~~Manual `addressFromKey`~~ / ~~address-less Address~~ — **rejected**.
     **`Address.unixFromKey`** sentinel (no `()`) — **lean** (§3.3).
 12. ~~Where `Address` lives~~ — **locked: `hyperlink-ts/Address`** (own subpath).
-12b. ~~`Node.make` arity~~ — **D25: `(key, Address?, options?)` — no `Address[]`** (§3.3.3 / §3.4).
+12b. ~~`Node.make` arity~~ — **D25/D26: `make(key).add(Address)` — no `Address[]`, no `.pipe`** (§3.3.3 / §3.4).
 12c. Multi-primary client pick — Policy default when several primaries exist.
 12d. Same label+protocol, different dials — how Policy names/disambiguates them.
-12e. ~~`withAddresses` wrapper~~ — **prefer pipe `Address.*` directly** (§3.4);
+12e. ~~`withAddresses` / `.pipe(Address.*)`~~ — **prefer `.add(Address)`** (D26).
     `withAddresses` at most optional sugar.
 
 ### Deploy / locality / Node.make
