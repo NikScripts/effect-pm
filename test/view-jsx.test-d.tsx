@@ -56,8 +56,8 @@ class Both extends View.make<Both>()("test/jsx/Both") {
 expectTypeOf(Both.layer).toMatchTypeOf<Layer.Layer<Both>>();
 type _BothNotAny = Expect<NotAny<typeof Both.layer>>;
 
-const App = View.stamp(Last.provide(Child, Child.layer));
-expectTypeOf(App).toMatchTypeOf<View.Component>();
+const App = Last.provide(Child, Child.layer);
+expectTypeOf(App).toMatchTypeOf<View.ViewFn>();
 const _okAppJsx = <App />;
 
 class Wrap extends View.make<Wrap>()("test/jsx/Wrap") {
@@ -73,8 +73,8 @@ class Wrap extends View.make<Wrap>()("test/jsx/Wrap") {
     }),
   ).pipe(Layer.provide(Child.layer));
 }
-const Wrapped = View.stamp(Last.provide(Wrap, Wrap.layer));
-expectTypeOf(Wrapped).toMatchTypeOf<View.Component>();
+const Wrapped = Last.provide(Wrap, Wrap.layer);
+expectTypeOf(Wrapped).toMatchTypeOf<View.ViewFn>();
 
 const _okDialog = <Dialog open onOpenChange={(_open: boolean) => undefined} />;
 // @ts-expect-error Radix Root does not take a fake prop
@@ -87,7 +87,7 @@ const _badPlain = <Plain />;
 class Pure extends View.make<Pure>()("test/jsx/Pure") {
   static layer = Layer.succeed(Pure, (_props: {}) => <span>ok</span>);
 }
-const PureApp = View.stamp(Last.provide(Pure, Pure.layer));
+const PureApp = Last.provide(Pure, Pure.layer);
 const _okPure = <PureApp />;
 
 void Effect.void;

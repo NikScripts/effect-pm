@@ -94,7 +94,7 @@ Waku is only the location Layer (`Waku.layer` / `Waku.fromApi`) — not a Link A
 
 ```ts
 class Sidebar extends View.make<Sidebar>()("app/Sidebar", () => <nav />) {}
-const App = View.stamp(Last.provide(Shell, Shell.layer))
+const App = Last.provide(Shell, Shell.layer)
 // Prefer pipe(layer, Layer.provide(…)) over layer.pipe(…)
 ```
 

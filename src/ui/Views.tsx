@@ -402,29 +402,26 @@ export const group = (appGroup: GroupLike): Layer.Layer<GroupDash> =>
 // Fallbacks + react kit
 // =============================================================================
 
-const FallbackCard: Component = View.stamp((props) =>
+const FallbackCard: Component = (props) =>
   React.createElement(
     "div",
     { "data-hyperlink-view": "fallback-card" },
     props.name ?? props.tag.key,
-  ),
-);
+  );
 
-const FallbackDetail: Component = View.stamp((props) =>
+const FallbackDetail: Component = (props) =>
   React.createElement(
     "div",
     { "data-hyperlink-view": "fallback-detail" },
     props.name ?? props.tag.key,
-  ),
-);
+  );
 
-const FallbackPage: Component = View.stamp((props) =>
+const FallbackPage: Component = (props) =>
   React.createElement(
     "div",
     { "data-hyperlink-view": "fallback-page" },
     props.name ?? props.tag.key,
-  ),
-);
+  );
 
 const fallbackFor = (viewKind: ViewKind): Component =>
   Match.value(viewKind).pipe(
@@ -511,34 +508,31 @@ export const useHasMatch = (
 };
 
 /** Kit matcher — card size. @internal */
-const MatchCard: Component = View.stamp((props) =>
+const MatchCard: Component = (props) =>
   React.createElement(MatchHost, {
     viewKind: ViewKind.Card(),
     resolved: useKit().resolve(props.tag, ViewKind.Card()),
     tag: props.tag,
     name: props.name,
-  }),
-);
+  });
 
 /** Kit matcher — detail size. @internal */
-const MatchDetail: Component = View.stamp((props) =>
+const MatchDetail: Component = (props) =>
   React.createElement(MatchHost, {
     viewKind: ViewKind.Detail(),
     resolved: useKit().resolve(props.tag, ViewKind.Detail()),
     tag: props.tag,
     name: props.name,
-  }),
-);
+  });
 
 /** Kit matcher — page size. @internal */
-const MatchPage: Component = View.stamp((props) =>
+const MatchPage: Component = (props) =>
   React.createElement(MatchHost, {
     viewKind: ViewKind.Page(),
     resolved: useKit().resolve(props.tag, ViewKind.Page()),
     tag: props.tag,
     name: props.name,
-  }),
-);
+  });
 
 /**
  * Size matchers for descendants of {@link react}`(…).Provider` / {@link compose}`(…).Provider`.

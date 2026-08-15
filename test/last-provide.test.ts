@@ -45,7 +45,7 @@ describe("Last.provide", () => {
         React.createElement("h1", null, "body"),
       );
     }
-    const App = View.stamp(Last.provide(Page, Page.layer));
+    const App = Last.provide(Page, Page.layer);
     expect(renderToString(React.createElement(App))).toContain("body");
   });
 });

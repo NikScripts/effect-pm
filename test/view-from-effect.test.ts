@@ -22,7 +22,7 @@ describe("Layer + Last.provide", () => {
         React.createElement("h1", null, props.name),
       );
     }
-    const App = View.stamp(Last.provide(Greeter, Greeter.layer));
+    const App = Last.provide(Greeter, Greeter.layer);
     expect(renderToString(React.createElement(App, { name: "nik" }))).toContain(
       "nik",
     );
@@ -42,7 +42,7 @@ describe("Layer + Last.provide", () => {
         }),
       ).pipe(Layer.provide(Layer.succeed(Prefix, "hi ")));
     }
-    const App = View.stamp(Last.provide(Greeter, Greeter.layer));
+    const App = Last.provide(Greeter, Greeter.layer);
     const html = renderToString(React.createElement(App, { name: "nik" }));
     expect(html).toContain("hi nik");
   });

@@ -46,4 +46,4 @@ class AppRoot extends View.make<AppRoot>()("docs/site/view-typed-jsx/App") {
 }
 
 /** Mounted app — JSX-legal. */
-export const App = View.stamp(Last.provide(AppRoot, AppRoot.layer));
+export const App = Last.provide(AppRoot, AppRoot.layer);

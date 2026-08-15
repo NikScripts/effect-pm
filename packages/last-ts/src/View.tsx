@@ -75,8 +75,7 @@ export type ViewFn<Props extends object = {}> = (
 
 /**
  * Fulfilled view — legal as a JSX component (`R` is `never`).
- * Produced by {@link stamp}`({@link Last.provide}(…))`. Prefer {@link ViewFn}
- * for Layer implementations.
+ * Edge: {@link Last.provide}`(Tag, Tag.layer)` returns a {@link ViewFn}.
  *
  * @public
  */
@@ -84,13 +83,13 @@ export type Component<
   Props extends object = {},
   Provides = never,
 > = ViewFn<Props> & {
-  readonly "~last-ts/View/services": never;
-  readonly "~last-ts/View/provides": Provides;
+  readonly "~last-ts/View/services"?: never;
+  readonly "~last-ts/View/provides"?: Provides;
 };
 
 /**
  * Open requirements — **not** a JSX component. Prefer {@link Service} +
- * `Layer.effect` / `Effect.gen`, then {@link Last.provide} at the edge.
+ * `Layer.effect` / `Effect.gen`, then {@link Last.provide}`(Tag, Tag.layer)` at the edge.
  *
  * Runtime value is still a render function; the type hides the call signature
  * so `<View />` is rejected while `R` is open.
@@ -111,7 +110,7 @@ export interface Unresolved<
 /**
  * View with props, services `R`, and upward Provides.
  *
- * - `R = never` → {@link Component} (JSX-legal — only after {@link mount})
+ * - `R = never` → {@link Component} (JSX-legal after {@link Last.provide})
  * - otherwise → {@link Unresolved}
  *
  * @public
@@ -136,7 +135,7 @@ export type ServicesOf<V> = V extends {
   : never;
 
 /**
- * Upward {@link Last.provide} tokens carried by a {@link View} type.
+ * Upward provide tokens carried by a {@link View} type.
  *
  * @public
  */
@@ -158,27 +157,6 @@ export type ViewPropsOf<V> = V extends {
   : V extends (props: infer P extends object) => any
     ? P
     : {};
-
-/**
- * Brand a plain component fn as a fulfilled {@link Component} (type-level;
- * no runtime change). Pair with {@link Last.provide} at the edge:
- * `View.stamp(Last.provide(Hello, Hello.layer))`.
- *
- * @public
- */
-export function stamp<F extends (props: any) => React.ReactElement | null>(
-  component: F,
-): Component<
-  Parameters<F>[0] extends object ? Parameters<F>[0] : {}
->;
-export function stamp<Props extends object>(
-  component: (props: Props) => React.ReactElement | null,
-): Component<Props>;
-export function stamp(
-  component: (props: any) => React.ReactElement | null,
-): Component<any> {
-  return component as Component<any>;
-}
 
 /**
  * Turn an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
@@ -592,7 +570,7 @@ export const Prototype =
  *   () => <nav data-sidebar="default">Menu</nav>,
  * ) {}
  *
- * const App = View.stamp(Last.provide(Hello, Hello.layer))
+ * const App = Last.provide(Hello, Hello.layer)
  * ```
  *
  * Prefer `pipe(layer, Layer.provide(…))` over `layer.pipe(…)`.

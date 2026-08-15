@@ -44,8 +44,8 @@ class Hello extends View.make<Hello, { readonly who: string }>()(
 
 expectTypeOf(Hello.layer).toMatchTypeOf<Layer.Layer<Hello>>();
 
-const Root = View.stamp(Last.provide(Hello, Hello.layer));
-expectTypeOf(Root).toMatchTypeOf<View.Component<{ readonly who: string }>>();
+const Root = Last.provide(Hello, Hello.layer);
+expectTypeOf(Root).toMatchTypeOf<View.ViewFn<{ readonly who: string }>>();
 
 class Open extends View.make<Open>()("test/view-service/Open") {
   static layer = Layer.effect(
