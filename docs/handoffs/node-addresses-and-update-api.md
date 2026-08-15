@@ -393,6 +393,25 @@ dream demos that need a novel to explain.
 | **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
 | **D23** | **protocols + proxy → auto dials**; narrow optional; no Address.ipc / no pool-index ritual as DX |
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
+| **D25** | **`Node.make` does not take `Address[]`** — `make(key)` or `make(key, one Address)` + `.pipe(Address.*)` |
+
+#### D25 — No address array on `Node.make`
+
+**Choice:** `Node.make` is **not** `make(key, Address[])`. More than one address
+goes on via **`.pipe(Address.*)`**. Preferred with D23: **`make(key)` +
+`configure({ protocols, proxy })`**.
+
+```ts
+class Worker extends Node.make("fleet/Worker") {}
+class WorkerHttp extends Node.make("fleet/Worker", Address.http(":8080")) {}
+class WorkerMore extends WorkerHttp.pipe(Address.unix("/tmp/w.sock")) {}
+```
+
+**Why:** Owner — array-on-make is wrong.
+
+**Rejected:** `Node.make(key, […addresses])` as product API.
+
+**Implies:** Tip still accepts `Address[]` — remove on Eng. §3.4.4 updated.
 
 #### D23 — Auto addresses from protocols + proxy (revised again 2026-08-15)
 
