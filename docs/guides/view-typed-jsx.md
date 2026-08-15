@@ -86,5 +86,4 @@ Hover **`App`** → discharged root (`ViewFn`, no open `R`).
 Open-`R` at the edge: `Last.provide(Open, Layer.provide(openLayer, greeterLayer))`.
 
 Optional slots stay `View.make(key, default)` — override with `Effect.provideService`
-or `Layer.provideMerge`. See also [View Tag types](/docs/view-tag-types) ·
-[Last.context](/docs/last-context).
+or `Layer.provideMerge`. See also [View Tag types](/docs/view-tag-types).

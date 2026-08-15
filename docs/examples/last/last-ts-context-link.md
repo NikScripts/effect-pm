@@ -1,4 +1,4 @@
-{#last-ts-context-link title="last-ts — context / link" status="stable" appliesTo=all}
+{#last-ts-context-link title="last-ts — context / link" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > Rendered docs (Tailscale):
@@ -6,11 +6,12 @@
 <!-- docs-site-link:end -->
 # last-ts — Last.context / Last.link
 
-Twoslash fences include the **full** runnable files under `examples/last/context-link/` (no `---cut---`); each fence shows its path.
+{.draft}
+**Draft** — Twoslash fences include the **full** runnable files under `examples/last/context-link/` (no `---cut---`); each fence shows its path.
 
 **App:** [`examples/last/context-link/`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/last/context-link/)  
 **Run:** `pnpm run example:last-context-link`  
-**Guide:** [Last.context](/docs/last-context) · **Lock:** [`last-context-view-lock.md`](../../handoffs/last-context-view-lock.md) (track 1 + T2e)
+**Lock:** [`last-context-view-lock.md`](../../handoffs/last-context-view-lock.md) (track 1 + T2e dogfood)
 
 ## Layout
 

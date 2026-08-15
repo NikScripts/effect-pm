@@ -572,15 +572,10 @@ Closed `FilePath` / `RoutePath` unions → `Route.fileRoot` → typed `urls.*`.
 
 `examples/last/spine/src/` — Page mint → soft-nav catalog → `Document.provide` → `Last.provider`.
 
-### [Last.context (guide)](/docs/last-context)
-
-Dream page — declare `.context`, fulfill `Last.provideContext`, `Last.use(App, …)`.  
-Demos: [router context](/docs/last-ts-router-context) · [context / link](/docs/last-ts-context-link).
-
 ### [last-ts context / link](/docs/last-ts-context-link)
 
 `examples/last/context-link/` · `pnpm run example:last-context-link`  
-`Last.link` + View kits; T2e edge (`.context` / `Last.provideContext`, no `provider(layer, Site)`).
+`Last.context` / `Last.use` / `Last.link` + nested View kits (full-file Twoslash).
 
 ### [last-ts router context](/docs/last-ts-router-context)
 
