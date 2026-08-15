@@ -26,7 +26,6 @@
  * @see docs/handoffs/router-httpapi-lock.md
  */
 import * as React from "react";
-import { Context } from "effect";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as fileRouter from "./internal/fileRouter";
 import * as outlet from "./internal/outlet";
