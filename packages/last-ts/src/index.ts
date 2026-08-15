@@ -19,6 +19,5 @@ export * as RootLayout from "./RootLayout";
 export * as Route from "./Route";
 export * as Router from "./Router";
 export * as RouterBuilder from "./RouterBuilder";
-export * as RouterClient from "./RouterClient";
 export * as View from "./View";
 export * as Waku from "./Waku";

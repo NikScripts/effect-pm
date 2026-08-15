@@ -7,8 +7,8 @@
  * - **Mint:** {@link make} — Context slot; service shape is a {@link ViewFn}
  * - **Build:** `Layer.succeed` / `Layer.effect` + `Effect.gen`
  * - **Default Layer:** `static layer = Layer.succeed(This, impl)` (compose deps there)
- * - **Edge:** {@link Last.provide}`(Tag, Tag.layer)` → {@link ViewFn}; stamp with {@link stamp}
- *   for a JSX-legal {@link Component} (`layer` `R` must be `never`)
+ * - **Edge:** {@link Last.provide}`(Tag, Tag.layer)` → {@link ViewFn}
+ *   (`layer` `R` must be `never`)
  * - **Page runtime:** {@link Last.provider}`(layer)` when Atom / router context is needed
  *
  * There is no freestanding View value you call as JSX. Always `yield*` a
@@ -57,15 +57,8 @@ export const annotationsSym: unique symbol = Symbol.for(
 );
 
 /**
- * Phantom brand for open-`R` views (not a JSX call signature).
- *
- * @internal
- */
-declare const ViewTypeId: unique symbol;
-
-/**
  * Plain render function — what {@link Layer.succeed} / {@link Layer.effect}
- * install into a {@link Service}.
+ * install into a Service. Edge: {@link Last.provide}`(Tag, Tag.layer)`.
  *
  * @public
  */
@@ -74,89 +67,11 @@ export type ViewFn<Props extends object = {}> = (
 ) => React.ReactElement | null;
 
 /**
- * Fulfilled view — legal as a JSX component (`R` is `never`).
- * Edge: {@link Last.provide}`(Tag, Tag.layer)` returns a {@link ViewFn}.
+ * View render function (alias of {@link ViewFn}).
  *
  * @public
  */
-export type Component<
-  Props extends object = {},
-  Provides = never,
-> = ViewFn<Props> & {
-  readonly "~last-ts/View/services"?: never;
-  readonly "~last-ts/View/provides"?: Provides;
-};
-
-/**
- * Open requirements — **not** a JSX component. Prefer {@link Service} +
- * `Layer.effect` / `Effect.gen`, then {@link Last.provide}`(Tag, Tag.layer)` at the edge.
- *
- * Runtime value is still a render function; the type hides the call signature
- * so `<View />` is rejected while `R` is open.
- *
- * @public
- */
-export interface Unresolved<
-  Props extends object = {},
-  R = never,
-  Provides = never,
-> {
-  readonly "~last-ts/View/services": R;
-  readonly "~last-ts/View/provides": Provides;
-  readonly "~last-ts/View/props": Props;
-  readonly [ViewTypeId]: typeof ViewTypeId;
-}
-
-/**
- * View with props, services `R`, and upward Provides.
- *
- * - `R = never` → {@link Component} (JSX-legal after {@link Last.provide})
- * - otherwise → {@link Unresolved}
- *
- * @public
- */
-export type View<
-  Props extends object = {},
-  R = never,
-  Provides = never,
-> = [R] extends [never]
-  ? Component<Props, Provides>
-  : Unresolved<Props, R, Provides>;
-
-/**
- * Services (`R`) carried by a {@link View} type.
- *
- * @public
- */
-export type ServicesOf<V> = V extends {
-  readonly "~last-ts/View/services": infer R;
-}
-  ? R
-  : never;
-
-/**
- * Upward provide tokens carried by a {@link View} type.
- *
- * @public
- */
-export type ProvidesOf<V> = V extends {
-  readonly "~last-ts/View/provides": infer P;
-}
-  ? P
-  : never;
-
-/**
- * Props carried by a {@link View} type.
- *
- * @public
- */
-export type ViewPropsOf<V> = V extends {
-  readonly "~last-ts/View/props": infer P extends object;
-}
-  ? P
-  : V extends (props: infer P extends object) => any
-    ? P
-    : {};
+export type View<Props extends object = {}> = ViewFn<Props>;
 
 /**
  * Turn an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
@@ -169,7 +84,6 @@ export type ViewPropsOf<V> = V extends {
  * const Home = View.effect(
  *   Effect.gen(function* () {
  *     const req = yield* Page.Request
- *     yield* (yield* Page.Document).set("Home")
  *     return <h1>{req.pathname}</h1>
  *   }),
  * )
@@ -249,7 +163,7 @@ type MergeRequirement<
  */
 export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _A>
   ? Props
-  : T extends { readonly Service: View<infer P, infer _Services> }
+  : T extends { readonly Service: ViewFn<infer P> }
     ? P
     : T extends { readonly Type: infer P extends object }
       ? P
@@ -351,25 +265,16 @@ type ViewStamps<
   readonly Type: Props;
 };
 
-/**
- * Required View handle — {@link Context.Service} (must be Layer-provided).
- *
- * @public
- */
-export type ViewHandle<
+/** Required View handle — {@link Context.Service}. @internal */
+type ViewHandle<
   Self,
   K extends string,
   Props extends object,
   Annotations extends AnyAnnotations = {},
 > = Context.ServiceClass<Self, K, ViewFn<Props>> & ViewStamps<Props, Annotations>;
 
-/**
- * Optional View slot — {@link Context.Reference} with a default component.
- * Override with `Effect.provideService` / Layer; absence is not an error.
- *
- * @public
- */
-export type ViewHandleDefault<
+/** Optional View slot — {@link Context.Reference}. @internal */
+type ViewHandleDefault<
   Props extends object,
   Annotations extends AnyAnnotations = {},
 > = Context.Reference<ViewFn<Props>> & ViewStamps<Props, Annotations>;
@@ -578,16 +483,3 @@ export const Prototype =
  * @public
  */
 export const make = Prototype()().Service;
-
-/**
- * A View service handle (DI identity + key). Prototype metadata via
- * {@link annotations}; factory brand via {@link Last.kindOf}.
- *
- * @public
- */
-export type AnyView<Self extends object = object> = Context.Service<
-  Self,
-  View
-> & {
-  readonly key: ViewKey;
-};

@@ -137,7 +137,6 @@ export default Config.defineConfig({
         "last-ts/Router/waku": `${lastTsSrc}/Router/waku.ts`,
         "last-ts/Router": `${lastTsSrc}/Router.ts`,
         "last-ts/RouterBuilder": `${lastTsSrc}/RouterBuilder.ts`,
-        "last-ts/RouterClient": `${lastTsSrc}/RouterClient.ts`,
         "last-ts/Layout": `${lastTsSrc}/Layout.tsx`,
         "last-ts/RootLayout": `${lastTsSrc}/RootLayout.tsx`,
         "last-ts/Document": `${lastTsSrc}/Document.tsx`,

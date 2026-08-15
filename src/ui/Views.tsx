@@ -71,7 +71,7 @@ export interface ViewProps {
 }
 
 /** Dashboard skin component — defaults to {@link ViewProps}. @public */
-export type Component<Props extends object = ViewProps> = View.View<Props>;
+export type Component<Props extends object = ViewProps> = View.ViewFn<Props>;
 
 /**
  * A matched view ready to render (size chrome).

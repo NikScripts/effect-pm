@@ -1,5 +1,5 @@
 /**
- * RouterBuilder + Memory — Effect page handler with Page.Request / Document.
+ * RouterBuilder + Memory — Effect page handler with Page.Request.
  * Isolated mini-catalog (does not replace Waku file routes).
  */
 import * as React from "react";
@@ -35,8 +35,6 @@ class DemoSite extends Router.make("docs/site/router-page").add(
 
 const homePage = Effect.gen(function* () {
   const req = yield* Page.Request;
-  const doc = yield* Page.Document;
-  yield* doc.set("Effect Home");
   return React.createElement(
     "div",
     { "data-page": "effect-home", className: "space-y-1" },
@@ -49,11 +47,6 @@ const homePage = Effect.gen(function* () {
       "p",
       { className: "text-xs text-muted-foreground" },
       `Page.Request pathname: ${req.pathname}`,
-    ),
-    React.createElement(
-      "p",
-      { className: "text-xs text-muted-foreground" },
-      "Document title set to “Effect Home”",
     ),
   );
 });
@@ -72,11 +65,6 @@ const aboutPage = React.createElement(
     "handle(\"about\", <About />) — element, not Effect",
   ),
 );
-
-/** Stamped file-router mark (plugin reads {@link Page.stampOf}). */
-export const StampedAbout = Page.static("/about", () => aboutPage, {
-  title: "About",
-});
 
 const routes = pipe(
   RouterBuilder.layer(DemoSite),

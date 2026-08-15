@@ -47,10 +47,6 @@
       "types": "./src/RouterBuilder.ts",
       "default": "./src/RouterBuilder.ts"
     },
-    "./RouterClient": {
-      "types": "./src/RouterClient.ts",
-      "default": "./src/RouterClient.ts"
-    },
     "./History": {
       "types": "./src/History.ts",
       "default": "./src/History.ts"

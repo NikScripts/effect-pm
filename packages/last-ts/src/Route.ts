@@ -41,7 +41,8 @@ import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import type { ReactNode } from "react";
-import * as pageModule from "./Page";
+import type * as pageModule from "./Page";
+import * as pageMint from "./internal/pageMint";
 import * as endpoint from "./internal/route";
 import * as fileRouter from "./internal/fileRouter";
 import * as catalog from "./internal/routes";
@@ -195,7 +196,7 @@ export type RequestOptions = endpoint.RequestOptions;
  */
 export const static_: <P extends pageModule.AnyPage>(
   self: P,
-) => pageModule.AnyPage<P["options"], "static"> = pageModule.remintStatic;
+) => pageModule.AnyPage<P["options"], "static"> = pageMint.remintStatic;
 
 export { static_ as static };
 

@@ -99,13 +99,5 @@ export const group: typeof internal.group = internal.group;
  */
 export const layer: typeof internal.layer = internal.layer;
 
-/** @internal */
-export const resolveHandler: typeof internal.resolveHandler =
-  internal.resolveHandler;
-
-/** @deprecated Use {@link resolveHandler}. @internal */
-export const resolveRender: typeof internal.resolveRender =
-  internal.resolveRender;
-
 /** Re-export layout type for consumers. @public */
 export type { Layout };

@@ -277,39 +277,6 @@ export const provide = <const Args extends ReadonlyArray<ProvideArg>>(
     Args
   >;
 
-/**
- * Apply `Page.document` args to {@link Cell}.
- *
- * @internal
- */
-export const applyDocumentArgs = (
-  ...args: ReadonlyArray<unknown>
-): Effect.Effect<void, never, Cell> =>
-  Effect.gen(function* () {
-    const cell = yield* Cell;
-    let rest = args;
-    if (rest.length > 0 && isDocumentClass(rest[0])) {
-      const doc = rest[0];
-      rest = rest.slice(1);
-      cell.setHead(doc.Head);
-    }
-    const patches: Array<ProvideArg> = [];
-    for (const arg of rest) {
-      if (core.isPatch(arg)) {
-        patches.push(arg);
-      } else if (typeof arg === "object" && arg !== null) {
-        patches.push(arg as ProvideArg);
-      }
-    }
-    if (patches.length === 0) return;
-    cell.update((prev) => {
-      const asPartial: core.BaseFieldsPartial = { ...prev };
-      const folded = core.foldArgs(asPartial, patches);
-      const next = core.finalizeFields(folded);
-      return (next ?? prev) as BaseFields;
-    });
-  });
-
 export {
   Provider as FieldsProvider,
   useFields,

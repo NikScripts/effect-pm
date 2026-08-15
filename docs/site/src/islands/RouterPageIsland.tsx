@@ -5,13 +5,11 @@
  */
 import * as React from "react";
 import "../styles/widgets.css";
-import * as Page from "last-ts/Page";
-import { DemoProvider, Router, StampedAbout } from "./router-page-demo.js";
+import { DemoProvider, Router } from "./router-page-demo.js";
 
 function DemoChrome(): React.ReactElement {
   const router = Router.useRouter();
   const atAbout = router.pathname === "/about";
-  const stamp = Page.stampOf(StampedAbout);
   return (
     <div className="hl-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2 gap-2">
@@ -48,9 +46,7 @@ function DemoChrome(): React.ReactElement {
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        {stamp !== undefined
-          ? `Page.static("${stamp.path}", …, { title: "${stamp.title}" })`
-          : "Page.static stamp missing"}
+        Effect home uses Page.Request; about is a JSX handle overload
       </p>
       <Router.Outlet />
     </div>

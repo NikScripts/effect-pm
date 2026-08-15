@@ -23,7 +23,8 @@
  */
 import type * as React from "react";
 import { Effect } from "effect";
-import * as Document from "./Document";
+import type * as Document from "./Document";
+import * as documentApply from "./internal/documentApply";
 import type * as pageServices from "./internal/pageServices";
 import * as pageMint from "./internal/pageMint";
 import type {
@@ -89,9 +90,6 @@ export const static_: typeof pageMint.static_ = pageMint.static_;
 
 export { static_ as static };
 
-/** @internal — used by `Route.static`. */
-export const remintStatic = pageMint.remintStatic;
-
 // =============================================================================
 // Live route services (Router.Outlet)
 // =============================================================================
@@ -135,38 +133,4 @@ export { Document } from "./internal/pageServices";
 export const document = (
   ...args: Array<unknown>
 ): Effect.Effect<void, never, Document.Cell> =>
-  Document.applyDocumentArgs(...args);
-
-// =============================================================================
-// Deprecated stamp helpers — park; do not grow
-// =============================================================================
-
-/** @deprecated @internal */
-export const StampTypeId = "~last-ts/Page/stamp" as const;
-
-/** @deprecated @internal */
-export type Stamp = {
-  readonly path: "/" | `/${string}`;
-  readonly render: { readonly _tag: "Static" | "Dynamic" | "Build" };
-  readonly title?: string;
-  readonly description?: string;
-  readonly paths?: import("effect/Effect").Effect<ReadonlyArray<string>>;
-};
-
-/** @deprecated @public */
-export const stampOf = (comp: object): Stamp | undefined => {
-  if (StampTypeId in comp) {
-    return (comp as { readonly [StampTypeId]: Stamp })[StampTypeId];
-  }
-  return undefined;
-};
-
-/** @deprecated @internal */
-export const renderModeOf = (
-  stampValue: Stamp,
-  options: { readonly dev: boolean },
-): "static" | "dynamic" => {
-  if (stampValue.render._tag === "Dynamic") return "dynamic";
-  if (stampValue.render._tag === "Build" && options.dev) return "dynamic";
-  return "static";
-};
+  documentApply.applyDocumentArgs(...args);

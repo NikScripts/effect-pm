@@ -272,8 +272,6 @@ class ViewEffectSite extends Router.make("view-effect-site").add(
 
 const effectHome = Effect.gen(function* () {
   const req = yield* Page.Request;
-  const doc = yield* Page.Document;
-  yield* doc.set("Effect Home");
   return React.createElement(
     "span",
     { "data-page": "effect-home", "data-pathname": req.pathname },
