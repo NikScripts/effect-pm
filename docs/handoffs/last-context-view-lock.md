@@ -507,7 +507,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 | **T2b — fulfill pipeable** | `Context.provide(layer)` (Layout dual) registers fulfilled scope on the group/catalog Layer | unit: Layer build includes context tags |
 | **T2c — runtime mount** | Soft-nav match → mount catalog→group→route bag bridges (active path only) | memory router test: `Last.use` sees bags; sibling group not mounted |
 | **T2d — `Last.use(Router, …)`** | bare = active merge; string group; `(r) => group \| route` selectors | type + runtime tests |
-| **T2e — dogfood** | Port context-link demo + spine/Last site chrome off hand `Last.provider(layer, Site)` | bundle/network: home doesn’t load docs kit chunk |
+| **T2e — dogfood** | Port context-link demo off hand `Last.provider(layer, Site)` (+ spine/Last site already `Last.provider(layer)` only) | **Eng’d** — context-link uses `.context` + `Last.provideContext`; home SSR has no `data-docs` |
 | **T2f — docs** | Twoslash dream page; lock status → Eng’d | Examples hub |
 
 **Do not** Eng T2c before T2a/b — runtime without debt is how apps silently ship half-provided kits.
@@ -549,6 +549,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 | Phase A site Frame kits (current tree) | Eng’d earlier — **superseded by this lock** for next cut |
 | Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Eng’d** — `test/last-context-link.test.tsx` · demo [`examples/last/context-link/`](../../examples/last/context-link/) · twoslash [`last-ts-context-link`](../examples/last/last-ts-context-link.md) |
 | Track 2: router/builder-scoped provide | **Eng’d** — `test/last-router-context.test.tsx` · demo [`examples/last/router-context/`](../../examples/last/router-context/) · twoslash [`last-ts-router-context`](../examples/last/last-ts-router-context.md) |
+| **T2e dogfood** | **Eng’d** — context-link edge is `Last.provider(layer)` only; docs kit mounts on `/docs` |
 
 ---
 

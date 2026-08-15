@@ -1,14 +1,14 @@
 /**
  * @module examples/last/context-link/App
  *
- * Edge composition — provider wraps the Tree.
+ * Edge — provider wraps {@link Router.Outlet} (active-path context mounts there).
  */
 import * as React from "react";
+import * as Router from "last-ts/Router";
 import * as Provider from "./lib/Provider";
-import * as Tree from "./lib/Tree";
 
 export const App = (): React.ReactElement => (
   <Provider.Provider>
-    <Tree.Tree />
+    <Router.Outlet />
   </Provider.Provider>
 );
