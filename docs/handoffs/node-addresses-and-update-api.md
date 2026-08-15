@@ -394,6 +394,7 @@ dream demos that need a novel to explain.
 | **D21** | **Bag keys camelCase**; option **strings** stay PascalCase; References stay PascalCase |
 | **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
 | **D23** | **Auto address pool** for proxy cutover (not hard-coded A/B names); optional **key-derived range**; narrow by concrete address or explicit range |
+| **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
 
 #### D23 — Auto address pool for proxy cutover (revised 2026-08-15)
 
