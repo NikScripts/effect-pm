@@ -782,15 +782,16 @@ infer exists (breaks today’s Update).
 **Choice:**
 
 1. **D3** S14 filtered rows + handoff peer pick (unblocks D4/D5)
-2. **D9–D15** `LookupConfig` / `NodeConfig` + `Node.config` / `Node.policy` +
-   Service handlers + both-ways options
-3. **D17** stream/ref forward (unblocks default verify)
-4. **D2** Update.execute β (activate + shutdown order)
-5. **D18** rewrite dream example last
+2. **D23** `unixFromKey` bind + labeled auto IPC (unblocks easy β without sock strings)
+3. **D9–D15** + **D21–D22** `LookupConfig` / `NodeConfig` + `Node.configure` /
+   `Node.policy` + Service handlers + both-ways + camelCase keys
+4. **D24** type-level literal dial overlap (can parallel with 3)
+5. **D17** stream/ref forward (unblocks default verify)
+6. **D2** Update.execute β (activate + shutdown order)
+7. **D18** rewrite dream example last
 
-**Why:** Handoff peer is the hard correctness hole; renaming APIs before that
-produces a pretty API that still can’t move pending. Dream last so it can’t
-lie about missing substrate.
+**Why:** Handoff peer is correctness; auto IPC is the easy bar for β; renaming
+before bind still leaves `UnixFromKeyBindPending`. Dream last.
 
 **Rejected:** Dream rewrite first; Update β before handoff peers; big-bang Eng.
 
