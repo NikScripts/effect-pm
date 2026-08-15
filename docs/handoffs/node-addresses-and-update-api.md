@@ -393,7 +393,7 @@ dream demos that need a novel to explain.
 | D20 | Eng order: S14 → config/policy → stream/ref → Update β → dream |
 | **D21** | **Bag keys camelCase**; option **strings** stay PascalCase; References stay PascalCase |
 | **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
-| **D23** | **Auto address pool** for proxy; labels = plain strings (no special A/B); optional key-derived range |
+| **D23** | **protocols + proxy → auto dials**; narrow optional; no Address.ipc / no pool-index ritual as DX |
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
 
 #### D23 — Auto addresses from protocols + proxy (revised again 2026-08-15)
