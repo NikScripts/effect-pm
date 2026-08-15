@@ -80,6 +80,7 @@ const watchDocsContent = {
         "../../examples/scenarios",
         "../../examples/apps",
         "../../examples/shared",
+        "../../docs/last/site/src",
       ].map((p) => fileURLToPath(new URL(p, import.meta.url))),
     );
   },

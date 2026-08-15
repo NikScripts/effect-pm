@@ -1,7 +1,9 @@
 /**
- * Typed catalog — paths align with fileRouter `paths.gen`; bodies are Page mints.
+ * Typed catalog + routes — `.context(SiteKit)` + `Last.provideContext`.
+ * Paths align with fileRouter `paths.gen` and {@link ./Catalog}.
  */
 import { Layer, pipe, Schema } from "effect";
+import * as Last from "last-ts/Last";
 import * as Layout from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
@@ -12,20 +14,24 @@ import { Chapter } from "../pages/guides/[slug]";
 import { Home } from "../pages/index";
 import { ViewPage } from "../pages/view";
 import * as Frame from "./Frame";
+import { SiteKit } from "./SiteKit";
 
-export class Site extends Router.make("last-ts").add(
-  Route.get("index", "/"),
-  Route.get("about", "/about"),
-  Route.get("view", "/view"),
-  Route.get("guides_slug", "/guides/:slug", {
-    params: { slug: Schema.Literals(["routing", "view-service"]) },
-  }),
-  Route.get("docs_path", "/docs/*path", {
-    params: { path: Schema.String },
-  }),
-) {}
+export class Site extends Router.make("last-ts")
+  .context(SiteKit)
+  .add(
+    Route.get("index", "/"),
+    Route.get("about", "/about"),
+    Route.get("view", "/view"),
+    Route.get("guides_slug", "/guides/:slug", {
+      params: { slug: Schema.Literals(["routing", "view-service"]) },
+    }),
+    Route.get("docs_path", "/docs/*path", {
+      params: { path: Schema.String },
+    }),
+  ) {}
 
-export const urls = Route.urlBuilder(Site);
+/** @deprecated Prefer {@link ./Catalog.urls} — kept for any stray imports. */
+export { urls } from "./Catalog";
 
 const app = pipe(
   RouterBuilder.group(Site, "__top", (h) =>
@@ -37,6 +43,11 @@ const app = pipe(
       .handle("docs_path", DocsPath),
   ),
   Layout.provide(Frame.App),
+  // Views are Reference defaults — discharge SiteKit scope (no required Services).
+  Last.provideContext(SiteKit, Layer.empty),
 );
 
-export const routes = pipe(RouterBuilder.layer(Site), Layer.provide(app));
+export const routes = pipe(
+  RouterBuilder.layer(Site),
+  Layer.provideMerge(app),
+);
