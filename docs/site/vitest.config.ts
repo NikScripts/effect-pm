@@ -26,7 +26,7 @@ export default defineConfig({
       "last-ts/Route": path.join(lastTsSrc, "Route.ts"),
       "last-ts/RouterBuilder": path.join(lastTsSrc, "RouterBuilder.ts"),
       "last-ts/Memory": path.join(lastTsSrc, "Memory.ts"),
-      "last-ts/Layout": path.join(lastTsSrc, "Layout.ts"),
+      "last-ts/Layout": path.join(lastTsSrc, "Layout.tsx"),
       "last-ts/Router/waku": path.join(lastTsSrc, "Router/waku.ts"),
       "last-ts/Router": path.join(lastTsSrc, "Router.ts"),
       "last-ts/Last": path.join(lastTsSrc, "Last.ts"),
