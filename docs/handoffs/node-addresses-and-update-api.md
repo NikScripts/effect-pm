@@ -393,25 +393,44 @@ dream demos that need a novel to explain.
 | D20 | Eng order: S14 → config/policy → stream/ref → Update β → dream |
 | **D21** | **Bag keys camelCase**; option **strings** stay PascalCase; References stay PascalCase |
 | **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
-| **D23** | **Auto IPC for labeled A/B** when proxy/protocols declared; narrow by range or concrete address |
-| **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
+| **D23** | **Auto address pool** for proxy cutover (not hard-coded A/B names); optional **key-derived range**; narrow by concrete address or explicit range |
 
-#### D23 — Auto IPC A/B (easy bar extension)
+#### D23 — Auto address pool for proxy cutover (revised 2026-08-15)
 
-**Choice:** Apps should **not** have to hand-mint A/B sock paths for the common
-Shape β case. Declare **protocols supported** + enable **proxy**; the node
-**auto-selects IPC** for labeled backends (key + label → path, same family as
-`unixFromKey`). Narrow when needed: pin a concrete address, or a port/path
-range. Deterministic key-derived paths — not random `/tmp` UUIDs.
+**Choice:** For Shape β, apps declare **protocols** + **proxy**, and get an
+**available address pool** the runtime can use the way we use A/B today (bring
+one up, activate/flip, drain the other) — **not** a requirement to name labels
+`"A"` / `"B"`. Optional: a **standard range derived from the node key** (port
+band / sock namespace) so two nodes don’t collide without hand-minting. Narrow
+when needed with a concrete address or an explicit range.
 
-**Why:** Owner 2026-08-15 — preferably no A/B addresses; protocol + proxy then
-narrow. Matches best-tool DX.
+```ts
+// Intent (sketch) — protocols + proxy → pool of usable dials
+Node.configure(Worker, { proxy: "Prefer" /*, protocols: ["Http", "Ipc"] */ })
+// runtime: primary + N available backend dials from key-derived range (or defaults)
 
-**Rejected:** Explicit `Address.unix({ A, B })` as the *default* dream; random
-non-key auto paths as the only story.
+// Narrow
+Node.configure(Worker, { /* range: … */ })
+Address.unix("/explicit/path.sock") // pin / add concrete
+```
 
-**Implies:** Eng `unixFromKey` **bind** (today `UnixFromKeyBindPending`); extend
-to labeled auto IPC; dream sketch drops hand-minted socks.
+**Not chosen:** “Auto mint `Address.unix({ A, B })` from key” as the story —
+owner did not ask for key→A/B socks; A/B is the *usage pattern* (active/standby
+slots), not the required label vocabulary. Labeled `"A"`/`"B"` remain valid when
+apps want explicit names.
+
+**Why:** Owner correction — available addresses used *like* A/B; key only as a
+possible **range** seed, not as hard-wired A/B paths.
+
+**Rejected:** Hard-coding product DX around labels `"A"`/`"B"`; requiring
+hand-minted socks for the default proxy pool; random non-ranged `/tmp` UUIDs as
+the only auto story (range-from-key preferred when auto).
+
+**Implies:** `Node.activate` / Active config speak in **pool slot / address
+identity** (label if present, else stable pool index / dial id). Dream examples
+can still show `"A"`/`"B"` as one way to name slots, not the only way.
+`unixFromKey` bind stays useful for **single** key-derived primary; pool range
+is a separate mechanism (may share slug/root Config).
 
 #### D24 — Type-catch conflicting addresses
 
@@ -782,7 +801,8 @@ infer exists (breaks today’s Update).
 **Choice:**
 
 1. **D3** S14 filtered rows + handoff peer pick (unblocks D4/D5)
-2. **D23** `unixFromKey` bind + labeled auto IPC (unblocks easy β without sock strings)
+2. **D23** auto **address pool** + optional key-derived **range** + `unixFromKey`
+   bind for single primary (unblocks easy β without hand-minted socks / forced A/B names)
 3. **D9–D15** + **D21–D22** `LookupConfig` / `NodeConfig` + `Node.configure` /
    `Node.policy` + Service handlers + both-ways + camelCase keys
 4. **D24** type-level literal dial overlap (can parallel with 3)
