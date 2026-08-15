@@ -393,6 +393,37 @@ dream demos that need a novel to explain.
 | D20 | Eng order: S14 → config/policy → stream/ref → Update β → dream |
 | **D21** | **Bag keys camelCase**; option **strings** stay PascalCase; References stay PascalCase |
 | **D22** | Stamp method = **`Node.configure`** (not `Node.config`) — avoid Effect `Config` collision |
+| **D23** | **Auto IPC for labeled A/B** when proxy/protocols declared; narrow by range or concrete address |
+| **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
+
+#### D23 — Auto IPC A/B (easy bar extension)
+
+**Choice:** Apps should **not** have to hand-mint A/B sock paths for the common
+Shape β case. Declare **protocols supported** + enable **proxy**; the node
+**auto-selects IPC** for labeled backends (key + label → path, same family as
+`unixFromKey`). Narrow when needed: pin a concrete address, or a port/path
+range. Deterministic key-derived paths — not random `/tmp` UUIDs.
+
+**Why:** Owner 2026-08-15 — preferably no A/B addresses; protocol + proxy then
+narrow. Matches best-tool DX.
+
+**Rejected:** Explicit `Address.unix({ A, B })` as the *default* dream; random
+non-key auto paths as the only story.
+
+**Implies:** Eng `unixFromKey` **bind** (today `UnixFromKeyBindPending`); extend
+to labeled auto IPC; dream sketch drops hand-minted socks.
+
+#### D24 — Type-catch conflicting addresses
+
+**Choice:** Target **compile-time** overlap errors when dials are **literals** in
+source. Keep **runtime** `AddressDialOverlap` for auto / `unixFromKey` /
+Config-resolved dials (opaque until bind).
+
+**Why:** Catch what types can see; don’t pretend types see resolved paths.
+
+**Rejected:** Types-only for all conflicts; dropping runtime asserts.
+
+**Implies:** Phantom unique dial brands on make/pipe lists for concrete literals.
 
 #### D21 — camelCase keys (overrides prior PascalCase bag keys)
 
