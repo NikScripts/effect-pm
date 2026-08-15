@@ -19,7 +19,7 @@ const isDocumentClass = (u: unknown): u is AnyDocument =>
   typeof u === "function" &&
   u !== null &&
   DocumentTypeId in u &&
-  (u as AnyDocument)[DocumentTypeId] === DocumentTypeId;
+  (u as unknown as AnyDocument)[DocumentTypeId] === DocumentTypeId;
 
 type ProvideArg = core.ProvideArg<
   core.BaseFieldsPartial & Record<string, unknown>
