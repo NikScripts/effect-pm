@@ -394,6 +394,36 @@ dream demos that need a novel to explain.
 | **D23** | **protocols + proxy → auto dials**; narrow optional; no Address.ipc / no pool-index ritual as DX |
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
 | **D25** | **`Node.make` does not take `Address[]`** — `make(key)` or `make(key, one Address)` + `.pipe(Address.*)` |
+| **D26** | **Nodes = HttpApi constructable direction** — immutable widen via `extends` / `.pipe`; never mutate a made Node/class in place |
+
+#### D26 — Node direction = HttpApi constructable (locked 2026-08-15)
+
+**Choice:** Nodes follow the same shape as `HttpApi.make` → `.add` / class
+`extends`: declare with `Node.make`, **widen by returning a new value**
+(`.pipe(Address.*)` / `class B extends A.pipe(…)`), never mutate the original
+class or make-result in place.
+
+```ts
+class Worker extends Node.make("fleet/Worker") {}
+class WorkerHttp extends Worker.pipe(Address.http(":8080")) {}
+// Worker unchanged — like MyApi.add(Posts) leaving MyApi alone
+
+class WorkerUnix extends WorkerHttp.pipe(Address.unix("/tmp/w.sock")) {}
+```
+
+`Node.configure` / `Node.policy` are **role overlays** on a made identity (process
+knobs), not “mutate the Api.” Same key; new shell — still no in-place edit of
+the class’s address list.
+
+**Why:** Owner — this is the new direction for nodes (side quest → product lock).
+
+**Rejected:** Mutating a `Node.make` result / class after the fact; growing
+addresses by assigning into the existing class; array-on-make (D25).
+
+**Implies:** Docs and Eng treat `make` + `pipe` + `extends` as the SSOT story,
+matching Effect HttpApi. Tip `withPolicy` → `configure`/`policy` overlays stay
+overlay-shaped, not HttpApi `.add` clones of the whole catalog unless we later
+unify.
 
 #### D25 — No address array on `Node.make`
 
