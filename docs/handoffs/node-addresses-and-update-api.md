@@ -342,6 +342,97 @@ wins over stamped wins over package default.
 Tip still has `withPolicy` + uneven sugar — `Node.policy` + full both-ways
 surface when owner says Eng.
 
+### 3.3.3 Agent 5 decision pack (2026-08-15) — owner may override any row
+
+All open A/B / policy / dream calls **agent-decided** below. Change an id → we
+revise. Until overridden, this is the dream SSOT (not yet Eng’d).
+
+| Id | Decision | Choice |
+|----|----------|--------|
+| **D1** | Product A/B bar | **S5 Shape β** — stable primary + `forward` + `activate`. S6 dual-public remains supported, not the dream. |
+| **D2** | Update north star | `Update.plan` → `simulate` → `execute` drives **S5**: up B → baked handoff → `Node.activate("B")` → shutdown A. S6 `restartSuccessor` path stays until execute grows β. |
+| **D3** | Handoff peer under Primary advertise | **S14 filtered**: Directory may hold labeled backend rows for peer/ops; **`lookupClient` dials only the Advertise/Primary set**. Shutdown handoff peer-picks the other live labeled row (same `nodeKey`, different dial) — never a forged second key. |
+| **D4** | Manual `release`/`add` | **Rejected** forever as product. Only WorkPool baked `releaseEnqueueHandoff`. |
+| **D5** | Parity “up to par” test | Public client, **stable dial**: enqueue on Active A → up B → shutdown A (handoff) → activate B → **exact pending on B** + Probe tip flip. No `verifyOff` once stream/ref forward lands. |
+| **D6** | Rollback | Before A shutdown: `Node.activate("A")` + stop B. After A gone: plan step to up A again — no implicit time travel. |
+| **D7** | Edge / A / B identity | **One** `Node.make` public class; private via `.pipe(Address…)`; roles via `Node.config` — never three makes with the same key. |
+| **D8** | Worker sources | **One** worker entry; tip/version from Config or argv — **not** duplicated v1/v2 files. File-swap (if used) swaps that one entry. |
+| **D9** | Policy vs config | Policy = handlers (Yield, Pick). Config = mode dials + Node address knobs (`LookupConfig` / `NodeConfig`). |
+| **D10** | Post-make overlays | `Node.config(node, { partial })` + `Node.policy(node, …fragments)` varargs. Reject `withPolicy` / `withConfig` as names. |
+| **D11** | Option API | **Both ways**: `yield("Refuse")` ≡ `yieldRefuse`; `pick("First")` ≡ `pickFirst`. Reject boolean primary `yield(true)`. |
+| **D12** | Custom Yield | `LookupPolicy.yield(effect)` overload on the same helper. |
+| **D13** | Precedence | call-site > `Node.policy` stamp > ambient Service default (`Accept` / unset Pick). |
+| **D14** | Client layer install | Keep `LookupConfig.provide` / `LookupPolicy.provide` on layers; `Node.policy` only stamps made nodes. |
+| **D15** | Handler backing | One `Context.Service` per policy + default Layer (engines `yield*` then invoke). |
+| **D16** | Proxy | `NodeConfig.Proxy: "Prefer"`; behavior = primary `Node.forward*` → Active label; flip = `Node.activate`. |
+| **D17** | Stream/ref forward | **Required** before public clients use default verify; until then demos may `verifyOff` but that is not the dream. |
+| **D18** | Dream example | Thin compose matching § dream sketch below — not a twin of forward-proxy with interim hacks. Prefer forward-proxy as substrate unit test; dream = Launcher + Update + handoff + activate. |
+| **D19** | Tags on Update.plan | Prefer infer-from-successor serve list when Eng allows; until then tags stay but must match child serve (fail simulate on drift). |
+| **D20** | Eng order | (1) S14 filtered rows + handoff peer pick (2) `Node.config`/`Node.policy` + config split (3) stream/ref forward (4) Update.execute β (5) rewrite dream example last. |
+
+#### Dream version (target DX — not Eng’d)
+
+```ts
+import * as Address from "hyperlink-ts/Address"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Launcher from "hyperlink-ts/Launcher"
+import * as LookupConfig from "hyperlink-ts/LookupConfig"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
+import * as Node from "hyperlink-ts/Node"
+import * as Update from "hyperlink-ts/Update"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
+class WorkerPrivate extends Worker.pipe(
+  Address.unix({ A: "/var/run/w.a.sock", B: "/var/run/w.b.sock" }),
+)
+
+const edge = Node.config(WorkerPrivate, {
+  Listen: "Primary",
+  Advertise: "Primary",
+  Proxy: "Prefer",
+  Active: "A",
+})
+const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
+const backendB = Node.config(WorkerPrivate, { As: "B", Listen: ["B"] })
+
+// Edge — stable public dial
+Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])])
+
+// Backends — one entry; tip from Config (v1 then v2 after file-swap / image)
+Node.unix(backendA, [
+  WorkPool.serve(Jobs, { effect: () => Effect.void }),
+  Hyperlink.serve(Probe, { tip: tipFromConfig }), // "v1" | "v2"
+])
+
+// Clients never change dial; default verify (after D17)
+Hyperlink.client(Probe, Worker)
+Hyperlink.client(Jobs, Worker).pipe(
+  LookupConfig.provide(LookupConfig.make({ Sticky: true })),
+)
+
+// Optional: this node refuses askIncumbent during critical section
+Node.policy(backendA, LookupPolicy.yield("Refuse"))
+
+// Cutover — plan value, then dumb execute (D2)
+const plan = yield* Update.plan({
+  steps: [{
+    target: Worker.key,
+    successor: { node: backendB, process: childFromActivePath },
+    // activate flip is part of execute β — not a manual script
+  }],
+})
+yield* Update.simulate(plan)
+yield* Update.execute(plan)
+// inside execute β:
+//   Launcher.up(B) → Node.shutdown(A) [baked handoff A→B via D3] → Node.activate(WorkerPrivate, "B")
+
+// Public Probe.tip → "v2"; Jobs pending exact on B; dial still Worker Http
+```
+
+**Rejected dream (current tip example):** duplicated v1/v2 workers, `makeDreamNodes`,
+manual queue move, `verifyOff` as the story, `withPolicy` fragment soup as SSOT.
+
 ### 3.3.2 PolicyBuilder — shared architecture (Eng’d substrate; rename pending)
 
 Both *current* policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**.
