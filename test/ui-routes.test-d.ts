@@ -4,6 +4,7 @@
 import { expectTypeOf } from "vitest";
 import { Schema } from "effect";
 import * as Route from "../src/ui/Route";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../src/ui/Router";
 
 const site = Route.make("site").add(
@@ -29,7 +30,7 @@ expectTypeOf(
 // @ts-expect-error path param required
 urls.node();
 
-const router = Router.unsafeService(site, "Memory");
+const router = Memory.service(site);
 router.to((u) => u.app.dashboard());
 router.to((u) => u.home());
 router.to((u) => u.node("a", { query: { focus: "1" } }));

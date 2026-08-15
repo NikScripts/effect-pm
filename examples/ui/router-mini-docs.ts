@@ -11,6 +11,8 @@
 // ---cut---
 import { Effect, Schema } from "effect";
 import * as Route from "../../src/ui/Route";
+import * as History from "last-ts/History";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../../src/ui/Router";
 
 /**
@@ -40,7 +42,7 @@ export const urls = Route.urlBuilder(site);
  */
 export const makeDocsRouter = (
   engine: "Memory" | "History" = "Memory",
-): Router.Service<typeof site> => Router.unsafeService(site, engine);
+): Router.Service<typeof site> => (engine === "History" ? History.service(site) : Memory.service(site));
 
 // ---cut-after---
 const program = Effect.gen(function* () {

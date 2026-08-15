@@ -25,6 +25,7 @@ import {
 import * as GroupNav from "../ui/GroupNav";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
+import * as Memory from "last-ts/Memory";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
@@ -476,7 +477,7 @@ export const Dashboard = <R, ER>(props: {
     );
     const composed = Views.compose({
       views,
-      router: Router.memory(routesFor(props.group)),
+      router: Memory.fromApi(routesFor(props.group)),
       group: props.group,
     });
     for (const key of props.path ?? []) {

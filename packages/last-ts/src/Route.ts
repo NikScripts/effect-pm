@@ -26,7 +26,7 @@
  *
  * Route.urlBuilder(site).home()
  * Route.urlBuilder(site).user("42", { query: { tab: "bio" } })
- * Router.history(site)
+ * // Last.provider(History.fromApi(site)) — or Memory.fromApi / Waku.fromApi
  * // <Router.Outlet /> renders the matched handle
  * ```
  *

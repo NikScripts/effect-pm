@@ -1,11 +1,11 @@
-{#view-typed-jsx title="Typed Views (Service + mount)" status="draft" appliesTo=all}
+{#view-typed-jsx title="Typed Views (Service + Last.provide)" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > live type previews, and the demo island — is at
 > <http://100.67.32.32:5190/docs/view-typed-jsx> (Tailscale).
 <!-- docs-site-link:end -->
-# Typed Views — Service and mount
+# Typed Views — Service and Last.provide
 
 TypeScript does not carry services `R` through `<Child />` expressions. Last
 keeps `R` on **Layers** instead of inventing View-shaped masks:
@@ -13,7 +13,7 @@ keeps `R` on **Layers** instead of inventing View-shaped masks:
 1. **`View.make`** — `Context.Service` whose shape is a render fn (`ViewFn`)
 2. **`Layer.succeed` / `Layer.effect` + `Effect.gen`** — build the service Layer
 3. **`static layer`** — compose deps with `Layer.provide` until `R = never`
-4. **`View.mount(Service)`** — only JSX edge; uses `Service.layer`
+4. **`Last.provide(Service, Service.layer)`** — only JSX edge (`Effect.provide` + `runSync`)
 
 Compose multiple services with `yield* Effect.all({ A, B })`. There is **no** bag
 `Layer.succeed({ Child }, …)` form. Layer values are camelCase (`greeter.layer` /
@@ -30,7 +30,7 @@ Hover **`Hello`** → **`App`**.
 | Symbol | Role |
 |--------|------|
 | `Hello` | `Layer.effect` + `yield* Greeter`; deps on `Hello.layer` |
-| `App` | `View.mount(Hello)` → JSX-legal component |
+| `App` | `Last.provide(AppRoot, AppRoot.layer)` → JSX-legal component |
 
 ## Live render
 
@@ -61,11 +61,10 @@ class Hello extends View.make<Hello, { readonly who: string }>()("app/Hello") {
   ).pipe(Layer.provide(Greeter.layer))
 }
 
-const App = View.mount(Hello)
+const App = Last.provide(Hello, Hello.layer)
 ```
 
-Upward values: `yield* Last.provide(Service, value)` — see
-[effect-app-router-plan](../handoffs/effect-app-router-plan.md).
+Open-`R` at the edge: `Last.provide(Open, Layer.provide(Open.layer, Greeter.layer))`.
 
 Use normal React JSX (`react/jsx-runtime`). See also [View Tag types](/docs/view-tag-types).
 
@@ -78,25 +77,6 @@ override with `Effect.provideService` or `Layer.provideMerge`.
 ```ts
 class Sidebar extends View.make<Sidebar>()(
   "app/Sidebar",
-  () => <nav data-sidebar="default">Menu</nav>,
+  () => <aside>default</aside>,
 ) {}
-
-// Nested settings chrome — swap for this tree only
-Effect.provideService(
-  Sidebar,
-  () => <nav data-sidebar="settings">Settings</nav>,
-)
-
-// Theme / section Layer (Reference is not in R — use provideMerge)
-Layer.effect(Shell, …).pipe(
-  Layer.provideMerge(Layer.succeed(Sidebar, ThemedSidebar)),
-)
-```
-
-Annotations on Prototype mints stay as an **object** second arg:
-`Service()(key, { spec: … })`. Default component is a **function** second arg.
-
-Live toggle (default sidebar ↔ settings override):
-
-```view-sidebar
 ```

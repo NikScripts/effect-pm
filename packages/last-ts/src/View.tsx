@@ -76,8 +76,9 @@ export type View<Props extends object = {}> = ViewFn<Props>;
 /**
  * Turn an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
  *
- * Under {@link ./Router.Outlet}, provides {@link ./Page.Request} /
- * {@link ./Page.Document} from the React bridges when present.
+ * Under {@link ./Router.Outlet}, provides {@link ./Page.Request} from the React
+ * bridges when present. Write document fields with {@link ./Page.document}
+ * (+ {@link ./Document.Cell} from {@link ./Last.provider}).
  *
  * @example
  * ```tsx
@@ -98,7 +99,6 @@ export const effect = <E = never, R = never>(
   const Comp = (): React.ReactElement | null => {
     const runtime = AtomReact.useRuntime();
     const request = pageContext.useRequestOption();
-    const documentApi = pageContext.useDocumentApiOption();
     const atom = React.useMemo(() => {
       let next: Effect.Effect<React.ReactNode, unknown, unknown> = program;
       if (request !== null) {
@@ -106,13 +106,8 @@ export const effect = <E = never, R = never>(
           Effect.provideService(pageServices.Request, request),
         );
       }
-      if (documentApi !== null) {
-        next = next.pipe(
-          Effect.provideService(pageServices.Document, documentApi),
-        );
-      }
       return runtime.atom(next);
-    }, [runtime, program, request?.href, documentApi]);
+    }, [runtime, program, request?.href]);
     const result = AtomReact.useAtomValue(atom);
     if (AsyncResult.isSuccess(result)) {
       const node = result.value;

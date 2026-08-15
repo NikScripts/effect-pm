@@ -701,12 +701,13 @@ const resolveComposeRouter = (
  * @example
  * ```tsx
  * import * as Observe from "hyperlink-ts/Observe"
+ * import * as History from "last-ts/History"
  * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
  * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = Views.compose({
  *   views: Layer.mergeAll(Views.bind(Group.kind, GroupCard), webDashboard.layer),
  *   group: ServicesHub,
- *   router: Router.history(
+ *   router: History.fromApi(
  *     Route.make("dash").add(
  *       Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
  *     ),

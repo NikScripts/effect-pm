@@ -19,6 +19,8 @@ SSOT bans: [`last-ts-api-corrections.md`](./last-ts-api-corrections.md).
 | Package export `./server` | **Removed** — host `createPages` is Waku host wiring |
 | Package export `./Router/waku` | **Removed** — use `last-ts/Waku` |
 | `Waku.setDefault` / `Waku.Provider` / `binding` public | **Dropped** — `Last.provider(Waku.fromApi\|layer)` |
+| `Router.memory` / `history` / `unsafeService` | **Deleted** — use `Memory.fromApi` / `History.fromApi` / `.service` / `.layer` |
+| Public `Page.Document` / `DocumentValue` / `DocumentApi` | **Deleted** — use `Page.document` + `Document.*` |
 
 ---
 
@@ -35,15 +37,14 @@ SSOT bans: [`last-ts-api-corrections.md`](./last-ts-api-corrections.md).
 
 | Surface | Notes |
 |---------|-------|
-| Stale guides teaching createPages / `View.mount` / `getConfig` | Scrub remaining prose |
-| Lite `Router.memory` / `history` / `unsafeService` / `Router.Provider` | Dashboards still use; prefer Memory/History/Waku + `Last.provider` |
-| `Page.Document` legacy service | Prefer `Page.document` + `Document.*` |
+| `Router.Provider` | React mount under `Last.provider`; keep for `useRouter` — apps prefer `Last.provider` |
 | `View.Prototype` / annotations | Hyperlink size chrome depends — keep until redesign |
 | `AtomReact` public / `Waku.fromApi` / docgen | Owner call if demote |
 | Hyperlink `Chrome` / `SizeChrome` | Intentional on hyperlink-ts |
+| Outlet-local `useDocument` bridge | Internal read/set bag; product writes stay `Page.document` |
 
 ---
 
 ## Keep (locked)
 
-`Last.provider` / `context` / `use` / `provideContext` / `link` / `provide` · `View.make` · Page/Document/Layout mint · Route catalog + `group.effect` / `fileRoot` · Memory/History/Waku layers · `last-ts/vite` `fileRouter` · `last-ts/config`
+`Last.provider` / `context` / `use` / `provideContext` / `link` / `provide` · `View.make` · Page/Document/Layout mint · Route catalog + `group.effect` / `fileRoot` · Memory/History/Waku layers (+ `fromApi`) · `last-ts/vite` `fileRouter` · `last-ts/config`

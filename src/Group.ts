@@ -94,7 +94,7 @@ export const isGroup = (
  *   Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
  * )
  * Route.urlBuilder(site).Nwsl.HttpApi()
- * Router.unsafeService(site, "Memory").to((u) => u.nodeHealth("a"))
+ * Memory.service(site).to((u) => u.nodeHealth("a")) // last-ts/Memory
  * ```
  *
  * @category constructors

@@ -4,6 +4,7 @@
 import { expectTypeOf } from "vitest";
 import { site, urls } from "../examples/ui/router-mini-docs";
 import * as Route from "../src/ui/Route";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../src/ui/Router";
 
 expectTypeOf(urls.home()).toEqualTypeOf<string>();
@@ -16,6 +17,6 @@ expectTypeOf(
 // @ts-expect-error api path param required
 urls.api();
 
-const router = Router.unsafeService(site, "Memory");
+const router = Memory.service(site);
 router.to((u) => u.guides.gates());
 expectTypeOf(Route.urlBuilder(site).install()).toEqualTypeOf<string>();

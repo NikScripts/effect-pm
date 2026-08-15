@@ -6,6 +6,7 @@ import { expectTypeOf } from "vitest";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
 import * as Route from "../src/ui/Route";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../src/ui/Router";
 
 class HttpApi extends Daemon.Service<HttpApi>()("test/fromEffect/HttpApi") {}
@@ -32,7 +33,7 @@ expectTypeOf(
 // @ts-expect-error nodeHealth path param required
 urls.nodeHealth();
 
-const router = Router.unsafeService(site, "Memory");
+const router = Memory.service(site);
 router.to((u) => u.Nwsl.HttpApi());
 router.to((u) => u.nodeHealth("x"));
 expectTypeOf(router.urls.Nwsl.HttpApi()).toEqualTypeOf<string>();

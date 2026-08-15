@@ -3,12 +3,13 @@
  */
 import { expectTypeOf } from "vitest";
 import * as Route from "../src/ui/Route";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../src/ui/Router";
 import * as RouterWaku from "../src/ui/RouterWaku";
 
 const site = Route.make("site").add(Route.get("home", "/"));
 
-const memory = Router.unsafeService(site, "Memory");
+const memory = Memory.service(site);
 expectTypeOf(memory._tag).toEqualTypeOf<"Memory" | "History" | "Waku">();
 expectTypeOf(memory._tag).toEqualTypeOf<Router.Service["_tag"]>();
 

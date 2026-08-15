@@ -29,16 +29,17 @@ export class Request extends Context.Service<Request, RequestValue>()(
 /**
  * Document fields bag (title today; extend later).
  *
- * @public
+ * @internal
  */
 export type DocumentValue = {
   readonly title: string | undefined;
 };
 
 /**
- * Effect API for document fields (`yield* Page.Document`, then `.set`).
+ * Effect API for the legacy Outlet-local title bag (internal bridge only).
+ * Apps write with {@link ../Page.document} + {@link ../Document.Cell}.
  *
- * @public
+ * @internal
  */
 export type DocumentApi = {
   readonly set: (title: string) => Effect.Effect<void>;
@@ -46,9 +47,9 @@ export type DocumentApi = {
 };
 
 /**
- * Set-anywhere document fields (`yield* Page.Document`).
+ * Legacy Outlet-local document service (internal). Prefer {@link ../Page.document}.
  *
- * @public
+ * @internal
  */
 export class Document extends Context.Service<Document, DocumentApi>()(
   "last-ts/Page/Document",

@@ -13,6 +13,7 @@ import * as WorkPool from "../src/WorkPool";
 import * as Daemon from "../src/Daemon";
 import * as GroupNav from "../src/ui/GroupNav";
 import * as Route from "../src/ui/Route";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../src/ui/Router";
 import * as View from "../src/ui/View";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
@@ -50,13 +51,13 @@ describe("RuntimeProvider + Observe.use", () => {
   it("compose has no data door", () => {
     const ui = Views.compose({
       views,
-      router: Router.memory(hubSite),
+      router: Memory.fromApi(hubSite),
     });
     expect("data" in ui).toBe(false);
   });
 
   it("compose accepts a live Router.Service", () => {
-    const router = Router.unsafeService(hubSite, "Memory");
+    const router = Memory.service(hubSite);
     GroupNav.open(Hub, router, Jobs);
     const ui = Views.compose({ views, router, group: Hub });
     expect(ui.router).toBe(router);
@@ -72,7 +73,7 @@ describe("RuntimeProvider + Observe.use", () => {
     );
     const ui = Views.compose({
       views,
-      router: Router.memory(site),
+      router: Memory.fromApi(site),
     });
     ui.router.go("/handled");
     const html = renderToString(

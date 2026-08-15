@@ -1,8 +1,9 @@
 /**
  * @module Page/react
  *
- * Client-only React bridges for {@link ../Page.Request} / {@link ../Page.Document}.
- * RSC pages import stamps from `last-ts/Page` without pulling createContext.
+ * Client-only React bridges for {@link ../Page.Request} (and legacy Outlet
+ * document read helpers). RSC pages import from `last-ts/Page` without
+ * pulling createContext. Write document fields with {@link ../Page.document}.
  *
  * ```ts
  * import { useRequest, useDocument } from "last-ts/Page/react"

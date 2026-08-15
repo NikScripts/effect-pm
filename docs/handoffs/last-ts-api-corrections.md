@@ -31,7 +31,7 @@ stale — fix on sight.
 
 | Banned | Why it appeared (log only — not approval) | Correct direction |
 |--------|---------------------------------------------|-------------------|
-| **Direct `waku` / `waku/*` imports in apps** | Agents treated Waku as the app framework (fs-router + `getConfig`) | **Apps import only `last-ts/*`.** `waku` is an optional peer inside last-ts (`last-ts/config`, `last-ts/server`, `last-ts/Waku`). |
+| **Direct `waku` / `waku/*` imports in apps** | Agents treated Waku as the app framework (fs-router + `getConfig`) | **Apps import only `last-ts/*`.** `waku` is an optional peer inside last-ts (`last-ts/config`, `last-ts/Waku`; host entry uses Waku `createPages` internally). |
 | **`getConfig` anywhere** (app file, `Page.getConfig`, Vite inject `pageConfig`, “Waku’s own getConfig on that file”) | Symptom of using Waku’s fs-router | Impossible / irrelevant when apps never use that router. Never author `getConfig`. |
 | **`pageConfig` Vite plugin** | Interim inject bridge | Deleted; stays deleted |
 | **`Page.asDefault`** | Bridge so Waku fs-router accepts a class default export | Not approved; do not reintroduce |
@@ -49,10 +49,10 @@ Follow **[`router-httpapi-lock.md`](./router-httpapi-lock.md)** for Router / Rou
 
 - `Router.make` / `Router.group` / `Route.get(…, { params, … })`
 - Handlers: `Effect → ReactNode` (and documented overloads)
-- `Page.Request` / `Page.Document` (+ `Page/react` bridges) for request + **document title**
+- `Page.Request` / `Page.document` (+ `Document.*` / `Page/react` bridges) for request + **document title**
 - `Last.provider(layer)` — one children-only provider baked from the Layer graph
-- `View.make` + `View.mount` + Layers for DI components
-- `History` / `Memory` / `Waku` as transport namespaces
+- `View.make` + `Last.provide(Service, Service.layer)` + Layers for DI components
+- `History` / `Memory` / `Waku` as transport namespaces (`fromApi` / `.layer`)
 
 ### Eng’d locks (do not invent past these)
 
@@ -87,7 +87,7 @@ Follow **[`router-httpapi-lock.md`](./router-httpapi-lock.md)** for Router / Rou
 | App imports | last-ts only |
 |-------------|--------------|
 | Config | `last-ts/config` (`defineConfig`) — file may still be named `waku.config.ts` for the CLI |
-| RSC server entry | **Do not teach** Waku `createPages` / `createRoot` / `createLayout` in apps. `last-ts/server` re-exports are host-engine leftovers, not product API. Product: Page / RootLayout / Last.provider / catalog. |
+| RSC server entry | **Do not teach** Waku `createPages` / `createRoot` / `createLayout` in apps. Host entry wires those; not product API. Product: Page / RootLayout / Last.provider / catalog. |
 | Soft-nav transport | `last-ts/Waku` |
 | Path codegen | `last-ts/vite` `fileRouter` → `paths.gen.ts` |
 

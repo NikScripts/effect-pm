@@ -14,6 +14,7 @@ import * as Daemon from "../../src/Daemon";
 import * as Group from "../../src/Group";
 import * as GroupNav from "../../src/ui/GroupNav";
 import * as Route from "../../src/ui/Route";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../../src/ui/Router";
 
 class HttpApi extends Daemon.Service<HttpApi>()("examples/group-nav/HttpApi") {}
@@ -29,7 +30,7 @@ export const urls = Route.urlBuilder(site);
 
 /** Lite Memory router — live field is `router._tag`, not a separate mode. */
 export const makeHubRouter = (): Router.Service<typeof site> =>
-  Router.unsafeService(site, "Memory");
+  Memory.service(site);
 
 // ---cut-after---
 const describeTarget = (router: Router.Service): string => {

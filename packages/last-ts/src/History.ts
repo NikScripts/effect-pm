@@ -2,13 +2,16 @@
  * @module History
  *
  * Browser History location transport for {@link ./Router}
- * (`pushState` / `popstate`). Provides {@link ./Router.Router} from
- * {@link ./RouterBuilder.Catalog} + {@link ./RouterBuilder.Registry}.
+ * (`pushState` / `popstate`).
  *
  * ```ts
+ * // SPA / Outlet — RouterBuilder registry + History engine
  * export const provider = Last.provider(
  *   History.layer.pipe(Layer.provide(routes)),
  * )
+ *
+ * // Catalog soft-nav only (no Outlet handlers) — web dashboards
+ * export const provider = Last.provider(History.fromApi(Site))
  * ```
  *
  * @public
@@ -16,6 +19,7 @@
 import { Effect, Layer } from "effect";
 import * as Router from "./Router";
 import * as routerBuilder from "./internal/routerBuilder";
+import type { ApiConstraint } from "./internal/routes";
 import * as internal from "./internal/router";
 
 /**
@@ -40,3 +44,29 @@ export const layer: Layer.Layer<
     }) as Router.Service;
   }),
 );
+
+/**
+ * Live catalog-only History service (tests / sync install). Prefer
+ * {@link fromApi} under {@link ./Last.provider}.
+ *
+ * @public
+ */
+export const service = <A extends ApiConstraint>(
+  api: A,
+): Router.Service<A> => internal.makeService(api, "History");
+
+/**
+ * Catalog-only History Layer — soft-nav / `Route.handle` Outlet without
+ * {@link ./RouterBuilder} handlers (web dashboards, embeds).
+ *
+ * @example
+ * ```ts
+ * export const provider = Last.provider(History.fromApi(Site))
+ * ```
+ *
+ * @public
+ */
+export const fromApi = <A extends ApiConstraint>(
+  api: A,
+): Layer.Layer<Router.Router> =>
+  Layer.sync(Router.Router, () => service(api));

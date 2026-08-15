@@ -13,11 +13,11 @@ import type { Layer } from "effect";
  * const site = Route.make("site").add(
  *   Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub)),
  * )
- * Router.history(site) // never Router.history(ServicesHub)
+ * History.fromApi(site) // never History.fromApi(ServicesHub)
  * ```
  */
 export type StolenRouteCatalog =
-  "Route.make | group | get | fromEffect | Group.asRoutes";
+  "Route.make | group | get | group.effect | Group.asRoutes";
 
 export interface StolenRouter {
   readonly pathname: string;

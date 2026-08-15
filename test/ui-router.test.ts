@@ -1,5 +1,5 @@
 /**
- * Router.memory / .history — Route.Api only; Group via asRoutes + fromEffect.
+ * Memory.fromApi / History.fromApi — Route.Api only; Group via asRoutes + group.effect.
  */
 import { createElement } from "react";
 import { describe, expect, it } from "@effect/vitest";
@@ -10,6 +10,8 @@ import * as Group from "../src/Group";
 import { pathToMember } from "../src/internal/uiGroupRoutes";
 import * as GroupNav from "../src/ui/GroupNav";
 import * as Route from "../src/ui/Route";
+import * as History from "last-ts/History";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../src/ui/Router";
 
 const site = Route.make("site").add(
@@ -40,7 +42,7 @@ const run = <A>(
 
 describe("Router.make (typed)", () => {
   it("to / urls are catalog-typed", () => {
-    const router = Router.unsafeService(site, "Memory");
+    const router = Memory.service(site);
     expect(router._tag).toBe("Memory");
     router.to((urls) => urls.app.dashboard());
     expect(router.pathname).toBe("/app");
@@ -48,7 +50,7 @@ describe("Router.make (typed)", () => {
   });
 
   it("history layer stamps _tag History", () => {
-    run(Router.history(site), (router) => {
+    run(History.fromApi(site), (router) => {
       expect(router._tag).toBe("History");
     });
   });
@@ -67,7 +69,7 @@ describe("Route.handle + Router.Outlet", () => {
         ),
       ),
     );
-    const router = Router.unsafeService(app, "Memory");
+    const router = Memory.service(app);
     router.go("/users/42");
     expect(Route.handleOf(router.match)).toBeDefined();
 
@@ -93,7 +95,7 @@ describe("Route.handle + Router.Outlet", () => {
         ),
       ),
     );
-    const router = Router.unsafeService(app, "Memory");
+    const router = Memory.service(app);
     router.to((u) => u.user("42", { query: { tab: "bio" } }));
     expect(router.pathname).toBe("/users/42");
     expect(router.search).toBe("?tab=bio");
@@ -109,16 +111,16 @@ describe("Route.handle + Router.Outlet", () => {
   });
 });
 
-describe("Router.memory (Route.Api)", () => {
+describe("Memory.fromApi (Route.Api)", () => {
   it("matches Route.get home at /", () => {
     const app = Route.make("app").add(Route.get("home", "/"));
-    const router = Router.unsafeService(app, "Memory");
+    const router = Memory.service(app);
     expect(router.pathname).toBe("/");
     expect(router.match?.route.identifier).toBe("home");
   });
 
   it("go / to / match / back", () => {
-    run(Router.memory(site), (router) => {
+    run(Memory.fromApi(site), (router) => {
       expect(router.pathname).toBe("/");
       expect(router.match).toBeUndefined();
 
@@ -138,7 +140,7 @@ describe("Router.memory (Route.Api)", () => {
   });
 
   it("go({ replace }) does not deepen the memory stack", () => {
-    run(Router.memory(site), (router) => {
+    run(Memory.fromApi(site), (router) => {
       router.go("/home");
       router.go("/app", { replace: true });
       expect(router.pathname).toBe("/app");
@@ -148,7 +150,7 @@ describe("Router.memory (Route.Api)", () => {
   });
 
   it("toRoot replaces to /", () => {
-    run(Router.memory(site), (router) => {
+    run(Memory.fromApi(site), (router) => {
       router.go("/app");
       router.toRoot();
       expect(router.pathname).toBe("/");
@@ -158,7 +160,7 @@ describe("Router.memory (Route.Api)", () => {
   });
 
   it("subscribe fires on navigate", () => {
-    run(Router.memory(site), (router) => {
+    run(Memory.fromApi(site), (router) => {
       let n = 0;
       const unsub = router.subscribe(() => {
         n += 1;
@@ -179,7 +181,7 @@ describe("Group.asRoutes + fromEffect", () => {
       Route.group("tree", { topLevel: true }).effect(Group.asRoutes(Hub)),
     );
     // fromEffect defers — materialize via router install (R = never)
-    const router = Router.unsafeService(site, "Memory");
+    const router = Memory.service(site);
     const tree = (
       router.api.groups as Record<string, Route.GroupTop | undefined>
     )["tree"];
@@ -197,7 +199,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("open by member yields short-name path + Target match", () => {
-    run(Router.memory(hubSite), (router) => {
+    run(Memory.fromApi(hubSite), (router) => {
       GroupNav.open(Hub, router, HttpApi);
       const nav = GroupNav.state(Hub, router);
       expect(nav.keys).toEqual(["Nwsl", "HttpApi"]);
@@ -219,7 +221,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("openKey / up walk the tree without corrupting back()", () => {
-    run(Router.memory(hubSite), (router) => {
+    run(Memory.fromApi(hubSite), (router) => {
       GroupNav.openKey(Hub, router, "Nwsl");
       expect(GroupNav.state(Hub, router).keys).toEqual(["Nwsl"]);
       expect(GroupNav.state(Hub, router).selected).toBeNull();
@@ -239,7 +241,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("open then up lands on parent group (deep jump)", () => {
-    run(Router.memory(hubSite), (router) => {
+    run(Memory.fromApi(hubSite), (router) => {
       GroupNav.open(Hub, router, HttpApi); // one push to /Nwsl/HttpApi
       GroupNav.up(Hub, router); // replace → /Nwsl
       expect(GroupNav.state(Hub, router).keys).toEqual(["Nwsl"]);
@@ -252,7 +254,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("openHealth / openNode use catalog urls", () => {
-    run(Router.memory(hubSite), (router) => {
+    run(Memory.fromApi(hubSite), (router) => {
       GroupNav.openKey(Hub, router, "Nwsl");
       GroupNav.openHealth(router);
       expect(GroupNav.state(Hub, router).keys).toEqual(["health"]);
@@ -277,7 +279,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("openLogs stamps leafView Target", () => {
-    run(Router.memory(hubSite), (router) => {
+    run(Memory.fromApi(hubSite), (router) => {
       GroupNav.openLogs(Hub, router, HttpApi);
       const nav = GroupNav.state(Hub, router);
       expect(nav.keys).toEqual(["Nwsl", "HttpApi", "logs"]);
@@ -291,7 +293,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("openSchedule stamps LeafView schedule Target", () => {
-    run(Router.memory(hubSite), (router) => {
+    run(Memory.fromApi(hubSite), (router) => {
       GroupNav.openSchedule(Hub, router, HttpApi);
       const nav = GroupNav.state(Hub, router);
       expect(nav.keys).toEqual(["Nwsl", "HttpApi", "schedule"]);
@@ -305,7 +307,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("TargetValue matrix — Group / Leaf / LeafView / Health helpers", () => {
-    run(Router.memory(hubSite), (router) => {
+    run(Memory.fromApi(hubSite), (router) => {
       expect(Route.viewOf(undefined)).toBeUndefined();
       expect(Route.memberOf(undefined)).toBeNull();
 
@@ -330,7 +332,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("Route.targetOf reads Target from match annotations", () => {
-    const router = Router.unsafeService(hubSite, "Memory");
+    const router = Memory.service(hubSite);
     expect(router._tag).toBe("Memory");
     GroupNav.open(Hub, router, HttpApi);
     expect(Route.targetOf(undefined)).toBeUndefined();

@@ -98,30 +98,12 @@ export { static_ as static };
 export type RequestValue = pageServices.RequestValue;
 
 /**
- * @deprecated Legacy Outlet bag — prefer {@link document} + `last-ts/Document`.
- * @public
- */
-export type DocumentValue = pageServices.DocumentValue;
-
-/**
- * @deprecated Legacy Outlet API — prefer {@link document}.
- * @public
- */
-export type DocumentApi = pageServices.DocumentApi;
-
-/**
  * Current match (`yield* Page.Request`).
  * React: `import * as Page from "last-ts/Page/react"` → `Page.useRequest`.
  *
  * @public
  */
 export { Request } from "./internal/pageServices";
-
-/**
- * @deprecated Prefer {@link document}. Kept for Outlet bridge.
- * @public
- */
-export { Document } from "./internal/pageServices";
 
 /**
  * Merge document-field patches / partials into the current {@link Document.Cell}.

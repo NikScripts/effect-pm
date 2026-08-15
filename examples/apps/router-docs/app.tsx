@@ -3,10 +3,11 @@
  * Typed catalog twin (no JSX): `examples/ui/router-mini-docs.ts`.
  */
 import * as React from "react";
+import * as History from "last-ts/History";
 import * as Router from "../../../src/ui/Router";
 import { site, urls } from "./site";
 
-const router = Router.unsafeService(site, "History");
+const router = History.service(site);
 
 const NavLink = (props: {
   readonly to: string | ((u: typeof urls) => string);

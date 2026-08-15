@@ -26,6 +26,7 @@ import * as GateView from "../ui/GateView";
 import * as GroupView from "../ui/GroupView";
 import * as HyperlinkView from "../ui/HyperlinkView";
 import * as GroupNav from "../ui/GroupNav";
+import * as History from "last-ts/History";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as PriorityView from "../ui/PriorityView";
@@ -384,7 +385,7 @@ export const DashboardView = <R, ER>(props: {
     );
     return Views.compose({
       views,
-      router: Router.history(routesFor(props.group)),
+      router: History.fromApi(routesFor(props.group)),
       group: props.group,
     });
   }, [props.group, props.views]);

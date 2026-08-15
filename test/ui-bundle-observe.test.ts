@@ -13,6 +13,7 @@ import * as Observe from "../src/Observe";
 import * as WorkPool from "../src/WorkPool";
 import * as DaemonView from "../src/ui/DaemonView";
 import * as Route from "../src/ui/Route";
+import * as Memory from "last-ts/Memory";
 import * as Router from "../src/ui/Router";
 import { RuntimeProvider } from "../src/ui/runtime";
 import * as View from "../src/ui/View";
@@ -48,7 +49,7 @@ describe("Observe.use", () => {
   it("returns queue / daemon packs under RuntimeProvider", () => {
     const ui = Views.compose({
       views,
-      router: Router.memory(hubSite),
+      router: Memory.fromApi(hubSite),
     });
     const runtime = Atom.runtime(Layer.empty);
     let queueKeys: ReadonlyArray<string> | undefined;

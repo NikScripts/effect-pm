@@ -107,7 +107,8 @@ export type FileRouteId = /* union of ids */
 2. **Vite plugin** keeps gen aligned in dev.
 3. **`hyp file-router check` in CI** (`PathsMissingError` / `PathsStaleError`).
 4. **Never widen to `string`.** Empty tree → `never`.
-5. **Catalog / host stay hand-authored.** No auto-merge from gen into `Router.make` or `createPages`.
+5. **Catalog / host stay hand-authored.** No auto-merge from gen into
+   `Router.make` or host `createPages` wiring.
 
 ## Related
 

@@ -26,7 +26,7 @@
  * @see docs/handoffs/router-httpapi-lock.md
  */
 import * as React from "react";
-import { Context, Layer } from "effect";
+import { Context } from "effect";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as fileRouter from "./internal/fileRouter";
 import * as outlet from "./internal/outlet";
@@ -162,9 +162,10 @@ export type PageProps<
 // =============================================================================
 
 /**
- * Live navigation API — provide with {@link memory} / {@link history}, or build
- * with {@link make} for a catalog-typed surface. Discriminated by `_tag`
- * (`"Memory"` / `"History"` / `"Waku"`).
+ * Live navigation API — install with {@link ./Memory.fromApi} /
+ * {@link ./History.fromApi} / {@link ./Waku.fromApi} (or `.layer` +
+ * {@link ./RouterBuilder}), under {@link ./Last.provider}. Discriminated by
+ * `_tag` (`"Memory"` / `"History"` / `"Waku"`).
  *
  * @public
  */
@@ -175,45 +176,13 @@ export type Service<A extends ApiConstraint = ApiConstraint> =
 export type ForApi<A extends ApiConstraint> = Service<A>;
 
 /**
- * Router Context service — provide with {@link memory} / {@link history}.
+ * Router Context service — provide via Memory / History / Waku Layers.
  *
  * @public
  */
 export class Router extends Context.Service<Router, Service>()(
   "last-ts/Router",
 ) {}
-
-// =============================================================================
-// Legacy live Layers (prefer Memory.layer / History.layer + RouterBuilder)
-// =============================================================================
-
-/**
- * Live Memory service value — prefer {@link ./Memory.layer} + {@link ./RouterBuilder}.
- *
- * @public
- */
-export const unsafeService = <A extends ApiConstraint>(
-  api: A,
-  engine: "Memory" | "History",
-): Service<A> => internal.makeService(api, engine);
-
-/**
- * In-memory router Layer from a catalog value (legacy). Prefer
- * {@link ./Memory.layer} with {@link ./RouterBuilder.layer}.
- *
- * @public
- */
-export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
-  Layer.sync(Router, () => internal.makeService(api, "Memory"));
-
-/**
- * Browser History router Layer from a catalog value (legacy). Prefer
- * {@link ./History.layer} with {@link ./RouterBuilder.layer}.
- *
- * @public
- */
-export const history = (api: ApiConstraint): Layer.Layer<Router> =>
-  Layer.sync(Router, () => internal.makeService(api, "History"));
 
 /**
  * Typed destinations from a file-router path table.
@@ -230,6 +199,8 @@ const RouterReactContext = React.createContext<Service | null>(null);
 
 /**
  * Provide a live {@link Service} to descendant Views.
+ * Prefer {@link ./Last.provider} (`Memory` / `History` / `Waku` Layers) at the
+ * app edge — this is the React context mount used under that bake.
  *
  * @public
  */
@@ -440,7 +411,8 @@ export const UnboundLink = (props: UnboundLinkProps): React.ReactElement => {
 
 /**
  * Render the matched route’s page. Prefers {@link ./RouterBuilder} handlers
- * (+ group layout). Provides {@link ./Page.Request} / {@link ./Page.Document}
+ * (+ group layout). Provides {@link ./Page.Request}. Document writes use
+ * {@link ./Page.document} + {@link ./Document.Cell} under {@link ./Last.provider}.
  * bridges. Falls back to legacy {@link Route.handle} annotations.
  *
  * Layout = component + `children`.

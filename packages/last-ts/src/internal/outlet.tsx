@@ -42,11 +42,10 @@ const toNode = (
   return value;
 };
 
-/** Run a page Effect with Request + Document + layout Override, via Atom. */
+/** Run a page Effect with Request + layout Override, via Atom. */
 const PageEffectView = (props: {
   readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
   readonly request: pageServices.RequestValue;
-  readonly document: pageServices.DocumentApi;
   readonly args: Route.HandleArgs;
   readonly override: Layout.OverrideCell;
   readonly onOverride: () => void;
@@ -57,7 +56,6 @@ const PageEffectView = (props: {
       runtime.atom(
         props.effect.pipe(
           Effect.provideService(pageServices.Request, props.request),
-          Effect.provideService(pageServices.Document, props.document),
           Effect.provideService(Layout.Override, {
             get: props.override.get,
             set: (layout) => {
@@ -109,7 +107,6 @@ const MatchedBody = (props: {
   readonly match: Match;
   readonly request: pageServices.RequestValue;
 }): React.ReactElement | null => {
-  const documentApi = pageContext.useDocumentApi();
   const args: Route.HandleArgs = props.request;
   const bag = props.router._handlers;
   let body: React.ReactNode = null;
@@ -128,7 +125,6 @@ const MatchedBody = (props: {
         body = React.createElement(PageEffectWithLayout, {
           effect: h.effect,
           request: props.request,
-          document: documentApi,
           args,
           groupLayout,
         });
@@ -150,7 +146,6 @@ const MatchedBody = (props: {
 const PageEffectWithLayout = (props: {
   readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
   readonly request: pageServices.RequestValue;
-  readonly document: pageServices.DocumentApi;
   readonly args: Route.HandleArgs;
   readonly groupLayout: React.FC;
 }): React.ReactElement | null => {
@@ -171,7 +166,6 @@ const PageEffectWithLayout = (props: {
   const body = React.createElement(PageEffectView, {
     effect: props.effect,
     request: props.request,
-    document: props.document,
     args: props.args,
     override,
     onOverride: () => setLayout(override.get()),
