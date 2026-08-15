@@ -280,7 +280,7 @@ Config = Schema’d dials the engine branches on.
 |------|------------------------|---------|
 | **Lookup config** | `LookupConfig` (today still on `LookupPolicy`) | Sticky, StreamGap, ColdAmbiguous, Verify, Conflict *modes* |
 | **Node config** | `NodeConfig` (today `NodePolicy`) | PrimaryAddress, Listen, Advertise, Proxy, As, Active |
-| **Lookup policy** | `LookupPolicy` (shrunk) | Yield, Pick (fn) — real handlers + defaults; `"first"` / `true` = sugar over defaults |
+| **Lookup policy** | `LookupPolicy` (shrunk) | Yield, Pick — handlers; both-ways options (`yield("Refuse")` ≡ `yieldRefuse`) |
 
 **Where config lives:** ambient `Context.Reference`s with `defaultValue` (same DX:
 `yield*`, Layer overrides). **Not** a product options-bag on `lookupClient` /
