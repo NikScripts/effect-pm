@@ -342,33 +342,356 @@ wins over stamped wins over package default.
 Tip still has `withPolicy` + uneven sugar — `Node.policy` + full both-ways
 surface when owner says Eng.
 
-### 3.3.3 Agent 5 decision pack (2026-08-15) — owner may override any row
+### 3.3.3 Agent 5 decision pack (2026-08-15) — owner may override any id
 
 All open A/B / policy / dream calls **agent-decided** below. Change an id → we
 revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
-| Id | Decision | Choice |
-|----|----------|--------|
-| **D1** | Product A/B bar | **S5 Shape β** — stable primary + `forward` + `activate`. S6 dual-public remains supported, not the dream. |
-| **D2** | Update north star | `Update.plan` → `simulate` → `execute` drives **S5**: up B → baked handoff → `Node.activate("B")` → shutdown A. S6 `restartSuccessor` path stays until execute grows β. |
-| **D3** | Handoff peer under Primary advertise | **S14 filtered**: Directory may hold labeled backend rows for peer/ops; **`lookupClient` dials only the Advertise/Primary set**. Shutdown handoff peer-picks the other live labeled row (same `nodeKey`, different dial) — never a forged second key. |
-| **D4** | Manual `release`/`add` | **Rejected** forever as product. Only WorkPool baked `releaseEnqueueHandoff`. |
-| **D5** | Parity “up to par” test | Public client, **stable dial**: enqueue on Active A → up B → shutdown A (handoff) → activate B → **exact pending on B** + Probe tip flip. No `verifyOff` once stream/ref forward lands. |
-| **D6** | Rollback | Before A shutdown: `Node.activate("A")` + stop B. After A gone: plan step to up A again — no implicit time travel. |
-| **D7** | Edge / A / B identity | **One** `Node.make` public class; private via `.pipe(Address…)`; roles via `Node.config` — never three makes with the same key. |
-| **D8** | Worker sources | **One** worker entry; tip/version from Config or argv — **not** duplicated v1/v2 files. File-swap (if used) swaps that one entry. |
-| **D9** | Policy vs config | Policy = handlers (Yield, Pick). Config = mode dials + Node address knobs (`LookupConfig` / `NodeConfig`). |
-| **D10** | Post-make overlays | `Node.config(node, { partial })` + `Node.policy(node, …fragments)` varargs. Reject `withPolicy` / `withConfig` as names. |
-| **D11** | Option API | **Both ways**: `yield("Refuse")` ≡ `yieldRefuse`; `pick("First")` ≡ `pickFirst`. Reject boolean primary `yield(true)`. |
-| **D12** | Custom Yield | `LookupPolicy.yield(effect)` overload on the same helper. |
-| **D13** | Precedence | call-site > `Node.policy` stamp > ambient Service default (`Accept` / unset Pick). |
-| **D14** | Client layer install | Keep `LookupConfig.provide` / `LookupPolicy.provide` on layers; `Node.policy` only stamps made nodes. |
-| **D15** | Handler backing | One `Context.Service` per policy + default Layer (engines `yield*` then invoke). |
-| **D16** | Proxy | `NodeConfig.Proxy: "Prefer"`; behavior = primary `Node.forward*` → Active label; flip = `Node.activate`. |
-| **D17** | Stream/ref forward | **Required** before public clients use default verify; until then demos may `verifyOff` but that is not the dream. |
-| **D18** | Dream example | Thin compose matching § dream sketch below — not a twin of forward-proxy with interim hacks. Prefer forward-proxy as substrate unit test; dream = Launcher + Update + handoff + activate. |
-| **D19** | Tags on Update.plan | Prefer infer-from-successor serve list when Eng allows; until then tags stay but must match child serve (fail simulate on drift). |
-| **D20** | Eng order | (1) S14 filtered rows + handoff peer pick (2) `Node.config`/`Node.policy` + config split (3) stream/ref forward (4) Update.execute β (5) rewrite dream example last. |
+**Summary table**
+
+| Id | Choice (short) |
+|----|----------------|
+| D1 | S5 Shape β is the product A/B bar |
+| D2 | Update.execute grows β (up → handoff → activate → shutdown) |
+| D3 | S14 filtered Directory rows for handoff peers |
+| D4 | No manual queue copy — baked handoff only |
+| D5 | Parity test = stable dial + exact pending + tip flip |
+| D6 | Rollback = re-activate / re-up — no time travel |
+| D7 | One make + pipe + Node.config roles |
+| D8 | One worker entry; tip from Config/argv |
+| D9 | Policy = handlers; rest = config modules |
+| D10 | Node.config bag + Node.policy varargs |
+| D11 | Both-ways options (`yield("Refuse")` ≡ `yieldRefuse`) |
+| D12 | `yield(effect)` on the same helper |
+| D13 | call-site > Node.policy > ambient |
+| D14 | Layer provide for clients; Node.policy for nodes |
+| D15 | Context.Service + default Layer per policy |
+| D16 | Proxy Prefer = forward + Active; flip = activate |
+| D17 | Stream/ref forward before default verify |
+| D18 | Dream = Update compose; forward-proxy = substrate |
+| D19 | Plan tags must match serve; infer later |
+| D20 | Eng order: S14 → config/policy → stream/ref → Update β → dream |
+
+#### D1 — Product A/B bar = S5 (Shape β)
+
+**Choice:** The thing we optimize demos, Update, and “up to par” against is
+**stable primary + labeled backends + forward + activate**. Clients keep one
+dial across a binary update.
+
+**Why:** Peer tools (LB VIP, k8s Service, Envoy cluster) almost always keep the
+client address stable. S6 (dual public dial + sticky/Advice) works on tip but
+forces every client to rebind — that is a migration of *address*, not a
+redeploy behind a front door. Owner lean in §4 was already β.
+
+**Rejected:** Treating S6 / `restartSuccessor` as the dream. It stays a supported
+fleet shape for dual-public cutovers, not the north star.
+
+**Implies:** Dream example, parity tests, and Update β all assume a primary that
+does not move.
+
+#### D2 — Update.execute drives S5
+
+**Choice:** `Update.plan` → `simulate` → `execute` becomes the SSOT cutover verb
+for β: bring up B → baked WorkPool handoff on shutdown A → `Node.activate("B")`
+→ finish retiring A. Execute re-runs the simulate gate (already Eng’d for S6).
+
+**Why:** Without this, A/B is a shell script (file-swap, activate, manual moves)
+and we fail the “one SSOT API” bar vs Deployments / rollouts. Plan-as-value +
+dumb execute is already Eng’d; it just still calls S6 custody.
+
+**Rejected:** A separate `Redeploy` module; leaving activate outside Update
+forever; growing more flags on `restartSuccessor`.
+
+**Implies:** Until β lands, tip Update still does dial-replace. Docs must not
+claim execute does activate yet. `prefer?: boolean` on execute stays out of the
+β story (Advice/Active own early-move).
+
+#### D3 — Handoff peers via S14 filtered Directory
+
+**Choice:** Directory **may store labeled backend rows** (A/B Unix) for peer and
+ops use. **`lookupClient` / normal app dials only see the Advertise set**
+(Primary by default). On shutdown, WorkPool handoff peer-picks the other live
+**labeled row with the same `nodeKey` and a different dial** — never a second
+forged node identity.
+
+**Why:** Today Advertise Primary ⇒ B never appears in Directory ⇒ baked handoff
+cannot find a peer ⇒ demos invent `release`/`add`. Explicit peer dials on
+shutdown reintroduce options-bag identity lies. Edge-mediated handoff couples
+queue semantics to the proxy. Filtered multi-row is the least-lie: membership
+truth in Directory, client view filtered by Advertise.
+
+**Rejected:** Manual peer URL on shutdown; handoff only through the edge;
+forging `WorkerA`/`WorkerB` keys; leaving private backends invisible forever.
+
+**Implies:** Advertise and “rows handoff can see” are different projections of
+the same Directory. Client sticky/Advice still operate on the Primary set.
+
+#### D4 — No manual queue copy
+
+**Choice:** Product path is only WorkPool’s baked `releaseEnqueueHandoff` during
+`Node.shutdown`. Scripted `release` then `add` is not documented as a recipe.
+
+**Why:** That script was the rejected dream-redeploy β. Peers don’t ask apps to
+copy their own queues mid-rollout. Baked handoff is already Locked #39.
+
+**Rejected:** “Interim until S14” copy as SSOT (S14 is D3; interim dies).
+
+**Implies:** Dream rewrite waits on D3. Until then keep the tip example marked
+rejected, don’t polish it.
+
+#### D5 — Parity test = stable dial + exact pending + tip flip
+
+**Choice:** Conformance for “up to par with A/B tools”:
+
+1. Public client dials **primary** only (never A/B socks).
+2. Enqueue pending on Active A.
+3. Up B (new tip/binary).
+4. Shutdown A → baked handoff moves **exact** payloads to B.
+5. `Node.activate("B")` (or execute β does it).
+6. Same public client sees new Probe tip; releases exact jobs from B.
+
+**Why:** That is the intersection of LB stability, readiness-before-flip, and
+drain/migrate that k8s/Envoy-class tools claim. Tip-only or dial-replace-only
+tests are weaker.
+
+**Rejected:** Counting “Directory row moved” or “activate flipped” alone as
+parity without pending integrity.
+
+**Implies:** D17 (forward+verify) must land before this test drops `verifyOff`.
+
+#### D6 — Rollback is explicit, not magical
+
+**Choice:**
+
+- **Before A shutdown:** `Node.activate("A")` and stop/kill B — traffic returns
+  to A; pending still on A.
+- **After A is gone:** a new plan step (or manual) ups A again from a known
+  good artifact. No automatic “roll back the binary” inventing A’s process.
+
+**Why:** Peer tools distinguish abort-during-rollout from restore-after-retire.
+Implicit revive hides custody and Ready.
+
+**Rejected:** Silent undo inside `Update.execute` after A has left Directory.
+
+**Implies:** Simulate/execute report phases so ops know which rollback applies.
+
+#### D7 — One identity, role overlays
+
+**Choice:** Exactly one `Node.make` per `nodeKey` for client-facing construction.
+Private dials = `Public.pipe(Address…)`. Edge vs backend A/B =
+`Node.config(…, { Listen, As, Active, … })`. Never three `make`s with the same
+key; never put A/B on the public make.
+
+**Why:** Owner correction already locked this (HttpApi-shaped). Forged sibling
+makes are the identity lie in §2.
+
+**Rejected:** `Worker` / `WorkerA` / `WorkerB` all `make`’d with one key;
+`makeDreamNodes` runtime class factories as the app pattern.
+
+**Implies:** `Node.config` must exist (D10) before dream rewrite looks clean.
+
+#### D8 — One worker entry
+
+**Choice:** A single worker program; version/tip from Effect `Config` or argv.
+File-swap (if used) replaces that one path. No `worker.v1.ts` / `worker.v2.ts`
+twins that only differ by a string.
+
+**Why:** Duplication was a top owner complaint. Real deploys swap an artifact or
+image tag, not two near-copy sources in tree.
+
+**Rejected:** Dual source files as the documented dream.
+
+**Implies:** Examples pass `TIP=v1|v2` (or Config) into one entry; tests assert
+the active artifact content or config, not which filename loaded.
+
+#### D9 — Policy vs config split
+
+**Choice:** **Policy** = pluggable handlers (Yield, Pick) with Services +
+defaults. **Config** = Schema’d dials (`Sticky`, `Verify`, `StreamGap`,
+`Conflict` modes, and all Node address knobs) under `LookupConfig` /
+`NodeConfig` ambient References.
+
+**Why:** Owner: things that don’t need handlers aren’t policies. HttpApi-ish
+handlers only where behavior is invoked; mode enums stay config.
+
+**Rejected:** Everything under `LookupPolicy`; calling Listen/Advertise “policy.”
+
+**Implies:** Tip’s merged Policy bags rename on Eng; Conflict *mode* is config,
+Yield *handler* is policy (askIncumbent config selects that Yield runs).
+
+#### D10 — Node.config + Node.policy
+
+**Choice:**
+
+```ts
+Node.config(MyNode, { Listen: "Primary", Active: "A" }) // partial bag, last-write
+Node.policy(MyNode, LookupPolicy.yield("Refuse"), LookupPolicy.pickFirst) // varargs
+```
+
+Reject product names `withPolicy` / `withConfig`. Address widen stays `.pipe(Address.*)`.
+
+**Why:** Owner gave this API. Bags fit structural knobs; varargs fit Layer-shaped
+policy fragments (same composability as today).
+
+**Rejected:** Policy as a partial bag of strings only; config as varargs Layers
+only; keeping `withPolicy` as the name.
+
+**Implies:** `Node.config` merge semantics = last-write per key; lists like
+`Listen: ["A"]` replace, they don’t union unless we later add explicit add APIs.
+
+#### D11 — Both-ways options
+
+**Choice:** Every mode option ships two equivalent installs:
+
+```ts
+LookupPolicy.yield("Refuse")  ≡  LookupPolicy.yieldRefuse
+LookupPolicy.pick("First")    ≡  LookupPolicy.pickFirst
+```
+
+Reject **boolean** primary (`yield(true)` / `yield(false)`) as the documented API.
+
+**Why:** Owner wanted one policy with options *and* named sugar for everything —
+neither form second-class. Booleans are hard to read at call sites.
+
+**Rejected:** Only nested `Yield.Refuse`; only flat sugar; only string helper.
+
+**Implies:** Option strings are PascalCase owned names (`"Accept"`, `"Refuse"`,
+`"First"`) to match other mode literals’ dignity; tip’s `"first"` lowercases
+normalize on Eng.
+
+#### D12 — Custom Yield on the same helper
+
+**Choice:** `LookupPolicy.yield(myEffect: Effect<boolean>)` is an overload of
+the same `yield` helper. No separate product export required; tip `onYield`
+can deprecate into this.
+
+**Why:** Keeps one create API (“the API shouldn’t change much”) while allowing
+real handlers with `R`.
+
+**Rejected:** A second `handlers.handle("Yield", …)` app surface for v1.
+
+**Implies:** Sugar presets don’t cover custom; custom always goes through
+`yield(effect)` (or `Node.policy` with that fragment).
+
+#### D13 — Override precedence
+
+**Choice:** **call-site** (`ListenOptions.onYield`, `lookupClient({ pick })`, …)
+**>** **`Node.policy` stamp** **>** **ambient Service default** (Accept / unset
+Pick → coldAmbiguous config path).
+
+**Why:** Same ladder tip already uses for yield. Local intent beats node default
+beats package default — predictable and loud.
+
+**Rejected:** Ambient always wins; stamp ignores call-site.
+
+**Implies:** Docs show call-site as escape hatch, not the normal way to configure
+fleet-wide Yield.
+
+#### D14 — Two install paths
+
+**Choice:** `LookupConfig.provide` / `LookupPolicy.provide` on **layers**
+(client, peers, serve composition). `Node.policy` / `Node.config` stamp **made
+nodes**. Fragments are the same values; install site differs.
+
+**Why:** Many clients never have a “this Node” to stamp. Forcing
+`Node.policy` only would strand `lookupClient`.
+
+**Rejected:** One true install path only on Node; deleting Layer provide.
+
+**Implies:** Provide and stamp both feed the same Services/References; last
+writer in the Layer graph still follows Effect Layer rules.
+
+#### D15 — Service backing
+
+**Choice:** Each policy key is a `Context.Service` with a **default Layer**.
+Engines `yield* LookupPolicy.Yield` (or Pick) and invoke. Option helpers
+`Layer.succeed` / replace that Service.
+
+**Why:** Owner agreed; References-of-Effects don’t grow `R` cleanly. Defaults
+mean apps aren’t forced to register handlers for Accept.
+
+**Rejected:** Required HttpApi-style “must handle every policy” with no default;
+storing bare Effects in References as the end state.
+
+**Implies:** PolicyBuilder may gain a `.handler` key kind, or Yield/Pick move off
+the old Reference builder onto Service factories — Eng detail under this lock.
+
+#### D16 — Proxy Prefer = forward + Active
+
+**Choice:** `NodeConfig.Proxy: "Prefer"` means primary listeners run
+`Node.forward` / `forwardAll` toward the **Active** label. Live flip =
+`Node.activate(node, label)` (and Update β calls that). Not a client Redirect
+SDK; not Advice-as-the-only-flip for β.
+
+**Why:** §4 owner lean. Advice/sticky remain for S6 and non-proxy fleets.
+
+**Rejected:** Proxy as a separate process type with its own make key by default;
+client-side redirect API.
+
+**Implies:** Edge role listens Primary only; backends `As` + Listen labels;
+Active is runtime state (seeded from config, flipped by activate).
+
+#### D17 — Stream/ref forward before default verify
+
+**Choice:** Public clients on a forwarding edge use **default verify** only after
+stream/ref members forward correctly (or verify is taught to skip inert
+forward stubs safely). Until then demos may use `verifyOff`, but that is
+**not** the dream story or parity gate.
+
+**Why:** Tip forward stubs caused hangs; `verifyOff` papered over it and made
+the rejected demo look “done.”
+
+**Rejected:** Shipping dream as verifyOff-forever; weakening global verify
+defaults.
+
+**Implies:** Eng stream/ref forward (or verify awareness of forward stubs)
+before D5 can go green without verifyOff.
+
+#### D18 — Dream example role
+
+**Choice:** Dream redeploy example = thin composition of D7–D8 + Launcher +
+Update β + D5 assertions. **forward-proxy** stays the small in-process substrate
+test for forward/activate only. Current tip dream-redeploy stays **rejected**
+until rewrite (last in D20).
+
+**Why:** Owner: not clean, not handoff, duplicated. Don’t polish trash.
+
+**Rejected:** Dream as a second forward-proxy with OS spawn bolted on; dream as
+Update docs while execute is still S6-only without a β callout.
+
+**Implies:** Docs hub keeps “rejected draft” until D20 step 5.
+
+#### D19 — Plan tags vs serve list
+
+**Choice:** Near term: `steps[].tags` remain but **simulate fails** if they
+drift from what the successor process actually serves (when detectable).
+Target: infer tags from successor serve registration / node declaration so
+apps don’t re-list.
+
+**Why:** §2 failure “tags as plan input.” Infer is right; detection is Eng-able
+sooner than full infer.
+
+**Rejected:** Trusting caller tags forever with no check; removing tags before
+infer exists (breaks today’s Update).
+
+**Implies:** Contract audit and tag drift are both simulate gates.
+
+#### D20 — Eng order
+
+**Choice:**
+
+1. **D3** S14 filtered rows + handoff peer pick (unblocks D4/D5)
+2. **D9–D15** `LookupConfig` / `NodeConfig` + `Node.config` / `Node.policy` +
+   Service handlers + both-ways options
+3. **D17** stream/ref forward (unblocks default verify)
+4. **D2** Update.execute β (activate + shutdown order)
+5. **D18** rewrite dream example last
+
+**Why:** Handoff peer is the hard correctness hole; renaming APIs before that
+produces a pretty API that still can’t move pending. Dream last so it can’t
+lie about missing substrate.
+
+**Rejected:** Dream rewrite first; Update β before handoff peers; big-bang Eng.
 
 #### Dream version (target DX — not Eng’d)
 
@@ -396,38 +719,29 @@ const edge = Node.config(WorkerPrivate, {
 const backendA = Node.config(WorkerPrivate, { As: "A", Listen: ["A"] })
 const backendB = Node.config(WorkerPrivate, { As: "B", Listen: ["B"] })
 
-// Edge — stable public dial
 Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])])
 
-// Backends — one entry; tip from Config (v1 then v2 after file-swap / image)
 Node.unix(backendA, [
   WorkPool.serve(Jobs, { effect: () => Effect.void }),
   Hyperlink.serve(Probe, { tip: tipFromConfig }), // "v1" | "v2"
 ])
 
-// Clients never change dial; default verify (after D17)
 Hyperlink.client(Probe, Worker)
 Hyperlink.client(Jobs, Worker).pipe(
   LookupConfig.provide(LookupConfig.make({ Sticky: true })),
 )
 
-// Optional: this node refuses askIncumbent during critical section
 Node.policy(backendA, LookupPolicy.yield("Refuse"))
 
-// Cutover — plan value, then dumb execute (D2)
 const plan = yield* Update.plan({
   steps: [{
     target: Worker.key,
     successor: { node: backendB, process: childFromActivePath },
-    // activate flip is part of execute β — not a manual script
   }],
 })
 yield* Update.simulate(plan)
 yield* Update.execute(plan)
-// inside execute β:
-//   Launcher.up(B) → Node.shutdown(A) [baked handoff A→B via D3] → Node.activate(WorkerPrivate, "B")
-
-// Public Probe.tip → "v2"; Jobs pending exact on B; dial still Worker Http
+// execute β: Launcher.up(B) → Node.shutdown(A) [D3 handoff] → Node.activate(..., "B")
 ```
 
 **Rejected dream (current tip example):** duplicated v1/v2 workers, `makeDreamNodes`,
