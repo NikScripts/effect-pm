@@ -392,7 +392,7 @@ describe("RouterBuilder Effect / JSX page handlers", () => {
     await assertTag(viewEffectRoutes, "home", "Page");
   });
 
-  it("Outlet runs Effect page with Page.Request + Document.set", () => {
+  it("Outlet runs Effect page with Page.Request", () => {
     const html = renderToString(
       React.createElement(
         effectHomeProvider,

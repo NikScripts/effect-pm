@@ -11,20 +11,21 @@ server** (`docs/last/site`) — not Hyperlink `docs/site`.
 
 | Layer | Job |
 |-------|-----|
-| `last-ts/server` (`createPages` + `adapter`) | RSC host registration (no Waku `fsRouter`) |
+| Waku host `createPages` + `adapter` (host entry only) | RSC host registration (no Waku `fsRouter`) |
 | `last-ts/vite` `fileRouter` → `paths.gen.ts` | Typed file path table |
 | `Router.make` + `Route.get` | Typed catalog / `urls.*` |
 | `Last.provider(…)` + `last-ts/Waku` | Soft-nav provider |
-| `View.make` + `Last.provide` | Client islands |
+| `View.make` + `Last.provide(Service, Service.layer)` | Client islands |
 
 Apps **never** `import` from `waku`. Host CLI filenames (`waku.config.ts`,
-`waku.server.tsx`) may remain; imports are `last-ts/config` / `last-ts/server`.
+`waku.server.tsx`) may remain; product imports are `last-ts/config` / `last-ts/Waku`
+/ Page / catalog — not a `last-ts/server` product export.
 
 ## Forbidden
 
-**Never** direct `waku` imports, `getConfig`, `pageConfig`, `Page.asDefault`,
-Page introspection helpers, or Route `fromEffect` / `fromPage` / `*FromPages`
-catalog merges.
+**Never** direct `waku` imports in apps, `getConfig`, `pageConfig`, `Page.asDefault`,
+Page introspection / stamp helpers, or Route `fromPage` / `*FromPages`
+catalog merges. (`group.effect` is core — not banned.)
 
 ## Catalog
 
@@ -46,58 +47,17 @@ export class Site extends Router.make("last-ts").add(
 export const urls = Route.urlBuilder(Site)
 ```
 
-## Host server entry
-
-```tsx
-import * as Server from "last-ts/server"
-import { Home } from "./pages/index"
-import { Chapter } from "./pages/guides/[slug]"
-
-export default Server.adapter(
-  Server.createPages(async ({ createPage, createRoot }) => [
-    createRoot({ render: "static", component: Root }),
-    createPage({ ...Server.fromPage("/", Home) }),
-    createPage({
-      ...Server.fromPage("/guides/[slug]", Chapter),
-      staticPaths: ["routing"],
-    }),
-  ]),
-)
-```
-
-Page components take soft-nav props (`params.slug`). `Server.fromPage(path, mint)`
-adapts Waku’s flat `{ slug, path, query }` at the host boundary.
-
-## Provider
+## Soft-nav provider
 
 ```ts
-export const Provider = Last.provider(
-  pipe(Waku.layer, Layer.provide(routes)),
-)
+import * as Last from "last-ts/Last"
+import * as Waku from "last-ts/Waku"
+
+export const provider = Last.provider(Waku.fromApi(Site))
 ```
 
-## Soft-nav
+## Client island
 
 ```ts
-import * as Router from "last-ts/Router"
-import { Site, urls } from "../lib/site"
-
-export const Link = Router.link(Site)
-
-<Link to={urls.index()}>Home</Link>
-<Link to={urls.guides_slug("routing")}>Guide</Link>
-```
-
-Waku is only the location Layer (`Waku.layer` / `Waku.fromApi`) — not a Link API.
-
-## View DI
-
-```ts
-class Sidebar extends View.make<Sidebar>()("app/Sidebar", () => <nav />) {}
 const App = Last.provide(Shell, Shell.layer)
-// Prefer pipe(layer, Layer.provide(…)) over layer.pipe(…)
 ```
-
-## Spine
-
-Full walkthrough: [`../handoffs/last-ts-spine.md`](../handoffs/last-ts-spine.md).

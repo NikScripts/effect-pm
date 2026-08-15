@@ -19,7 +19,8 @@
  * export const Link = Router.link(Site)
  * ```
  *
- * Lower-level binding helpers re-export from the former `Router/waku` entry.
+ * Lower-level `waku` / hooks support the live mount under {@link ./Last.provider}.
+ * Prefer `Last.provider(Waku.fromApi|layer)` — no nested Provider / setDefault.
  *
  * @public
  */
@@ -27,10 +28,7 @@
 
 export {
   waku,
-  layer as binding,
-  setDefault,
   isWakuBinding,
-  Provider,
   useRouter,
   useHasRouter,
   useMatch,

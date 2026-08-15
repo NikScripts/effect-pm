@@ -1,5 +1,5 @@
 /**
- * Router Service discriminants + Waku layer surface (type locks).
+ * Router Service discriminants + Waku surface (type locks).
  */
 import { expectTypeOf } from "vitest";
 import * as Route from "../src/ui/Route";
@@ -19,13 +19,12 @@ memory.mode;
 const binding = RouterWaku.waku(site);
 expectTypeOf(binding._tag).toEqualTypeOf<"WakuBinding">();
 expectTypeOf(binding.api).toEqualTypeOf(site);
-expectTypeOf(RouterWaku.layer.waku(site)._tag).toEqualTypeOf<"WakuBinding">();
 
 // @ts-expect-error WakuBinding has no redundant mode field
 binding.mode;
 
-// Layer entry is not a Router namespace mirror
-// @ts-expect-error Router/waku has no make
+// Waku module is not a Router namespace mirror
+// @ts-expect-error no make
 RouterWaku.make;
 // @ts-expect-error Memory layer stays on ui/Router
 RouterWaku.memory;
@@ -35,8 +34,12 @@ RouterWaku.history;
 RouterWaku.Outlet;
 // @ts-expect-error Context tag stays on ui/Router
 RouterWaku.Router;
-// @ts-expect-error layer has only waku
-RouterWaku.layer.memory;
+// @ts-expect-error nested Provider / setDefault removed — use Last.provider
+RouterWaku.Provider;
+// @ts-expect-error
+RouterWaku.setDefault;
+// @ts-expect-error object layer.waku removed — use waku() / Waku.fromApi
+RouterWaku.layer;
 
 type Target = Route.TargetValue;
 expectTypeOf<Target["_tag"]>().toEqualTypeOf<

@@ -71,10 +71,6 @@
       "types": "./src/Document.tsx",
       "default": "./src/Document.tsx"
     },
-    "./Router/waku": {
-      "types": "./src/Router/waku.ts",
-      "default": "./src/Router/waku.ts"
-    },
     "./AtomReact": {
       "types": "./src/AtomReact.tsx",
       "default": "./src/AtomReact.tsx"
@@ -94,10 +90,6 @@
     "./config": {
       "types": "./src/config.ts",
       "default": "./src/config.ts"
-    },
-    "./server": {
-      "types": "./src/server.ts",
-      "default": "./src/server.ts"
     },
     "./package.json": "./package.json",
     "./docgen": {

@@ -3,4 +3,10 @@
 "hyperlink-ts": major
 ---
 
-**Breaking — last-ts API cleanup:** Removed View brand theater (`View.Component` / `Unresolved` / `ServicesOf` / `ProvidesOf` / `ViewPropsOf` / `ViewHandle` / `ViewHandleDefault` / `AnyView`); `View` is now an alias of `ViewFn`. Deleted Page stamp helpers (`Stamp` / `stampOf` / `renderModeOf`). Removed public `RouterClient` module (use `Route.urlBuilder`), public `RouterBuilder.resolveHandler` / `resolveRender`, and `Document.applyDocumentArgs` / `Page.remintStatic` from the public surface.
+**Breaking — last-ts outdated API cleanup**
+
+- Removed View brand theater (`Component` / `Unresolved` / peels / handles / `AnyView`); `View` ≡ `ViewFn`.
+- Deleted Page stamp helpers (`Stamp` / `stampOf` / `renderModeOf`).
+- Removed public `RouterClient`, `RouterBuilder.resolve*`, `Document.applyDocumentArgs`, `Page.remintStatic`.
+- Dropped package exports `./server` and `./Router/waku` (use `last-ts/Waku` + `Last.provider`; host `createPages` is Waku host wiring, not product).
+- Dropped public `Waku.setDefault` / `Waku.Provider` / `binding` — prefer `Last.provider(Waku.fromApi|layer)`.

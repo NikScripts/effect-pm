@@ -134,13 +134,12 @@ export default Config.defineConfig({
         "last-ts/Page/react": `${lastTsSrc}/Page/react.tsx`,
         "last-ts/Page": `${lastTsSrc}/Page.ts`,
         "last-ts/Route": `${lastTsSrc}/Route.ts`,
-        "last-ts/Router/waku": `${lastTsSrc}/Router/waku.ts`,
+        "last-ts/Waku": `${lastTsSrc}/Waku.ts`,
         "last-ts/Router": `${lastTsSrc}/Router.ts`,
         "last-ts/RouterBuilder": `${lastTsSrc}/RouterBuilder.ts`,
         "last-ts/Layout": `${lastTsSrc}/Layout.tsx`,
         "last-ts/RootLayout": `${lastTsSrc}/RootLayout.tsx`,
         "last-ts/Document": `${lastTsSrc}/Document.tsx`,
-        "last-ts/Waku": `${lastTsSrc}/Waku.ts`,
         "last-ts/View": `${lastTsSrc}/View.tsx`,
         "last-ts/Last": `${lastTsSrc}/Last.ts`,
         "last-ts/Memory": `${lastTsSrc}/Memory.ts`,
@@ -148,7 +147,8 @@ export default Config.defineConfig({
         "last-ts/AtomReact": `${lastTsSrc}/AtomReact.tsx`,
         "last-ts/vite": `${lastTsSrc}/vite/fileRouter.ts`,
         "last-ts/config": `${lastTsSrc}/config.ts`,
-        "last-ts/server": `${lastTsSrc}/server.ts`,
+        // Compat: old Router/waku import path → Waku module
+        "last-ts/Router/waku": `${lastTsSrc}/Waku.ts`,
         // Package source pulls `waku/router/client` via repo root — pin to THIS
         // app's waku so hooks share the site's Router context (no dual instance).
         "waku/router/client": fileURLToPath(

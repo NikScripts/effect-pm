@@ -15,17 +15,22 @@ import * as Route from "last-ts/Route"
 import * as Router from "last-ts/Router"
 import * as Page from "last-ts/Page"
 import * as Last from "last-ts/Last"
-import { defineConfig } from "last-ts/config"  // never import waku in apps
-import { adapter, createPages } from "last-ts/server"
+import * as Waku from "last-ts/Waku"
 import * as Document from "last-ts/Document"
-import * as Page from "last-ts/Page"
+import { defineConfig } from "last-ts/config"  // never import waku in apps
 import { fileRouter } from "last-ts/vite"
 
 yield* Page.document(Document.title("Chapter"))
+
+// Page edge
+const App = Last.provide(Hello, Hello.layer)
+export const provider = Last.provider(Waku.fromApi(Site))
 ```
 
-**Host boundary:** apps import **only** `last-ts/*`. `waku` is an optional peer
-inside this package. **Document fields:** `docs/handoffs/page-document-lock.md`.
+**Host boundary:** apps import **only** `last-ts/*`. Optional `waku` peer stays
+inside this package (`config` / `Waku`). Host RSC registration (`createPages`)
+is Waku host wiring — not a last-ts product export.
+**Document fields:** `docs/handoffs/page-document-lock.md`.
 **Corrections:** `docs/handoffs/last-ts-api-corrections.md`.
 
 Root barrels real modules only.
