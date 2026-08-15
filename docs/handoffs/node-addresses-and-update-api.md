@@ -341,87 +341,85 @@ surface when owner says Eng.
 All open A/B / policy / dream calls **agent-decided** below. Change an id → we
 revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
-#### Target Node API (SSOT sketch — read this first)
+#### Target Node API — one example (SSOT)
 
-HttpApi-shaped constructable. **Easy path first**; narrow only when you care.
-Tip still has `pipe` / `withPolicy` / address arrays — this is the **target**.
+Forget the kitchen-sink sketch. This is the product example:
 
 ```ts
-import * as Address from "hyperlink-ts/Address"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Launcher from "hyperlink-ts/Launcher"
-import * as LookupConfig from "hyperlink-ts/LookupConfig"
 import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 import * as Node from "hyperlink-ts/Node"
 import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Effect, Schema } from "effect"
 
-// 1) Identity — one make per key (HttpApi.make)
+// Tags
+class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
+  payload: Schema.Struct({ id: Schema.String }),
+}) {}
+class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
+  tip: Hyperlink.effect(Schema.String),
+}) {}
+
+// One identity — no addresses, no A/B
 class Worker extends Node.make("fleet/Worker") {}
 
-// Widen — .add like HttpApi.add (NOT .pipe, NOT Address[])
-class WorkerPinned extends Worker.add(Address.http(":8080")) {}
-
-// 2) Easy Shape β — protocols + proxy; runtime mints dials (no sock strings)
-const Fleet = Node.configure(Worker, {
+// ── edge process ───────────────────────────────────────────────────
+const edge = Node.configure(Worker, {
   protocols: ["Http", "Unix"],
   proxy: "Prefer",
+  listen: "Primary",
 })
-const edge = Node.configure(Fleet, { listen: "Primary" })
-const running = Node.configure(Fleet, { listen: "Available" })
-Node.policy(running, LookupPolicy.yield("Refuse")) // ≡ yieldRefuse
 
-// 3) Serve / forward / client
-Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])])
-Node.unix(running, [
-  WorkPool.serve(Jobs, { effect: () => Effect.void }),
-  Hyperlink.serve(Probe, { tip: tipFromConfig }),
-])
-Hyperlink.client(Probe, Worker)
-Hyperlink.client(Jobs, Worker).pipe(
-  LookupConfig.provide(LookupConfig.make({ sticky: true })),
+yield* Layer.launch(
+  Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])]),
 )
 
-// 4) Bring-up + cutover
-yield* Launcher.up({ node: running, process: child, ready: { timeout: "25 seconds" } })
-yield* Node.activate(Fleet, nextSlot)
-
-const plan = yield* Update.plan({
-  steps: [{ target: Worker.key, successor: { node: running, process: child } }],
+// ── backend process (same class; auto unix from protocols) ─────────
+const backend = Node.configure(Worker, {
+  protocols: ["Http", "Unix"],
+  proxy: "Prefer",
+  listen: "Available",
 })
-yield* Update.simulate(plan)
-yield* Update.execute(plan) // β: up → baked handoff → activate → retire
 
-// 5) Modules
-// NodeConfig   — protocols, listen, advertise, proxy, as, active, …
-// LookupConfig — sticky, verify, streamGap, conflict modes (camelCase bags)
-// LookupPolicy — Yield / Pick; yield("Refuse") ≡ yieldRefuse
+yield* Node.launch(
+  backend,
+  Node.unix(backend, [
+    WorkPool.serve(Jobs, { effect: () => Effect.void }),
+    Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
+  ], { assumeToken }),
+)
 
-// 6) Narrow only when you care
-class Explicit extends Node.make("fleet/Worker")
-  .add(Address.http(":8080"))
-  .add(Address.unix("blue", "/var/run/w.blue.sock"))
-  .add(Address.unix("green", "/var/run/w.green.sock")) {}
-Node.configure(Explicit, { proxy: "Prefer", active: "blue", listen: "Primary" })
-yield* Node.activate(Explicit, "green")
+// ── any client — always the same dial ──────────────────────────────
+const probe = yield* Probe.pipe(
+  Effect.provide(Hyperlink.client(Probe, Worker)),
+)
+yield* probe.tip // "v1"
 
-// 7) Addressless coop — protocols only; Lookup dials by service key
-class Mail extends Node.make("fleet/Mail") {}
-Node.configure(Mail, { protocols: ["Unix"] })
-Hyperlink.lookupClient(MailApi)
+// ── redeploy ───────────────────────────────────────────────────────
+// file-swap / new image → tip will be "v2" on the new process
+yield* Update.execute(
+  yield* Update.plan({
+    steps: [{
+      target: Worker.key,
+      successor: {
+        node: backend,
+        process: Launcher.command("pnpm", ["exec", "tsx", "worker.ts"]),
+      },
+    }],
+  }),
+)
+// up new → handoff pending Jobs → activate → retire old
+
+yield* probe.tip // "v2" — same Worker client, no rebind
 ```
 
-| API | Role |
-|-----|------|
-| `Node.make(key)` | Constructable identity |
-| `.add(Address)` | Immutable widen — **not** `.pipe` |
-| `Node.configure(node, { … })` | camelCase bag (protocols, proxy, listen, …) |
-| `Node.policy(node, …)` | Varargs Yield/Pick |
-| `Node.http` / `Node.unix` / … | Bind + serve |
-| `Node.forward` / `forwardAll` | Primary → Active |
-| `Node.activate` / `active` | Flip / read Active |
-| `Hyperlink.client` / `lookupClient` | Dial primary or by key |
-| `Update.plan` → `simulate` → `execute` | Fleet cutover SSOT |
+**That’s the whole story:** `make` → `configure(protocols + proxy)` → serve/forward →
+`Update.execute`. Addresses are minted. Labels optional. No `.pipe`. No address
+arrays. No forged second make.
+
+Narrow later with `.add(Address.http(":8080"))` only when you must pin something.
 
 **Quality bar (owner 2026-08-15):** D1–D26 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
