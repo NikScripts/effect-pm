@@ -546,7 +546,7 @@ Track 1 `Last.use(NavBarContext)` still works under the mounted bridge.
 
 | Piece | Status |
 |-------|--------|
-| Phase A site Frame kits (current tree) | **Eng’d** — `docs/last/site` `ui/*` View kits + `Site.context(SiteKit)` + Twoslash [`rsc-router.md`](../last/rsc-router.md) |
+| Phase A site Frame kits (current tree) | Eng’d earlier — **superseded by this lock** for next cut |
 | Track 1: `Last.context` / `provider` / `use` + `Last.link` + `Link` `out` | **Eng’d** — `test/last-context-link.test.tsx` · demo [`examples/last/context-link/`](../../examples/last/context-link/) · twoslash [`last-ts-context-link`](../examples/last/last-ts-context-link.md) |
 | Track 2: router/builder-scoped provide | **Eng’d** — `test/last-router-context.test.tsx` · demo [`examples/last/router-context/`](../../examples/last/router-context/) · twoslash [`last-ts-router-context`](../examples/last/last-ts-router-context.md) |
 | **T2e dogfood** | **Eng’d** — context-link edge is `Last.provider(layer)` only; docs kit mounts on `/docs` |

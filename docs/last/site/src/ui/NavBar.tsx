@@ -1,70 +1,33 @@
 /**
- * Top bar kit — leaf Views (DOM) + composition (zero DOM) + `NavBarContext`.
+ * Top bar — brand + primary links. HTML for this region lives here.
  */
 "use client";
 
 import type * as React from "react";
-import * as Last from "last-ts/Last";
-import * as View from "last-ts/View";
 import { Link } from "../lib/Link";
-import { urls } from "../lib/Catalog";
+import { urls } from "../lib/site";
 
-export class Root extends View.make<Root, {
-  readonly children?: React.ReactNode;
-}>()(
-  "last-ts/site/NavBar/Root",
-  (props) => (
-    <header className="navbar">
-      <div className="navbar-inner">{props.children}</div>
-    </header>
-  ),
-) {}
+export const Brand = (): React.ReactElement => (
+  <Link className="navbar-brand" to={urls.index()}>
+    last.ts
+  </Link>
+);
 
-export class Brand extends View.make<Brand, {
-  readonly children?: React.ReactNode;
-}>()(
-  "last-ts/site/NavBar/Brand",
-  (props) => (
-    <Link className="navbar-brand" to={urls.index()}>
-      {props.children}
-    </Link>
-  ),
-) {}
+export const Links = (): React.ReactElement => (
+  <nav className="navbar-links" aria-label="Primary">
+    <Link to={urls.index()}>Home</Link>
+    <Link to={urls.about()}>About</Link>
+    <Link to={urls.guides_slug("routing")}>Docs</Link>
+    <Link to={urls.view()}>View</Link>
+  </nav>
+);
 
-export class Nav extends View.make<Nav, {
-  readonly children?: React.ReactNode;
-}>()(
-  "last-ts/site/NavBar/Nav",
-  (props) => (
-    <nav className="navbar-links" aria-label="Primary">
-      {props.children}
-    </nav>
-  ),
-) {}
-
-export class NavBar extends View.make<NavBar>()(
-  "last-ts/site/NavBar",
-  () => {
-    const { Root: NavRoot, Brand: BrandView, Nav: NavEl } = Last.use(
-      NavBarContext,
-    );
-    return (
-      <NavRoot>
-        <BrandView>last.ts</BrandView>
-        <NavEl>
-          <Link to={urls.index()}>Home</Link>
-          <Link to={urls.about()}>About</Link>
-          <Link to={urls.guides_slug("routing")}>Docs</Link>
-          <Link to={urls.view()}>View</Link>
-        </NavEl>
-      </NavRoot>
-    );
-  },
-) {}
-
-export class NavBarContext extends Last.context({
-  Root,
-  Brand,
-  Nav,
-  View: NavBar,
-}) {}
+/** Full top bar. */
+export const NavBar = (): React.ReactElement => (
+  <header className="navbar">
+    <div className="navbar-inner">
+      <Brand />
+      <Links />
+    </div>
+  </header>
+);

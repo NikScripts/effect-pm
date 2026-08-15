@@ -36,8 +36,6 @@ const modules = import.meta.glob(
     "../../../../examples/apps/**/*.tsx",
     "../../../../examples/scenarios/**/*.ts",
     "../../../../examples/shared/**/*.ts",
-    "../../../../docs/last/site/src/**/*.ts",
-    "../../../../docs/last/site/src/**/*.tsx",
   ],
 
   { query: "?raw", import: "default", eager: true },

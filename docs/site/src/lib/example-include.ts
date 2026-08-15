@@ -3,13 +3,11 @@
 
 import * as nodePath from "node:path";
 
-/** Normalize a Vite glob key or author `include=` to repo-relative `examples/…` or `docs/last/site/…`. */
+/** Normalize a Vite glob key or author `include=` to repo-relative `examples/…`. */
 export const normalizeExampleRel = (pathOrKey: string): string => {
   const unified = pathOrKey.replace(/\\/g, "/");
-  const atExamples = unified.lastIndexOf("/examples/");
-  if (atExamples >= 0) return unified.slice(atExamples + 1);
-  const atDocsLast = unified.lastIndexOf("/docs/last/site/");
-  if (atDocsLast >= 0) return unified.slice(atDocsLast + 1);
+  const at = unified.lastIndexOf("/examples/");
+  if (at >= 0) return unified.slice(at + 1);
   return unified.replace(/^\.?\//, "");
 };
 
@@ -46,9 +44,7 @@ export const loadExampleIncludeFromDisk = (
   readFile: (abs: string) => string,
 ): string | undefined => {
   const rel = normalizeExampleRel(include);
-  if (!rel.startsWith("examples/") && !rel.startsWith("docs/last/site/")) {
-    return undefined;
-  }
+  if (!rel.startsWith("examples/")) return undefined;
   if (rel.includes("..")) return undefined;
   try {
     return readFile(nodePath.join(repoRoot, rel));

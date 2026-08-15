@@ -1,16 +1,11 @@
-{#last-rsc-router title="RSC + Router" status="stable" appliesTo=last-ts}
-<!-- docs-site-link:begin -->
-> [!NOTE]
-> last-ts docs server (`docs/last/site`) — not Hyperlink `docs/site`.
-<!-- docs-site-link:end -->
+{#last-rsc-router title="RSC + Router" status="draft" appliesTo=last-ts}
 # RSC + Router
 
-How **last.ts** wires file pages + typed soft-nav + View kits.
+How **last.ts** wires file pages + typed soft-nav. Surface: **last-ts docs
+server** (`docs/last/site`) — not Hyperlink `docs/site`.
 
-**App:** [`docs/last/site/`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/last/site/)  
-**Run:** `pnpm run docs:last-site`  
-**Corrections:** [`../handoffs/last-ts-api-corrections.md`](../handoffs/last-ts-api-corrections.md)  
-**Context lock:** [`../handoffs/last-context-view-lock.md`](../handoffs/last-context-view-lock.md)
+**Corrections SSOT:** [`../handoffs/last-ts-api-corrections.md`](../handoffs/last-ts-api-corrections.md)  
+**Router lock:** [`../handoffs/router-httpapi-lock.md`](../handoffs/router-httpapi-lock.md)
 
 ## Split of jobs
 
@@ -18,68 +13,51 @@ How **last.ts** wires file pages + typed soft-nav + View kits.
 |-------|-----|
 | Waku host `createPages` + `adapter` (host entry only) | RSC host registration (no Waku `fsRouter`) |
 | `last-ts/vite` `fileRouter` → `paths.gen.ts` | Typed file path table |
-| `Router.make` + `.context(SiteKit)` + `Route.get` | Typed catalog / kit debt |
-| `Last.provideContext` + `Layout.provide` | Builder fulfill |
-| `Last.provider(layer)` + `last-ts/Waku` | Soft-nav edge (no second kit arg) |
-| `ui/*` View kits | Leaf HTML; Tree composition via `Last.use` |
+| `Router.make` + `Route.get` | Typed catalog / `urls.*` |
+| `Last.provider(…)` + `last-ts/Waku` | Soft-nav provider |
+| `View.make` + `Last.provide(Service, Service.layer)` | Client islands |
 
-Apps **never** `import` from `waku`.
+Apps **never** `import` from `waku`. Host CLI filenames (`waku.config.ts`,
+`waku.server.tsx`) may remain; product imports are `last-ts/config` / `last-ts/Waku`
+/ Page / catalog — not a `last-ts/server` product export.
 
-## Layout
+## Forbidden
 
-```text
-docs/last/site/src/
-  ui/           View kits (NavBar, Sidebar, Main, Footer, LayoutGrid)
-  lib/
-    Catalog.ts  paths + urls (Link)
-    SiteKit.ts  nested Last.context
-    Tree.tsx    composition only
-    Frame.tsx   Layout.make → Tree
-    site.ts     Site.context(SiteKit) + routes
-    Provider.tsx  Last.provider(layer) only
-  pages/        Page mints
+**Never** direct `waku` imports in apps, `getConfig`, `pageConfig`, `Page.asDefault`,
+Page introspection / stamp helpers, or Route `fromPage` / `*FromPages`
+catalog merges. (`group.effect` is core — not banned.)
+
+## Catalog
+
+```ts
+import { Schema } from "effect"
+import * as Route from "last-ts/Route"
+import * as Router from "last-ts/Router"
+
+export class Site extends Router.make("last-ts").add(
+  Route.get("index", "/"),
+  Route.get("guides_slug", "/guides/:slug", {
+    params: { slug: Schema.Literals(["routing", "view-service"]) },
+  }),
+  Route.get("docs_path", "/docs/*path", {
+    params: { path: Schema.String },
+  }),
+) {}
+
+export const urls = Route.urlBuilder(Site)
 ```
 
-## Catalog (paths)
+## Soft-nav provider
 
-{.twoslash include="docs/last/site/src/lib/Catalog.ts"}
-``` ts
-```
+```ts
+import * as Last from "last-ts/Last"
+import * as Waku from "last-ts/Waku"
 
-## Site + routes
-
-{.twoslash include="docs/last/site/src/lib/site.ts"}
-``` ts
-```
-
-## SiteKit
-
-{.twoslash include="docs/last/site/src/lib/SiteKit.ts"}
-``` ts
-```
-
-## NavBar (leaf HTML + composition)
-
-{.twoslash include="docs/last/site/src/ui/NavBar.tsx"}
-``` tsx
-```
-
-## Tree + Frame
-
-{.twoslash include="docs/last/site/src/lib/Tree.tsx"}
-``` tsx
-```
-
-{.twoslash include="docs/last/site/src/lib/Frame.tsx"}
-``` tsx
-```
-
-## Provider
-
-{.twoslash include="docs/last/site/src/lib/Provider.tsx"}
-``` tsx
+export const provider = Last.provider(Waku.fromApi(Site))
 ```
 
 ## Client island
 
-`/view` — [`ViewDemo`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/last/site/src/islands/ViewDemo.tsx) uses const Layers + `Last.provide(Tag, layer)`.
+```ts
+const App = Last.provide(Shell, shellLayer)
+```
