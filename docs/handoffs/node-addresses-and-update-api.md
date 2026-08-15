@@ -396,78 +396,60 @@ dream demos that need a novel to explain.
 | **D23** | **Auto address pool** for proxy; labels = plain strings (no special A/B); optional key-derived range |
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
 
-#### D23 — Auto address pool for proxy cutover (revised 2026-08-15)
+#### D23 — Auto addresses from protocols + proxy (revised again 2026-08-15)
 
-**Choice:** For Shape β, apps declare **protocols** + **proxy**, and get an
-**available address pool** the runtime can flip/drain across — **not** a special
-A/B address system. **Labels are just strings** — `"A"` / `"B"` are not
-privileged, not required, and not a separate address kind. Call them whatever
-you want (`"blue"`, `"1"`, …) or use an unlabeled/auto pool and activate by
-slot/dial id. Optional: a **standard range derived from the node key** (port
-band / sock namespace). Narrow with a concrete address or an explicit range.
+**Owner point (do not miss):** Prefer **not** providing backend addresses at all.
+Specify that the node **supports protocols**, enable **proxy**, **let it do the
+rest**. Optionally **narrow** with a range or a specific address. Labels are
+plain strings when you use them — no special A/B system, no `Address.ipc`, no
+required pool-index/`as: 0` ritual as the product DX.
 
-**Target API (owner review — how auto pool + activate work with no concrete dials):**
+**Not the point:** Inventing `Address.ipc({ pool: 2 })`, “labeled address-less
+addresses,” activate-by-index as the main story, or a hand-rolled range DSL
+apps must learn. (`Address.range` is optional sugar at most — “not hard to do
+yourself.” Keep `Address.unix` unless we deliberately rename unix→ipc globally.)
+
+**Target DX — minimal:**
 
 ```ts
-import * as Address from "hyperlink-ts/Address"
-import * as Node from "hyperlink-ts/Node"
+class Worker extends Node.make("fleet/Worker") {}
 
-// 1) Identity + protocol shape — no paths/ports required
-class Worker extends Node.make("fleet/Worker", [
-  Address.http(),              // unresolved primary (key-range / ephemeral at bind)
-  Address.ipc({ pool: 2 }),    // two available backend dials — no labels
-]) {}
-
-// Optional: label any dial (still just strings)
-class Named extends Node.make("fleet/Worker", [
-  Address.http(),
-  Address.ipc("blue"),         // one unresolved IPC, label "blue"
-  Address.ipc("green"),
-]) {}
-
-// Optional: narrow — pin or constrain resolution
-class Pinned extends Node.make("fleet/Worker", [
-  Address.http(":8080"),                    // concrete primary
-  Address.ipc({ pool: 2, range: "key" }),   // pool from key-derived sock namespace
-]) {}
-class Ranged extends Node.make("fleet/Worker", [
-  Address.http({ range: [8100, 8199] }),
-  Address.ipc({ pool: 2, range: "key" }),
-]) {}
-
-// 2) Roles — which dials this process uses
-const edge = Node.configure(Worker, {
+// protocols + proxy → runtime mints primary + available unix dials (key/range)
+Node.configure(Worker, {
+  protocols: ["Http", "Unix"],
   proxy: "Prefer",
-  listen: "Primary",     // bind unresolved http → concrete at bind
-  active: 0,             // pool index into ipc pool (not a magic "A")
 })
-const slot0 = Node.configure(Worker, {
-  as: 0,                 // this process owns pool slot 0
-  listen: "As",          // bind only that slot's resolved dial
-})
-const slot1 = Node.configure(Worker, { as: 1, listen: "As" })
 
-Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])])
-Node.unix(slot0, [Hyperlink.serve(Probe, { tip: tipFromConfig })])
+// edge / backends are roles on the same identity — still no sock strings
+const edge = Node.configure(Worker, { listen: "Primary" })
+const live = Node.configure(Worker, { listen: "Proxy" }) // or whatever name = “available backends”
+// bring-up + activate use the auto-minted available dials
 
-// 3) Flip — no specific address string required
-yield* Node.activate(Worker, 1)         // pool index
-yield* Node.activate(Named, "green")    // label string when you labeled
-yield* Node.active(Worker)              // → 0 | 1 | "green" …
+Hyperlink.client(Probe, Worker) // stable primary
 ```
 
-**Resolution rules**
+**Narrow only when you care:**
 
-| Declared | At bind |
-|----------|---------|
-| `Address.http()` / `Address.ipc()` | Pick from **key-derived range** (or process ephemeral) — deterministic per node key + slot |
-| `Address.ipc({ pool: N })` | N unresolved dials; indices `0..N-1` are activate/`as` targets |
-| `Address.ipc("blue")` | One unresolved dial; activate/`as` use the **label string** |
-| Concrete dial / explicit `range` | Narrows or pins — no auto pick |
+```ts
+Node.configure(Worker, { protocols: ["Http", "Unix"], proxy: "Prefer" })
+// pin primary
+.pipe(Address.http(":8080"))
+// or constrain — optional; app can also build its own list
+```
 
-**`Node.activate(node, target)`** — `target` is `number` (pool index) **or** `string` (label). No special A/B. Forward dials whatever Active resolves to. If the pool has no labels, you activate by index; indices are the identity of “available addresses.”
+**Ties to addressless (already Eng’d on legacy `Node.Service`):** serve with no
+path → mint unix + claim by key; client `lookupClient(Tag)` dials by key. Same
+spirit for `Node.make`: protocols declared, dials from key — **`unixFromKey`
+bind still pending** on the make path.
 
-**Defaults for easy bar:** `proxy: "Prefer"` + protocols that include IPC ⇒ if no backend pool declared, runtime may imply `ipc({ pool: 2 })` (Eng detail — or require explicit `pool: 2` so magic stays visible). Prefer **visible** `Address.ipc({ pool: 2 })` over silent imply.
+**Rejected as product SSOT:** the prior “unresolved pool + `as: 0` +
+`activate(1)`” sketch — too manual, missed the point.
+
+**Open for Eng (keep thin):** exact `protocols` bag shape; how many available
+unix dials proxy implies by default (e.g. 2); how `activate` names an
+auto-minted dial without forcing apps to pass paths (internal slot ok —
+**apps** shouldn’t need to). Optional key-derived range as collision avoidance,
+not a user-facing A/B mint API.
 
 #### D24 — Type-catch conflicting addresses
 
