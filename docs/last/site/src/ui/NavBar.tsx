@@ -6,8 +6,8 @@
 import type * as React from "react";
 import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
-import { Link } from "../lib/Link";
-import { urls } from "../lib/Catalog";
+import * as Catalog from "../lib/Catalog";
+import * as SoftLink from "../lib/Link";
 
 export class Root extends View.make<Root, {
   readonly children?: React.ReactNode;
@@ -25,9 +25,9 @@ export class Brand extends View.make<Brand, {
 }>()(
   "last-ts/site/NavBar/Brand",
   (props) => (
-    <Link className="navbar-brand" to={urls.index()}>
+    <SoftLink.Link className="navbar-brand" to={Catalog.urls.index()}>
       {props.children}
-    </Link>
+    </SoftLink.Link>
   ),
 ) {}
 
@@ -52,10 +52,12 @@ export class NavBar extends View.make<NavBar>()(
       <NavRoot>
         <BrandView>last.ts</BrandView>
         <NavEl>
-          <Link to={urls.index()}>Home</Link>
-          <Link to={urls.about()}>About</Link>
-          <Link to={urls.guides_slug("routing")}>Docs</Link>
-          <Link to={urls.view()}>View</Link>
+          <SoftLink.Link to={Catalog.urls.index()}>Home</SoftLink.Link>
+          <SoftLink.Link to={Catalog.urls.about()}>About</SoftLink.Link>
+          <SoftLink.Link to={Catalog.urls.guides_slug("routing")}>
+            Docs
+          </SoftLink.Link>
+          <SoftLink.Link to={Catalog.urls.view()}>View</SoftLink.Link>
         </NavEl>
       </NavRoot>
     );

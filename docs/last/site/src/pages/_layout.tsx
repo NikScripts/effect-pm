@@ -4,10 +4,10 @@
  * `.context`; this path uses {@link ../lib/HostLayout} (client).
  */
 import type { ReactNode } from "react";
-import { HostLayout } from "../lib/HostLayout";
+import * as HostLayout from "../lib/HostLayout";
 
 export default function Layout(props: {
   readonly children: ReactNode;
 }) {
-  return <HostLayout>{props.children}</HostLayout>;
+  return <HostLayout.HostLayout>{props.children}</HostLayout.HostLayout>;
 }

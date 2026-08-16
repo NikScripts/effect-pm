@@ -7,20 +7,20 @@ export class Home extends Page.static(
   <article data-page="home">
     <h1>last.ts</h1>
     <p>
-      Dogfood site — layout is <strong>View kits</strong>: leaf HTML lives in{" "}
-      <code>ui/*</code> via <code>View.make</code> defaults;{" "}
-      <code>Tree</code> / <code>Frame</code> compose with zero DOM.
+      Product site — leaf HTML in <code>ui/*</code> via{" "}
+      <code>View.make</code>; <code>Tree</code> / <code>Frame</code> compose with
+      zero DOM.
     </p>
     <p>
-      Soft-nav via <code>Site.context(SiteKit)</code> +{" "}
+      Soft-nav: <code>Site.context(SiteKit)</code> +{" "}
       <code>Last.provideContext</code> + <code>Last.provider</code>.
     </p>
     <dl className="meta">
       <div>
         <dt>leaf HTML</dt>
         <dd>
-          <code>ui/NavBar</code> · <code>Sidebar</code> · <code>Main</code> ·{" "}
-          <code>Footer</code> · <code>LayoutGrid</code>
+          <code>ui/Site</code> · <code>NavBar</code> · <code>Sidebar</code> ·{" "}
+          <code>Main</code> · <code>Footer</code> · <code>LayoutGrid</code>
         </dd>
       </div>
       <div>

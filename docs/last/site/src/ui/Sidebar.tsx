@@ -7,8 +7,8 @@ import type * as React from "react";
 import * as Last from "last-ts/Last";
 import * as View from "last-ts/View";
 import type * as Route from "last-ts/Route";
-import { Link } from "../lib/Link";
-import { Catalog, urls } from "../lib/Catalog";
+import * as Catalog from "../lib/Catalog";
+import * as SoftLink from "../lib/Link";
 
 export class Group extends View.make<Group, {
   readonly title: string;
@@ -24,13 +24,13 @@ export class Group extends View.make<Group, {
 ) {}
 
 export class Item extends View.make<Item, {
-  readonly to: Route.ToHref<typeof Catalog>;
+  readonly to: Route.ToHref<typeof Catalog.Catalog>;
   readonly children?: React.ReactNode;
 }>()(
   "last-ts/site/Sidebar/Item",
   (props) => (
     <li>
-      <Link to={props.to}>{props.children}</Link>
+      <SoftLink.Link to={props.to}>{props.children}</SoftLink.Link>
     </li>
   ),
 ) {}
@@ -53,16 +53,20 @@ export class Sidebar extends View.make<Sidebar>()(
     return (
       <SideRoot>
         <GroupView title="Docs">
-          <ItemView to={urls.index()}>Home</ItemView>
-          <ItemView to={urls.guides_slug("routing")}>Guide · routing</ItemView>
-          <ItemView to={urls.guides_slug("view-service")}>
+          <ItemView to={Catalog.urls.index()}>Home</ItemView>
+          <ItemView to={Catalog.urls.guides_slug("routing")}>
+            Guide · routing
+          </ItemView>
+          <ItemView to={Catalog.urls.guides_slug("view-service")}>
             Guide · view-service
           </ItemView>
-          <ItemView to={urls.docs_path("intro/rest")}>Rest · intro/rest</ItemView>
+          <ItemView to={Catalog.urls.docs_path("intro/rest")}>
+            Rest · intro/rest
+          </ItemView>
         </GroupView>
         <GroupView title="Site">
-          <ItemView to={urls.about()}>About</ItemView>
-          <ItemView to={urls.view()}>View.make</ItemView>
+          <ItemView to={Catalog.urls.about()}>About</ItemView>
+          <ItemView to={Catalog.urls.view()}>View.make</ItemView>
         </GroupView>
       </SideRoot>
     );

@@ -6,7 +6,7 @@
  */
 import type { ReactNode } from "react";
 import * as RootLayout from "last-ts/RootLayout";
-import { Provider } from "../lib/Provider";
+import * as Provider from "../lib/Provider";
 
 // Waku debug channel calls `crypto.randomUUID`. Tailscale `http://100.x`
 // is not a secure context — polyfill so the dogfood URL works.
@@ -30,10 +30,10 @@ if (
 
 export default function Root(props: { readonly children: ReactNode }) {
   return (
-    <Provider>
+    <Provider.Provider>
       <RootLayout.Default.Component>
         {props.children}
       </RootLayout.Default.Component>
-    </Provider>
+    </Provider.Provider>
   );
 }

@@ -2,7 +2,7 @@
  * Path `/view` from this file. Mint has no path.
  */
 import * as Page from "last-ts/Page";
-import { ViewDemo } from "../islands/ViewDemo";
+import * as ViewDemo from "../islands/ViewDemo";
 
 export class ViewPage extends Page.static(() => (
   <article data-page="view">
@@ -12,6 +12,6 @@ export class ViewPage extends Page.static(() => (
       <code>Last.provide</code>. Swap
       slots with <code>Effect.provideService</code> / Layer provide.
     </p>
-    <ViewDemo />
+    <ViewDemo.ViewDemo />
   </article>
 )) {}

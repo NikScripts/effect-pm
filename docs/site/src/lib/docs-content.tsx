@@ -36,6 +36,7 @@ let demoIslands: {
   viewSidebar?: React.ComponentType;
   routerPage?: React.ComponentType;
   titleLive?: React.ComponentType;
+  lastRsc?: React.ComponentType;
 } = {};
 
 const collectFenceLangs = (n: any, out: Set<string> = new Set()): Set<string> => {
@@ -74,6 +75,11 @@ const loadDemoIslands = async (doc: any): Promise<void> => {
   }
   if (langs.has("title-live")) {
     demoIslands.titleLive = (await import("../islands/TitleLiveIsland.js")).TitleLiveIsland;
+  }
+  if (langs.has("last-rsc")) {
+    demoIslands.lastRsc = (
+      await import("../islands/LastSiteViewIsland.js")
+    ).LastSiteViewIsland;
   }
 }
 
@@ -340,6 +346,11 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "title-live") {
         return demoIslands.titleLive !== undefined
           ? h(demoIslands.titleLive, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "last-rsc") {
+        return demoIslands.lastRsc !== undefined
+          ? h(demoIslands.lastRsc, { key: keySeq++ })
           : null;
       }
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });

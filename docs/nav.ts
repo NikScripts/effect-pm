@@ -63,9 +63,9 @@ export const nav: ReadonlyArray<NavGroup> = [
     slugs: ["stores", "logs", "metrics", "client-verify", "routing", "file-router"],
   },
   {
-    // last-ts book — starts with demos; API docgen lands next.
+    // last-ts book — product site Twoslash + demos; API docgen lands next.
     label: "Last.ts",
-    slugs: ["title-live"],
+    slugs: ["rsc-router", "title-live", "view-typed-jsx"],
   },
   {
     // Tentative group name — "Observe and Control" per the outline, may change.

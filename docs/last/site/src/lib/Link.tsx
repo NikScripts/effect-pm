@@ -4,7 +4,7 @@
 "use client";
 
 import * as Router from "last-ts/Router";
-import { Catalog } from "./Catalog";
+import * as Catalog from "./Catalog";
 
 /** Typesafe soft-nav; Waku is only the location Layer. */
-export const Link = Router.link(Catalog);
+export const Link = Router.link(Catalog.Catalog);

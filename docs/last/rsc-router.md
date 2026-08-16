@@ -1,7 +1,11 @@
 {#last-rsc-router title="RSC + Router" status="stable" appliesTo=last-ts}
 <!-- docs-site-link:begin -->
 > [!NOTE]
-> last-ts docs server (`docs/last/site`) — not Hyperlink `docs/site`.
+> Rendered docs (Tailscale):
+> <http://100.67.32.32:5190/docs/rsc-router>
+>
+> Running site:
+> <http://100.67.32.32:5220/>
 <!-- docs-site-link:end -->
 # RSC + Router
 
@@ -11,6 +15,13 @@ How **last.ts** wires file pages + typed soft-nav + View kits.
 **Run:** `pnpm run docs:last-site`  
 **Corrections:** [`../handoffs/last-ts-api-corrections.md`](../handoffs/last-ts-api-corrections.md)  
 **Context lock:** [`../handoffs/last-context-view-lock.md`](../handoffs/last-context-view-lock.md)
+
+## Live render
+
+Same View demo as the product site `/view` (`docs/last/site` island):
+
+```last-rsc
+```
 
 ## Split of jobs
 
@@ -29,11 +40,11 @@ Apps **never** `import` from `waku`.
 
 ```text
 docs/last/site/src/
-  ui/           View kits (NavBar, Sidebar, Main, Footer, LayoutGrid)
+  ui/           View kits (Site, NavBar, Sidebar, Main, Footer, LayoutGrid)
   lib/
     Catalog.ts  paths + urls (Link)
     SiteKit.ts  nested Last.context
-    Tree.tsx    composition only
+    Tree.tsx    composition only (zero DOM)
     Frame.tsx   Layout.make → Tree
     site.ts     Site.context(SiteKit) + routes
     Provider.tsx  Last.provider(layer) only
@@ -58,6 +69,12 @@ docs/last/site/src/
 ``` ts
 ```
 
+## Site (viewport leaves)
+
+{.twoslash include="docs/last/site/src/ui/Site.tsx"}
+``` tsx
+```
+
 ## NavBar (leaf HTML + composition)
 
 {.twoslash include="docs/last/site/src/ui/NavBar.tsx"}
@@ -80,6 +97,8 @@ docs/last/site/src/
 ``` tsx
 ```
 
-## Client island
+## View demo source
 
-`/view` — [`ViewDemo`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/last/site/src/islands/ViewDemo.tsx) uses const Layers + `Last.provide(Tag, layer)`.
+{.twoslash include="docs/last/site/src/islands/ViewDemo.tsx"}
+``` tsx
+```

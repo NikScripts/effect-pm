@@ -29,7 +29,7 @@ keeps `R` on **Layers** instead of inventing View-shaped masks:
 examples/ui/view-typed-jsx/
   ui/
     Greeter.tsx     leaf DOM (View.make 2nd-arg default)
-    Frame.tsx       Outer / Middle leaf shells
+    Frame.tsx       Outer / Middle leaf Views
   lib/
     Hello.tsx       Hello Tag + helloLayer (yield* Greeter.Greeter)
     AppRoot.tsx     AppRoot Tag + appLayer (yield* Frame + Hello)
@@ -39,18 +39,19 @@ examples/ui/view-typed-jsx/
 Leaf Views own DOM. Composition Layers / `AppRoot` place Views only — **zero HTML**.
 `import * as` for last-ts and local modules (lock).
 
+Product site Twoslash (real modules): [RSC + Router](/docs/rsc-router).
+
 ## Greeter (leaf)
 
 {.twoslash include="examples/ui/view-typed-jsx/ui/Greeter.tsx"}
 ``` tsx
 ```
 
-## Frame shells (leaf)
+## Frame leaves
 
 {.twoslash include="examples/ui/view-typed-jsx/ui/Frame.tsx"}
 ``` tsx
 ```
-
 ## Hello (yield* Greeter)
 
 {.twoslash include="examples/ui/view-typed-jsx/lib/Hello.tsx"}

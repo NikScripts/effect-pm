@@ -8,16 +8,16 @@ import * as Layout from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
-import { About } from "../pages/about";
-import { DocsPath } from "../pages/docs/[...path]";
-import { Chapter } from "../pages/guides/[slug]";
-import { Home } from "../pages/index";
-import { ViewPage } from "../pages/view";
+import * as About from "../pages/about";
+import * as DocsPath from "../pages/docs/[...path]";
+import * as Chapter from "../pages/guides/[slug]";
+import * as Home from "../pages/index";
+import * as ViewPage from "../pages/view";
 import * as Frame from "./Frame";
-import { SiteKit } from "./SiteKit";
+import * as SiteKit from "./SiteKit";
 
 export class Site extends Router.make("last-ts")
-  .context(SiteKit)
+  .context(SiteKit.SiteKit)
   .add(
     Route.get("index", "/"),
     Route.get("about", "/about"),
@@ -36,15 +36,15 @@ export { urls } from "./Catalog";
 const app = pipe(
   RouterBuilder.group(Site, "__top", (h) =>
     h
-      .handle("index", Home)
-      .handle("about", About)
-      .handle("guides_slug", Chapter)
-      .handle("view", ViewPage)
-      .handle("docs_path", DocsPath),
+      .handle("index", Home.Home)
+      .handle("about", About.About)
+      .handle("guides_slug", Chapter.Chapter)
+      .handle("view", ViewPage.ViewPage)
+      .handle("docs_path", DocsPath.DocsPath),
   ),
   Layout.provide(Frame.App),
   // Views are Reference defaults — discharge SiteKit scope (no required Services).
-  Last.provideContext(SiteKit, Layer.empty),
+  Last.provideContext(SiteKit.SiteKit, Layer.empty),
 );
 
 export const routes = pipe(

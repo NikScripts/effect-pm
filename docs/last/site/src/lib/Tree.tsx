@@ -1,26 +1,28 @@
 /**
- * Composition only — place region Views from `Last.use(SiteKit)`.
+ * Composition only — place region Views from `Last.use(SiteKit)` (zero DOM).
  */
 "use client";
 
 import type * as React from "react";
 import * as Last from "last-ts/Last";
-import { SiteKit } from "./SiteKit";
+import * as SiteKit from "./SiteKit";
 
 export const Tree = (props: {
   readonly children?: React.ReactNode;
 }): React.ReactElement => {
-  const { NavBar, Sidebar, Main, Footer, LayoutGrid } = Last.use(SiteKit);
+  const { Site, NavBar, Sidebar, Main, Footer, LayoutGrid } = Last.use(
+    SiteKit.SiteKit,
+  );
   return (
-    <div className="site">
+    <Site.Root>
       <NavBar.View />
-      <div className="site-body">
+      <Site.Body>
         <LayoutGrid.View>
           <Sidebar.View />
           <Main.View>{props.children}</Main.View>
         </LayoutGrid.View>
-      </div>
+      </Site.Body>
       <Footer.View />
-    </div>
+    </Site.Root>
   );
 };

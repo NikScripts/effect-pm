@@ -14,7 +14,7 @@ Not Hyperlink `docs/site` — **same layout structure**, own style.
 
 HTML / DOM changes → touch the owning `ui/*` leaf Views (and Layer Effects that return JSX). Prefer more Layer-shaped markup over time (`Layout.make` / Document / RootLayout).
 
-**Next:** manual main group · docs `fileSystem` · API `fromEffect`.
+**Docs Twoslash + island:** [`../rsc-router.md`](../rsc-router.md) → `/docs/rsc-router` (includes real `docs/last/site` sources).
 
 **Locks:** [`../../handoffs/page-mint-lock.md`](../../handoffs/page-mint-lock.md) ·
 [`../../handoffs/page-document-lock.md`](../../handoffs/page-document-lock.md) ·
