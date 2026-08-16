@@ -30,7 +30,7 @@ body,
   color: var(--fg);
 }
 
-/* Full-height shell: navbar + body + footer (no mid-page void) */
+/* Full-height site: navbar + body + footer (no mid-page void) */
 .site {
   min-height: 100dvh;
   display: flex;
