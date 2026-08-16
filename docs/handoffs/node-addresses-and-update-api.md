@@ -526,8 +526,9 @@ class Plain extends Node.make("fleet/Plain").add(Address.http(":8080")) {}
 // no .proxy() → no forward
 ```
 
-**Behavior when on (still D16):** primary listeners run `NodeBuilder.forward` /
-`forwardAll` toward **Active**; flip via `NodeBuilder.activate(node, label)`.
+**Behavior when on (still D16):** primary listeners run forward /
+`forwardAll` toward **Active**; flip via `activate(node, label)` — on the
+**serve product** once designed (tip: `Node.forward` / `Node.activate`).
 
 **Rejected:** `.proxy("Prefer")` / `Proxy: "Prefer"` / `proxy: "Prefer"` as the
 API (implies alternatives that do not exist); inventing `"Off"` / `"Require"` /
@@ -618,8 +619,9 @@ without a protocol factory.
 - Optional range → **`Address.http(Address.range(":8080", ":8090", fn?))`** /
   **`Address.unix(Address.range(…))`** (D28–D29: nest + shape-typed defaults).
 - **Proxy** → constructable **`Node.….proxy()`** — no arg (D30). Omit = off.
-  **Reject** `.proxy("Prefer")`. Declared on description; Builder honors it.
-- **Listen / as / active / serve** → **`NodeBuilder`** (D31) — not on `Node`.
+  **Reject** `.proxy("Prefer")`. Declared on description; serve product honors it.
+- **Listen / as / active / serve** → **serve product** (D31 shape TBD) — not
+  description widen. Tip still `Node.listen` / `activate` / …
 - **Services** declare `node: Worker`.
 
 **Rejected:** `Node.configure({ protocols: ["Http", "Unix"], proxy, listen })`;
@@ -987,9 +989,9 @@ the old Reference builder onto Service factories — Eng detail under this lock.
 #### D16 — Proxy on = forward + Active
 
 **Choice:** When proxy is **on** (`.proxy()` on **`Node`** / D30 — not a
-`"Prefer"` string), primary listeners (via **`NodeBuilder`**) run `forward` /
-`forwardAll` toward the **Active** label. Live flip =
-`NodeBuilder.activate(node, label)` (and Update β calls that). Not a client
+`"Prefer"` string), primary listeners run `forward` / `forwardAll` toward the
+**Active** label. Live flip = `activate(node, label)` (and Update β calls that).
+Serve-side home = **D31 serve product** (tip still `Node.*`). Not a client
 Redirect SDK; not Advice-as-the-only-flip for β.
 
 **Why:** §4 owner lean. Advice/sticky remain for S6 and non-proxy fleets.
