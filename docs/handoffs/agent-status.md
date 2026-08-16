@@ -31,8 +31,8 @@
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
 2. **Agent K:** track 1 + track 2 router-scoped context **Eng’d** ([`last-context-view-lock.md`](./last-context-view-lock.md) · demo [`examples/last/router-context/`](../../examples/last/router-context/)). Parks: [`owned-string-casing-park.md`](./owned-string-casing-park.md) · [`repo-source-viewer-park.md`](./repo-source-viewer-park.md).
-3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. Chrome → **Agent K** (was G). Address + Node.make + Lookup/NodePolicy tip-synced ([`update.md`](../guides/update.md)). listen/advertise from address list still open. Gated: #37.
-4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
+3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. UI surface → **Agent K** (was G). Address + Node.make + Lookup/NodePolicy tip-synced ([`update.md`](../guides/update.md)). listen/advertise from address list still open. Gated: #37.
+4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` shell); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
