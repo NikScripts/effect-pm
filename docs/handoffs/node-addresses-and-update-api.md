@@ -415,9 +415,105 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 | Novel-length multi-file demo | Fails quality bar (“dream demos that need a novel”) |
 | Claimed membership table = Eng shape | D31 product cut ≠ API |
 
-**Open (must design before another play sketch):** what is `NodeBuilder` *actually*?
-Mirror HttpApiBuilder (`group` / handler registration / `layer(description)`), or a
-different serve constructable — **not** a prefix on today’s listen siblings.
+**Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
+second module optional).
+
+#### Play B — HttpApiBuilder-shaped, one module (play 2026-08-16)
+
+**Not Eng’d.** New API — not a rename of tip `listen`/`http`/`unix`.
+
+**Why Effect splits HttpApi / HttpApiBuilder:** one description drives **server +
+OpenAPI + typed client**. We don’t mint OpenAPI/clients from `Node` today —
+services already dial via `node: Worker`. So the **product cut** (connect-to vs
+this-process) can live as **regions on one `Node` module** unless a second
+module earns its keep later. Name `NodeBuilder` not required for this play.
+
+**Analogy:**
+
+| HttpApi | Play B (`Node`) |
+|---------|-----------------|
+| `HttpApi.make.add(Group)` | `Node.make.add(Address).proxy()` |
+| `HttpApiBuilder.group(api, id, h => h.handle(…))` | `Node.handle(node, h => h.listen(…).forward/serve(…))` |
+| `HttpApiBuilder.layer(api)` | `Node.layer(handle)` / `Layer.launch` |
+| Groups partition the full API | **Roles are intentionally partial** (edge ≠ backend A) — S5, not HttpApi completeness |
+
+```ts
+import * as Address from "hyperlink-ts/Address"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
+import * as Node from "hyperlink-ts/Node"
+import * as Update from "hyperlink-ts/Update"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Effect, Layer, Schema } from "effect"
+
+// ── description (connect-to) ───────────────────────────────────────────────
+class Worker extends Node.make("fleet/Worker")
+  .add(
+    Address.http(":8080"),
+    Address.unix({ A: "/var/run/w.A.sock", B: "/var/run/w.B.sock" }),
+  )
+  .proxy()
+{}
+
+class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
+  payload: Schema.Struct({ id: Schema.String }),
+  node: Worker,
+}) {}
+class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
+  tip: Hyperlink.effect(Schema.String),
+  node: Worker,
+}) {}
+
+// ── this process: edge (Primary + forward) ─────────────────────────────────
+const edge = Node.handle(Worker, (h) =>
+  h.listen("Primary").forward(Probe, Jobs),
+)
+
+yield* Layer.launch(Node.layer(edge))
+
+// ── this process: backend labeled A (serve) ────────────────────────────────
+const side = "A" as const
+const backend = Node.handle(Worker, (h) =>
+  h.as(side)
+    .listen("As")
+    .policy(LookupPolicy.yieldRefuse)
+    .serve(Jobs, { effect: () => Effect.void })
+    .serve(Probe, { tip: Effect.succeed("v1") }),
+)
+
+yield* Layer.launch(Node.layer(backend))
+
+// ── flip / cutover (Update still own module) ───────────────────────────────
+yield* Node.activate(Worker, "B")
+// Update.execute(plan) → up → handoff → activate → retire (β)
+```
+
+**Handlers bag (play):** fluent, returns the bag (like `Handlers.handle`).
+
+| Method | Role |
+|--------|------|
+| `listen("Primary" \| "As" \| "All" \| …)` | Which declared addresses **this process** binds |
+| `as(label)` | This process **is** that labeled side |
+| `forward(…tags)` / `forwardAll` | Primary forwards (honors `.proxy()`) |
+| `serve(tag, impl)` | Implement a service on the bound dials |
+| `policy(…fragments)` | Process-local policy stamp (same both-ways options) |
+| `active(label)` | Seed Prefer-target — or keep `Node.configure` / activate only |
+
+**Forks (owner):**
+
+1. **One module vs `NodeBuilder`** — play assumes one; split only if description
+   gains other consumers (docs/client-gen) like HttpApi.
+2. **`Node.handle` vs constructable** `class Edge extends Node.handle(Worker, …)` —
+   HttpApi uses free functions for builder; constructable was for description.
+3. **Completeness** — do **not** require every address handled in one process
+   (that would fight S5). Optional: if `.proxy()`, edge handle must `forward` or
+   explicitly opt out.
+4. **`configure` bag** — still D10 on `Node`, or fold listen/as/active into the
+   handlers bag only (play folds; bag may die).
+
+**Rejected in this play:** `NodeBuilder.listen = Node.listen`; `.pipe` widen;
+`listen(Worker, "A")` as if A were a listen mode; second `make` of `fleet/Worker`;
+`"Prefer"` string; novel multi-file demos.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
