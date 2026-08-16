@@ -418,137 +418,35 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — cleaner + vs tip (play 2026-08-16, rev 2)
+#### Play B — vs tip (play 2026-08-16, rev 3)
 
-**Not Eng’d.** Same scenario as tip [`forward-proxy`](../../examples/node/forward-proxy/) —
-stable Http → forward → Unix A/B → `activate`. One module. No `NodeBuilder` rename.
-
-**Why not HttpApi’s two-step `group` + `layer(api)`?** Effect merges **many groups**
-into one API layer. A Hyperlink **process** is usually **one role**. So collapse to
-one call: `Node.layer(node, handlers => …)`.
-
-##### Side by side
+**Not Eng’d.** One module. One `Node.layer` per process role.
 
 ```ts
-// ─────────────── TIP (forward-proxy today) ───────────────
-class Worker extends Node.make(
-  "examples/forward-proxy/Worker",
-  Address.http(":18765"),
+// tip                                              // play
+class Worker extends Node.make(                     class Worker extends Node.make(key)
+  key, Address.http(":18765"),                        .add(Address.http(":18765"))
+) {}                                                  .proxy()
+                                                    {}
+class WorkerPrivate extends Worker.pipe(            class WorkerPrivate extends Worker.add(
+  Address.unix({ A, B }),                             Address.unix({ A, B }),
+  NodePolicy.proxy("Prefer"),                       ) {}
 ) {}
 
-class WorkerPrivate extends Worker.pipe(
-  Address.unix({
-    A: "/tmp/…-a.sock",
-    B: "/tmp/…-b.sock",
-  }),
-  NodePolicy.proxy("Prefer"),
-) {}
-
-const edge = Node.withPolicy(
-  WorkerPrivate,
-  NodePolicy.listen("Primary"),
+const edge = Node.withPolicy(                       const edge = Node.layer(WorkerPrivate, (h) =>
+  WorkerPrivate,                                      h.listen("Primary").active("A").forward(Probe),
+  NodePolicy.listen("Primary"),                     )
   NodePolicy.active("A"),
-  NodePolicy.advertise("Primary"),
 )
-const backendA = Node.withPolicy(
-  WorkerPrivate,
-  NodePolicy.as("A"),
-  NodePolicy.listen(["A"]),
-)
+Node.http(edge, [Node.forward(edge, Probe)])
 
-const edgeLayer = Node.http(edge, [Node.forward(edge, Probe)])
-const aLayer = Node.unix(backendA, [
-  Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
-])
-
-yield* Node.activate(WorkerPrivate, "B")
-
-
-// ─────────────── PLAY B ───────────────
-class Worker extends Node.make("examples/forward-proxy/Worker")
-  .add(Address.http(":18765"))
-  .proxy()
-{}
-
-class WorkerPrivate extends Worker.add(
-  Address.unix({
-    A: "/tmp/…-a.sock",
-    B: "/tmp/…-b.sock",
-  }),
-) {}
-
-const edgeLayer = Node.layer(WorkerPrivate, (h) =>
-  h.listen("Primary").active("A").forward(Probe),
-)
-
-const aLayer = Node.layer(WorkerPrivate, (h) =>
-  h.as("A").listen("As").serve(Probe, { tip: Effect.succeed("v1") }),
-)
-
-yield* Node.activate(WorkerPrivate, "B")
+const a = Node.withPolicy(                          const a = Node.layer(WorkerPrivate, (h) =>
+  WorkerPrivate,                                      h.as("A").listen("As").serve(Probe, {
+  NodePolicy.as("A"),                                   tip: Effect.succeed("v1"),
+  NodePolicy.listen(["A"]),                           }),
+)                                                   )
+Node.unix(a, [Hyperlink.serve(Probe, { tip: … })])
 ```
-
-##### What got simpler
-
-| Tip | Play B |
-|-----|--------|
-| `make(key, Address)` + `.pipe(Address…)` | `make(key).add(…)` / `class extends X.add(…)` |
-| `NodePolicy.proxy("Prefer")` | `.proxy()` on description |
-| `withPolicy` + `NodePolicy.*` fragments | handlers bag (`listen` / `as` / `active`) |
-| `Node.http(edge, [Node.forward(edge, Probe)])` — edge twice, pick protocol | `Node.layer(node, h => h.listen(…).forward(Probe))` — protocol from listen set |
-| `Node.unix(backend, [Hyperlink.serve(…)])` | `h.serve(Probe, …)` inside the same bag |
-
-##### Full tiny program (play)
-
-```ts
-class Probe extends Hyperlink.Service<Probe>()("…/Probe", {
-  tip: Hyperlink.effect(Schema.String),
-}) {}
-
-class Worker extends Node.make("…/Worker")
-  .add(Address.http(":18765"))
-  .proxy()
-{}
-class WorkerPrivate extends Worker.add(
-  Address.unix({ A: "/tmp/a.sock", B: "/tmp/b.sock" }),
-) {}
-
-const program = Effect.gen(function* () {
-  const tipA = yield* (yield* Probe).tip
-  yield* Node.activate(WorkerPrivate, "B")
-  const tipB = yield* (yield* Probe).tip
-  // tipA === "v1", tipB === "v2"
-}).pipe(
-  Effect.provide(
-    Hyperlink.client(Probe, Worker).pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          Node.layer(WorkerPrivate, (h) =>
-            h.listen("Primary").active("A").forward(Probe),
-          ),
-          Node.layer(WorkerPrivate, (h) =>
-            h.as("A").listen("As").serve(Probe, {
-              tip: Effect.succeed("v1"),
-            }),
-          ),
-          Node.layer(WorkerPrivate, (h) =>
-            h.as("B").listen("As").serve(Probe, {
-              tip: Effect.succeed("v2"),
-            }),
-          ),
-        ),
-      ),
-    ),
-  ),
-)
-```
-
-**Still open:** where `advertise` lives (handlers vs default Primary); whether
-`serve`/`forward` need protocol siblings at all; one module stays unless
-description grows other consumers.
-
-**Rejected:** `NodeBuilder.` prefix; `.pipe` address widen; `"Prefer"`; second
-`make` of the same key.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
