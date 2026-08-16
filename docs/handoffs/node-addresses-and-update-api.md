@@ -372,7 +372,7 @@ class Worker extends Node.make("fleet/Worker")
     Address.http(":8080"),
     Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock")),
   )
-  .proxy("Prefer")
+  .proxy()
 {}
 
 class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
@@ -419,7 +419,7 @@ yield* Update.execute(
 | Address inputs | **single \| array \| record \| `Address.range(from, to, fn?)`** |
 | Nesting | **`Address.http(Address.range(…))`** / **`Address.unix(Address.range(…))`** |
 | Range typing | **D29** — overloads; default alg from `from`/`to` shape; `fn` override |
-| Proxy | `.proxy("Prefer")` (omit = no proxy) |
+| Proxy | **`.proxy()`** — no arg; omit = no proxy (**D30**) |
 | Listen | `Node.listen` |
 | Services → node | `node: Worker` |
 
@@ -464,7 +464,7 @@ dream demos that need a novel to explain.
 | D13 | call-site > Node.policy > ambient |
 | D14 | Layer provide for clients; Node.policy for nodes |
 | D15 | Context.Service + default Layer per policy |
-| D16 | Proxy Prefer = forward + Active; flip = activate |
+| D16 | Proxy on = forward + Active; flip = activate (string `"Prefer"` retired — D30) |
 | D17 | Stream/ref forward before default verify |
 | D18 | Dream = Update compose; forward-proxy = substrate |
 | D19 | Plan tags must match serve; infer later |
@@ -478,6 +478,32 @@ dream demos that need a novel to explain.
 | **D27** | **Address owns protocols/dials**; **`.proxy` / `Node.listen` separate**; Address inputs = single \| array \| record \| `Address.range` |
 | **D28** | **`Address.http(Address.range(…))` / `Address.unix(Address.range(…))`** — range nests in the protocol factory |
 | **D29** | **`Address.range` typed by `from`/`to` shape** — default algs; overloads; `fn` override; protocol factory type-checks the nest |
+| **D30** | **`.proxy()`** — no mode string; presence = on, omit = off (`"Prefer"` retired) |
+
+#### D30 — `.proxy()` not `.proxy("Prefer")` (locked 2026-08-16)
+
+**Choice:** Proxy is **on or off**. There is no second mode. So no option string.
+
+```ts
+class Worker extends Node.make("fleet/Worker")
+  .add(Address.http(":8080"), Address.unix(Address.range(...)))
+  .proxy()   // enable: primary forwards → Active label
+{}
+
+class Plain extends Node.make("fleet/Plain").add(Address.http(":8080")) {}
+// no .proxy() → no forward
+```
+
+**Behavior when on (still D16):** primary listeners run `Node.forward` /
+`forwardAll` toward **Active**; flip via `Node.activate(node, label)`.
+
+**Rejected:** `.proxy("Prefer")` / `Proxy: "Prefer"` / `proxy: "Prefer"` as the
+API (implies alternatives that do not exist); inventing `"Off"` / `"Require"` /
+`"Refuse"` just to have a string; boolean `proxy: true` as the primary DX
+(method presence matches HttpApi middleware shape better).
+
+**Implies:** Tip `NodePolicy.proxy("Prefer")` / `Schema.Literal("Prefer")` retarget
+on Eng — config becomes boolean / presence, or a unit tag, not a mode enum.
 
 #### D29 — `Address.range` typing + default algorithms (locked 2026-08-16)
 
@@ -558,8 +584,9 @@ without a protocol factory.
 - **Addresses / protocols** → `Address.*` + `Node.make(…).add(Address, …Address)`
   (variadic, like HttpApi.`add(Group, …Group)`).
 - Optional range → **`Address.http(Address.range(":8080", ":8090", fn?))`** /
-  **`Address.unix(Address.range(…))`** (D28).
-- **Proxy** → constructable method `.proxy("Prefer")` (HttpApi.`middleware`-shaped).
+  **`Address.unix(Address.range(…))`** (D28–D29: nest + shape-typed defaults).
+- **Proxy** → constructable **`.proxy()`** — no arg (D30). Omit = off.
+  **Reject** `.proxy("Prefer")`.
 - **Listen / as / active** → process-role API (`Node.listen`, `Node.activate`, …).
 - **Services** declare `node: Worker`.
 
@@ -925,17 +952,17 @@ storing bare Effects in References as the end state.
 **Implies:** PolicyBuilder may gain a `.handler` key kind, or Yield/Pick move off
 the old Reference builder onto Service factories — Eng detail under this lock.
 
-#### D16 — Proxy Prefer = forward + Active
+#### D16 — Proxy on = forward + Active
 
-**Choice:** `NodeConfig.Proxy: "Prefer"` means primary listeners run
-`Node.forward` / `forwardAll` toward the **Active** label. Live flip =
-`Node.activate(node, label)` (and Update β calls that). Not a client Redirect
-SDK; not Advice-as-the-only-flip for β.
+**Choice:** When proxy is **on** (`.proxy()` / D30 — not a `"Prefer"` string),
+primary listeners run `Node.forward` / `forwardAll` toward the **Active** label.
+Live flip = `Node.activate(node, label)` (and Update β calls that). Not a client
+Redirect SDK; not Advice-as-the-only-flip for β.
 
 **Why:** §4 owner lean. Advice/sticky remain for S6 and non-proxy fleets.
 
 **Rejected:** Proxy as a separate process type with its own make key by default;
-client-side redirect API.
+client-side redirect API; mode enum with a single member (`"Prefer"`) — see D30.
 
 **Implies:** Edge role listens Primary only; backends `As` + Listen labels;
 Active is runtime state (seeded from config, flipped by activate).
