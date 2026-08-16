@@ -418,25 +418,45 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — vs tip (play 2026-08-16, rev 4)
+#### Play B — vs tip (play 2026-08-16, rev 5)
 
-**Not Eng’d.** Serve shape only — description/`make` unchanged in this play.
+**Not Eng’d.** Serve shape only.
 
+**Tip — edge**
 ```ts
-// tip
-Node.http(
-  Node.withPolicy(WorkerPrivate, NodePolicy.listen("Primary"), NodePolicy.active("A")),
-  [Node.forward(edge, Probe)],
+const edge = Node.withPolicy(
+  WorkerPrivate,
+  NodePolicy.listen("Primary"),
+  NodePolicy.active("A"),
 )
-Node.unix(
-  Node.withPolicy(WorkerPrivate, NodePolicy.as("A"), NodePolicy.listen(["A"])),
-  [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })],
-)
+Node.http(edge, [Node.forward(edge, Probe)])
+```
 
-// play
-Node.layer(WorkerPrivate, (h) => h.listen("Primary").active("A").forward(Probe))
+**Play — edge**
+```ts
 Node.layer(WorkerPrivate, (h) =>
-  h.as("A").listen("As").serve(Probe, { tip: Effect.succeed("v1") }),
+  h.listen("Primary").active("A").forward(Probe),
+)
+```
+
+**Tip — backend A**
+```ts
+const a = Node.withPolicy(
+  WorkerPrivate,
+  NodePolicy.as("A"),
+  NodePolicy.listen(["A"]),
+)
+Node.unix(a, [
+  Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
+])
+```
+
+**Play — backend A**
+```ts
+Node.layer(WorkerPrivate, (h) =>
+  h.as("A").listen("As").serve(Probe, {
+    tip: Effect.succeed("v1"),
+  }),
 )
 ```
 
