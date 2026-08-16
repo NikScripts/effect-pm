@@ -353,6 +353,7 @@ import * as Address from "hyperlink-ts/Address"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Launcher from "hyperlink-ts/Launcher"
 import * as Node from "hyperlink-ts/Node"
+import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
 import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Layer, Schema } from "effect"
@@ -384,16 +385,16 @@ class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
   node: Worker,
 }) {}
 
-const edge = Node.listen(Worker, "Primary")
-const local = Node.listen(Worker, "Unix")
+const edge = NodeBuilder.listen(Worker, "Primary")
+const local = NodeBuilder.listen(Worker, "Unix")
 
 yield* Layer.launch(
-  Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])]),
+  NodeBuilder.http(edge, [NodeBuilder.forwardAll(edge, [Probe, Jobs])]),
 )
 
-yield* Node.launch(
+yield* NodeBuilder.launch(
   local,
-  Node.unix(local, [
+  NodeBuilder.unix(local, [
     WorkPool.serve(Jobs, { effect: () => Effect.void }),
     Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
   ], { assumeToken }),
@@ -414,14 +415,17 @@ yield* Update.execute(
 
 | Concern | API |
 |---------|-----|
+| **Connect-to (description)** | **`Node`** — `make` / `.add` / `.proxy()` (**D31**) |
+| **Serve / process / flip** | **`NodeBuilder`** — `listen` / `http` / `unix` / `launch` / `forward` / `activate` / role overlays (**D31**) |
 | Identity | `Node.make(key)` |
 | Addresses | `.add(Address, …)` — variadic like HttpApi.`add(Group, …)` |
 | Address inputs | **single \| array \| record \| `Address.range(from, to, fn?)`** |
 | Nesting | **`Address.http(Address.range(…))`** / **`Address.unix(Address.range(…))`** |
 | Range typing | **D29** — overloads; default alg from `from`/`to` shape; `fn` override |
-| Proxy | **`.proxy()`** — no arg; omit = no proxy (**D30**) |
-| Listen | `Node.listen` |
-| Services → node | `node: Worker` |
+| Proxy (declared) | **`Node.….proxy()`** — on description, like HttpApi middleware (**D30**) |
+| Listen / serve | **`NodeBuilder.listen` / `.http` / `.unix`** |
+| Services → node | `node: Worker` (description) |
+| Fleet cutover | **`Update`** (composes with Builder; own module) |
 
 **Rejected:** bare `...Address.range` as the only shown use; `Address.unix.range({ count })`.
 
@@ -479,6 +483,51 @@ dream demos that need a novel to explain.
 | **D28** | **`Address.http(Address.range(…))` / `Address.unix(Address.range(…))`** — range nests in the protocol factory |
 | **D29** | **`Address.range` typed by `from`/`to` shape** — default algs; overloads; `fn` override; protocol factory type-checks the nest |
 | **D30** | **`.proxy()`** — no mode string; presence = on, omit = off (`"Prefer"` retired) |
+| **D31** | **Two products:** `Node` (connect-to / description) + `NodeBuilder` (serve / process / flip) — HttpApi / HttpApiBuilder |
+
+#### D31 — `Node` + `NodeBuilder` (locked 2026-08-16)
+
+**Choice:** Two public products, same cut as Effect **HttpApi** / **HttpApiBuilder**.
+
+| Product | Module | Job |
+|---------|--------|-----|
+| **Connect-to** | **`Node`** | Identity + addresses + declared proxy — what clients dial, Directory advertises, services name (`node: Worker`), Update **targets** |
+| **Serve / run** | **`NodeBuilder`** | This process binds, serves, forwards, activates, launches, applies process-role overlays — what you run and flip |
+
+```ts
+// Product 1 — description (import Node only on clients / tags)
+class Worker extends Node.make("fleet/Worker")
+  .add(Address.http(":8080"), Address.unix(...))
+  .proxy()
+{}
+
+// Product 2 — this OS process
+const edge = NodeBuilder.listen(Worker, "Primary")
+NodeBuilder.http(edge, [NodeBuilder.forwardAll(edge, [Probe, Jobs])])
+NodeBuilder.activate(Worker, "B")
+```
+
+**Membership (Eng target):**
+
+| `Node` | `NodeBuilder` | Own module (not Builder) |
+|--------|---------------|---------------------------|
+| `make` / `.add` / `.proxy()` | `listen` / `http` / `unix` / `ws` / `nPipe` | **`Update`** — fleet plan/simulate/execute |
+| types / guards for the description | `launch` / `shutdown` / `drain` | **`LookupPolicy`** / **`LookupConfig`** |
+| | `forward` / `forwardAll` / `activate` | **`Address`** |
+| | process overlays (`configure` / `as` / listen-role / `policy` stamp if any) | **`Launcher`** |
+
+**Why:** Owner — connecting and serving are different products. One barrel mixing
+“thing to dial” with “thing to bind and update” lies. Clients should not need
+serve APIs; serve code should take a `Node` description, not redefine identity.
+
+**Rejected:** single `Node` kitchen-sink forever; putting `.add` / `.proxy()` on
+Builder; a third “NodeRuntime” name without cause (prefer **NodeBuilder** to
+mirror Effect); folding Update into NodeBuilder (Update stays compose API).
+
+**Implies:** Tip re-exports / moves listen·http·unix·launch·forward·activate off
+`Node` onto `NodeBuilder` on Eng; subpath `@nikscripts/…/NodeBuilder`; docs and
+examples import both. `.proxy()` stays on **`Node`** (declared capability, like
+HttpApi middleware) — Builder *honors* it when listening Primary.
 
 #### D30 — `.proxy()` not `.proxy("Prefer")` (locked 2026-08-16)
 
@@ -494,8 +543,8 @@ class Plain extends Node.make("fleet/Plain").add(Address.http(":8080")) {}
 // no .proxy() → no forward
 ```
 
-**Behavior when on (still D16):** primary listeners run `Node.forward` /
-`forwardAll` toward **Active**; flip via `Node.activate(node, label)`.
+**Behavior when on (still D16):** primary listeners run `NodeBuilder.forward` /
+`forwardAll` toward **Active**; flip via `NodeBuilder.activate(node, label)`.
 
 **Rejected:** `.proxy("Prefer")` / `Proxy: "Prefer"` / `proxy: "Prefer"` as the
 API (implies alternatives that do not exist); inventing `"Off"` / `"Require"` /
@@ -585,9 +634,9 @@ without a protocol factory.
   (variadic, like HttpApi.`add(Group, …Group)`).
 - Optional range → **`Address.http(Address.range(":8080", ":8090", fn?))`** /
   **`Address.unix(Address.range(…))`** (D28–D29: nest + shape-typed defaults).
-- **Proxy** → constructable **`.proxy()`** — no arg (D30). Omit = off.
-  **Reject** `.proxy("Prefer")`.
-- **Listen / as / active** → process-role API (`Node.listen`, `Node.activate`, …).
+- **Proxy** → constructable **`Node.….proxy()`** — no arg (D30). Omit = off.
+  **Reject** `.proxy("Prefer")`. Declared on description; Builder honors it.
+- **Listen / as / active / serve** → **`NodeBuilder`** (D31) — not on `Node`.
 - **Services** declare `node: Worker`.
 
 **Rejected:** `Node.configure({ protocols: ["Http", "Unix"], proxy, listen })`;
