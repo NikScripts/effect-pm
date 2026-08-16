@@ -18,6 +18,7 @@
 
 import { Effect, Layer } from "effect";
 import * as appInternal from "./internal/app";
+import { kindSym } from "./internal/kindSym";
 import * as lastContext from "./internal/lastContext";
 import * as lastLink from "./internal/lastLink";
 
@@ -82,10 +83,12 @@ export const link: typeof lastLink.link = lastLink.link;
 
 /**
  * Where a handle’s **factory brand** is stowed (e.g. `last-ts/View`).
+ * Defined in `internal/kindSym` so `View` can stamp without importing this
+ * module (breaks View → Last → … → Link → View TDZ).
  *
  * @internal
  */
-export const kindSym: unique symbol = Symbol.for("last-ts/Last/kind");
+export { kindSym };
 
 /**
  * The factory brand a handle was minted for (e.g. `last-ts/View`).

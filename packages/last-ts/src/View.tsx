@@ -15,7 +15,8 @@
  * (HttpApi-shaped), not `Service`.
  *
  * Prototype metadata: {@link annotations} / {@link getAnnotations}.
- * Factory brand: {@link kind} via {@link Last.kindSym}.
+ * Factory brand: {@link kind} via {@link ./Last.kindSym} (stamped with
+ * `internal/kindSym` — do not import `Last` here; that cycles through Link).
  *
  * Turn an Effect into a component with {@link effect} (no `<Run effect={…} />`).
  * Plain React JSX (`react/jsx-runtime`) — no custom `jsxImportSource`.
@@ -24,7 +25,7 @@ import * as React from "react";
 import { Cause, Context, Effect, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
-import * as Last from "./Last";
+import { kindSym } from "./internal/kindSym";
 import * as pageContext from "./internal/pageContext";
 import * as pageServices from "./internal/pageServices";
 
@@ -254,7 +255,7 @@ type ViewStamps<
   Annotations extends AnyAnnotations,
 > = {
   readonly [annotationsSym]: Annotations;
-  readonly [Last.kindSym]: typeof kind;
+  readonly [kindSym]: typeof kind;
   /** Phantom — component props. */
   readonly Type: Props;
 };
@@ -401,7 +402,7 @@ const makePrototype = <
       const merged = { ...bag, ...extra };
       const stamped = {
         [annotationsSym]: merged,
-        [Last.kindSym]: kind,
+        [kindSym]: kind,
         Type: undefined as unknown as NextProps,
       };
       if (defaultView !== undefined) {
