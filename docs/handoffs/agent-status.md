@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
-| **K** | `cursor/agent-k-page-route-6d0e` | [**context/view lock**](./last-context-view-lock.md) · [**API audit**](./agent-invented-api-audit.md) · [**spine**](./last-ts-spine.md) | **tip-synced** — last-site View kits + Twoslash `/docs/rsc-router` SSOT | same tip as `integration` | last-site + docs island | http://100.67.32.32:5220/ · http://100.67.32.32:5190/docs/rsc-router | 2026-08-16 |
+| **K** | *(fired)* `cursor/agent-k-page-route-6d0e` | [**final**](./agent-k-final.md) · [context/view lock](./last-context-view-lock.md) | **DONE / FIRED** — last-site kits + `/docs/rsc-router` SSOT; no further assign | `281998aa3` | site `:5220` + docs `:5190/docs/rsc-router` | Do not assign | 2026-08-16 |
 | **G / TUI** | *(fired)* | was page/route + last-ts site | **handed to K** | — | — | Do not assign | 2026-08-08 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **K** | 2026-07-26 |
 | **5** | `cursor/lifecycle-defer-start-929b` | [launcher brief](./launcher-and-handoff-brief.md) · [Update](../guides/update.md) · [addresses dock](./node-addresses-and-update-api.md) · [Versioned](./versioned-schema-decisions.md) | **tip-synced** — Address + Node.make + Lookup/NodePolicy | same tip as `integration` | address/node-make/policy suites green | listen/advertise from address list; label-constrained as | 2026-08-11 |
@@ -30,8 +30,8 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent K:** track 1 + track 2 router-scoped context **Eng’d** ([`last-context-view-lock.md`](./last-context-view-lock.md) · demo [`examples/last/router-context/`](../../examples/last/router-context/)). Parks: [`owned-string-casing-park.md`](./owned-string-casing-park.md) · [`repo-source-viewer-park.md`](./repo-source-viewer-park.md).
-3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. UI surface → **Agent K** (was G). Address + Node.make + Lookup/NodePolicy tip-synced ([`update.md`](../guides/update.md)). listen/advertise from address list still open. Gated: #37.
+2. **Agent K:** **FIRED** — final handoff [`agent-k-final.md`](./agent-k-final.md). Tip `281998aa3` on `cursor/agent-k-page-route-6d0e`. Do not reassign.
+3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. UI surface was Agent K (fired). Address + Node.make + Lookup/NodePolicy tip-synced ([`update.md`](../guides/update.md)). listen/advertise from address list still open. Gated: #37.
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` layout); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
