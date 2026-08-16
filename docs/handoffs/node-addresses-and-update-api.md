@@ -418,67 +418,61 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — vs tip (play 2026-08-16, rev 7)
+#### Play B — the API (play 2026-08-16, rev 9)
 
-**Not Eng’d.** Serve shape only. Piped combinators
-([`behaviour-via-piped-combinators`](../standards/hyperlink-services.md#behaviour-via-piped-combinators)) —
-not a fluent handlers bag.
-
-**Tip — edge**
+**Not Eng’d.**
 
 ``` ts
-Node.http(
-  Node.withPolicy(
-    WorkerPrivate,
-    NodePolicy.listen("Primary"),
-    NodePolicy.active("A"),
-  ),
-  [Node.forward(edge, Probe)],
+/**
+ * @module Node
+ *
+ * Serve product (HttpApiBuilder-shaped). Description = existing make / addresses.
+ */
+
+/** Register this process’s role + what it runs. */
+export declare const group: <N>(
+  node: N,
+  role: string,
+  build: (handlers: Handlers<N>) => Handlers<N>,
+) => Layer.Layer<…>
+
+/** Run every registered group for `node`. */
+export declare const layer: <N>(node: N) => Layer.Layer<…>
+
+/** Flip Active label. */
+export declare const activate: <N>(
+  node: N,
+  label: string,
+) => Effect.Effect<void>
+
+export interface Handlers<N> {
+  readonly listen: (selection: ListenSelection) => Handlers<N>
+  readonly as: (label: string) => Handlers<N>
+  readonly active: (label: string) => Handlers<N>
+  readonly advertise: (selection: AdvertiseSelection) => Handlers<N>
+  readonly forward: (...tags: ReadonlyArray<Tag>) => Handlers<N>
+  readonly serve: (tag: Tag, impl: ServeImpl) => Handlers<N>
+}
+```
+
+``` ts
+const EdgeLive = Node.group(WorkerPrivate, "edge", (handlers) =>
+  handlers.listen("Primary").active("A").forward(Probe),
+)
+
+const BackendALive = Node.group(WorkerPrivate, "A", (handlers) =>
+  handlers.as("A").listen("As").serve(Probe, {
+    tip: Effect.succeed("v1"),
+  }),
+)
+
+const AppLive = Node.layer(WorkerPrivate).pipe(
+  Layer.provide(EdgeLive),
+  Layer.provide(BackendALive),
 )
 ```
 
-**Play — edge**
-
-``` ts
-Node.layer(
-  WorkerPrivate.pipe(
-    Node.listen("Primary"),
-    Node.active("A"),
-    Node.forward(Probe),
-  ),
-)
-```
-
-**Tip — backend**
-
-``` ts
-Node.unix(
-  Node.withPolicy(
-    WorkerPrivate,
-    NodePolicy.as("A"),
-    NodePolicy.listen(["A"]),
-  ),
-  [
-    Hyperlink.serve(Probe, {
-      tip: Effect.succeed("v1"),
-    }),
-  ],
-)
-```
-
-**Play — backend**
-
-``` ts
-Node.layer(
-  WorkerPrivate.pipe(
-    Node.as("A"),
-    Node.listen("As"),
-    Node.serve(Probe, {
-      tip: Effect.succeed("v1"),
-    }),
-  ),
-)
-```
+Same cut as Effect: `HttpApiBuilder.group` + `HttpApiBuilder.layer`.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
