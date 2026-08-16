@@ -357,31 +357,18 @@ import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Layer, Schema } from "effect"
 
-// HttpApi-shaped: make + .add(a, b, c) — multiple in one call
+// Owner range API: Address.range(from, to, fn?) → Address[]
 class Worker extends Node.make("fleet/Worker")
   .add(
     Address.http(":8080"),
-    ...Address.range(":8080", ":8090"), // 3rd arg: custom range fn (optional)
+    ...Address.range(":8081", ":8082"), // 3rd arg: custom range fn
   )
   .proxy("Prefer")
 {}
-```
 
-For unix locals, same helper shape once inputs are paths — or list them:
+// Or without the helper — list dials yourself
+// .add(Address.http(":8080"), Address.unix("/var/run/w.0.sock"), Address.unix("/var/run/w.1.sock"))
 
-```ts
-class Worker extends Node.make("fleet/Worker")
-  .add(
-    Address.http(":8080"),
-    Address.unix("/var/run/w.0.sock"),
-    Address.unix("/var/run/w.1.sock"),
-  )
-  .proxy("Prefer")
-{}
-```
-
-```ts
-// Services have a node (rest of example unchanged)
 class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
   payload: Schema.Struct({ id: Schema.String }),
   node: Worker,
@@ -391,7 +378,6 @@ class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
   node: Worker,
 }) {}
 
-// Process roles — listen API (not Address, not proxy)
 const edge = Node.listen(Worker, "Primary")
 const local = Node.listen(Worker, "Unix")
 
@@ -407,11 +393,6 @@ yield* Node.launch(
   ], { assumeToken }),
 )
 
-const tip = yield* Probe.pipe(
-  Effect.flatMap((p) => p.tip),
-  Effect.provide(Hyperlink.client(Probe)),
-)
-
 yield* Update.execute(
   yield* Update.plan({
     steps: [{
@@ -425,30 +406,16 @@ yield* Update.execute(
 )
 ```
 
-**Without the optional range helper** (owner: not hard to do yourself):
-
-```ts
-class Worker extends Node.make("fleet/Worker")
-  .add(
-    Address.http(":8080"),
-    Address.unix("/var/run/w.0.sock"),
-    Address.unix("/var/run/w.1.sock"),
-  )
-  .proxy("Prefer")
-{}
-```
-
 | Concern | API |
 |---------|-----|
 | Identity | `Node.make(key)` |
 | Addresses | `.add(Address, …Address)` — variadic like HttpApi.`add(Group, …)` |
-| Range sugar | **`Address.range(":8080", ":8090", fn?)`** → array to spread (owner API) |
+| Range | **`Address.range(":8080", ":8090", fn?)`** → array to spread (owner) |
 | Proxy | `.proxy("Prefer")` |
 | Listen | `Node.listen` |
 | Services → node | `node: Worker` |
 
-**Rejected:** `Address.unix.range({ count: 2 })`; only single-arg chained `.add().add()`
-as the shown style; `configure({ protocols, proxy, listen })`.
+**Rejected:** `Address.unix.range({ count: 2 })`; `Address.range(Address.unix…, …)`.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
