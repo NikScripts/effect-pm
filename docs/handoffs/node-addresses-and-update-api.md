@@ -200,14 +200,14 @@ Address.unixFromKey                         // no ()
 NodePolicy.primaryAddress("AllUnlabeled")   // | "All" | ReadonlyArray<label>
 NodePolicy.listen("All")                    // | "Primary" | ReadonlyArray<label>
 NodePolicy.advertise("Primary")             // | "All" | ReadonlyArray<label>
-NodePolicy.proxy("Prefer")                  // primary forwards → live labeled (Advice)
+NodePolicy.proxy()                          // primary forwards → Active (D30; tip still Prefer)
 NodePolicy.as("A")                          // this OS process is the "A" side
 
 NodePolicy.make({
   PrimaryAddress: "AllUnlabeled",
   Listen: "All",
   Advertise: "Primary",
-  Proxy: "Prefer",
+  Proxy: true,                              // D30 — presence/boolean, not "Prefer"
   As: "A",
 })
 
@@ -229,7 +229,7 @@ class WorkerPrivate extends Worker.add(Address.unix("/var/run/w.sock")) {}
 const edge = Node.configure(WorkerPrivate, {
   listen: "Primary",
   active: "blue",
-  proxy: "Prefer",
+  proxy: true, // D30 — or constructable .proxy(); tip still "Prefer"
 })
 const backend = Node.configure(WorkerPrivate, { as: "blue", listen: "As" })
 
@@ -1051,7 +1051,7 @@ class WorkerPrivate extends Worker.add(
 const edge = Node.configure(WorkerPrivate, {
   listen: "Primary",
   advertise: "Primary",
-  proxy: "Prefer",
+  proxy: true, // D30 — or Worker.… .proxy(); tip still "Prefer"
   active: "A",
 })
 const backendA = Node.configure(WorkerPrivate, { as: "A", listen: ["A"] })
