@@ -12,13 +12,15 @@ export const Tree = (props: {
 }): React.ReactElement => {
   const { NavBar, Sidebar, Main, Footer, LayoutGrid } = Last.use(SiteKit);
   return (
-    <>
+    <div className="site">
       <NavBar.View />
-      <LayoutGrid.View>
-        <Sidebar.View />
-        <Main.View>{props.children}</Main.View>
-      </LayoutGrid.View>
+      <div className="site-body">
+        <LayoutGrid.View>
+          <Sidebar.View />
+          <Main.View>{props.children}</Main.View>
+        </LayoutGrid.View>
+      </div>
       <Footer.View />
-    </>
+    </div>
   );
 };

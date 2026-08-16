@@ -7,27 +7,33 @@ export class Home extends Page.static(
   <article data-page="home">
     <h1>last.ts</h1>
     <p>
-      Official docs server — last-ts file router + soft-nav via{" "}
-      <code>Last.provider</code> / <code>last-ts/Waku</code>.
+      Dogfood site — chrome is <strong>View kits</strong>: leaf HTML lives in{" "}
+      <code>ui/*</code> via <code>View.make</code> defaults;{" "}
+      <code>Tree</code> / <code>Frame</code> compose with zero DOM.
+    </p>
+    <p>
+      Soft-nav via <code>Site.context(SiteKit)</code> +{" "}
+      <code>Last.provideContext</code> + <code>Last.provider</code>.
     </p>
     <dl className="meta">
       <div>
-        <dt>catalog</dt>
+        <dt>leaf HTML</dt>
         <dd>
-          <code>Router.make</code> + <code>Route.get</code> (HttpApi lock)
+          <code>ui/NavBar</code> · <code>Sidebar</code> · <code>Main</code> ·{" "}
+          <code>Footer</code> · <code>LayoutGrid</code>
         </dd>
       </div>
       <div>
-        <dt>page mint</dt>
+        <dt>composition</dt>
         <dd>
-          <code>Page.make</code> / <code>Page.static</code> +{" "}
-          <code>Route.static</code>
+          <code>lib/Tree</code> + <code>Frame.App</code> (
+          <code>Last.use(SiteKit)</code>)
         </dd>
       </div>
       <div>
-        <dt>provider</dt>
+        <dt>live DI demo</dt>
         <dd>
-          <code>export const provider = Last.provider(…)</code>
+          <a href="/view">/view</a> — <code>View.make</code> + slot override
         </dd>
       </div>
     </dl>
