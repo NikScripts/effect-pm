@@ -418,61 +418,23 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — the API (play 2026-08-16, rev 9)
+#### Play B — **STRUCK / owner fired** (2026-08-16)
 
-**Not Eng’d.**
+~~HttpApiBuilder-shaped `Node.group` / `Handlers` / `Node.layer` play~~ — **trash.**
+Owner fired Agent 5 play on this. Do **not** resurrect.
 
-``` ts
-/**
- * @module Node
- *
- * Serve product (HttpApiBuilder-shaped). Description = existing make / addresses.
- */
+**Breaks (among others):** fluent handlers bag vs
+[`behaviour-via-piped-combinators`](../standards/hyperlink-services.md#behaviour-via-piped-combinators);
+invented `Node.serve` over existing `Hyperlink.serve` /
+[`serve-vocabulary`](../standards/hyperlink-services.md#serve-vocabulary);
+string role ids (`"edge"`) as a second identity system; `layer(node)` + provide
+all groups in one process (fights S5 multi-process); conflates connect-to and
+serve on one kitchen-sink after D31 cut; retargets D10 `withPolicy` /
+`configure` without a lock; invents `listen("As")`; novel API ahead of design.
 
-/** Register this process’s role + what it runs. */
-export declare const group: <N>(
-  node: N,
-  role: string,
-  build: (handlers: Handlers<N>) => Handlers<N>,
-) => Layer.Layer<…>
-
-/** Run every registered group for `node`. */
-export declare const layer: <N>(node: N) => Layer.Layer<…>
-
-/** Flip Active label. */
-export declare const activate: <N>(
-  node: N,
-  label: string,
-) => Effect.Effect<void>
-
-export interface Handlers<N> {
-  readonly listen: (selection: ListenSelection) => Handlers<N>
-  readonly as: (label: string) => Handlers<N>
-  readonly active: (label: string) => Handlers<N>
-  readonly advertise: (selection: AdvertiseSelection) => Handlers<N>
-  readonly forward: (...tags: ReadonlyArray<Tag>) => Handlers<N>
-  readonly serve: (tag: Tag, impl: ServeImpl) => Handlers<N>
-}
-```
-
-``` ts
-const EdgeLive = Node.group(WorkerPrivate, "edge", (handlers) =>
-  handlers.listen("Primary").active("A").forward(Probe),
-)
-
-const BackendALive = Node.group(WorkerPrivate, "A", (handlers) =>
-  handlers.as("A").listen("As").serve(Probe, {
-    tip: Effect.succeed("v1"),
-  }),
-)
-
-const AppLive = Node.layer(WorkerPrivate).pipe(
-  Layer.provide(EdgeLive),
-  Layer.provide(BackendALive),
-)
-```
-
-Same cut as Effect: `HttpApiBuilder.group` + `HttpApiBuilder.layer`.
+**D31 cut still stands** (connect-to vs serve are two products). **Serve API
+shape = open.** Tip stays on `Node.withPolicy` / `http` / `unix` / `forward`
+until a design that does not burn the standards.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
