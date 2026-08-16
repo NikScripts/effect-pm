@@ -1,10 +1,10 @@
 /**
- * Soft-nav for {@link Site} — `Router.link(Site)` (Waku is only the location Layer).
+ * Soft-nav for the site catalog — `Router.link(Catalog)`.
  */
 "use client";
 
 import * as Router from "last-ts/Router";
-import { Site } from "./site";
+import { Catalog } from "./Catalog";
 
-/** Same module family as {@link Site}: derived Link, not a free generic. */
-export const Link = Router.link(Site);
+/** Typesafe soft-nav; Waku is only the location Layer. */
+export const Link = Router.link(Catalog);

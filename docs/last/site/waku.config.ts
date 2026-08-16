@@ -32,6 +32,7 @@ export default Config.defineConfig({
         "last-ts/Last": `${lastTsSrc}/Last.ts`,
         "last-ts/Memory": `${lastTsSrc}/Memory.ts`,
         "last-ts/AtomReact": `${lastTsSrc}/AtomReact.tsx`,
+        "last-ts/server": `${lastTsSrc}/server.ts`,
         "last-ts/vite": `${lastTsSrc}/vite/fileRouter.ts`,
         "last-ts/config": `${lastTsSrc}/config.ts`,
       },

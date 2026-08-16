@@ -1,13 +1,13 @@
 /**
  * Host shim — same tree as {@link ../lib/Frame.App}, with RSC `children`
- * instead of {@link Layout.Outlet}. Product SSOT is `Frame.App` +
- * `Layout.provide`; retire this when soft-nav hosts the body layout.
+ * instead of {@link Layout.Outlet}. Soft-nav mounts SiteKit under Outlet via
+ * `.context`; this path uses {@link ../lib/HostLayout} (client).
  */
 import type { ReactNode } from "react";
-import * as Frame from "../lib/Frame";
+import { HostLayout } from "../lib/HostLayout";
 
 export default function Layout(props: {
   readonly children: ReactNode;
 }) {
-  return <Frame.Tree>{props.children}</Frame.Tree>;
+  return <HostLayout>{props.children}</HostLayout>;
 }

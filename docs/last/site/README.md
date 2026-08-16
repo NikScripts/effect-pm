@@ -6,13 +6,13 @@ Not Hyperlink `docs/site` — **same layout structure**, own style.
 
 | Piece | Shape |
 |-------|--------|
-| Frame | `Layout.make` (`Frame.App`) · `Frame.Tree` · `Frame.Root` |
-| Region UI | `NavBar` · `Sidebar` (rail) · `Main` · `Footer` — **HTML lives in these modules** |
-| Catalog | `Router.make` + `Route.get` + `Layout.provide(Frame.App)` |
-| Soft-nav | `Last.provider` + `Document.provide` + `last-ts/Waku` |
-| Host `_layout` | Thin shim: `<Frame.Tree>{children}</Frame.Tree>` until soft-nav hosts `Frame.App` |
+| Frame | `Layout.make` (`Frame.App`) — body places `Tree` only (no HTML) |
+| Region UI | `ui/*` View kits — **leaf HTML via `View.make` defaults**; composition zero DOM |
+| Catalog | `Router.make` + `.context(SiteKit)` + `Last.provideContext` + `Layout.provide(Frame.App)` |
+| Soft-nav | `Last.provider(layer)` + `Document.provide` + `last-ts/Waku` |
+| Host `_layout` | Thin RSC shim → client `HostLayout` (`Last.provider(SiteKit)` + `Tree`) |
 
-HTML / DOM changes → touch the owning `ui/*` or `Frame` surface (and Layer Effects that return JSX). Prefer more Layer-shaped markup over time (`Layout.make` / Document / RootLayout).
+HTML / DOM changes → touch the owning `ui/*` leaf Views (and Layer Effects that return JSX). Prefer more Layer-shaped markup over time (`Layout.make` / Document / RootLayout).
 
 **Next:** manual main group · docs `fileSystem` · API `fromEffect`.
 
