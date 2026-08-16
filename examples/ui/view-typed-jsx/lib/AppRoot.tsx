@@ -18,7 +18,7 @@ export const appLayer = Layer.effect(
     const HelloView = yield* Hello.Hello;
     const OuterView = yield* Frame.Outer;
     const MiddleView = yield* Frame.Middle;
-    return (_props: {}) => (
+    return () => (
       <OuterView>
         <MiddleView>
           <HelloView who="nik" />
