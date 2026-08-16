@@ -494,14 +494,16 @@ dream demos that need a novel to explain.
 
 **Choice:**
 
-- **Addresses / protocols** → `Address.*` + `Node.make(…).add(Address…)` only.
+- **Addresses / protocols** → `Address.*` + `Node.make(…).add(Address, …Address)`
+  (variadic, like HttpApi.`add(Group, …Group)`).
+- Optional range sugar → **`Address.range(from, to, fn?)`** returns an array to
+  spread into `.add` — **not** `Address.unix.range({ count })`.
 - **Proxy** → constructable method `.proxy("Prefer")` (HttpApi.`middleware`-shaped).
 - **Listen / as / active** → process-role API (`Node.listen`, `Node.activate`, …).
 - **Services** declare `node: Worker`.
 
-**Rejected:** `Node.configure({ protocols: ["Http", "Unix"], proxy, listen })` as one
-bag (that was the repeated mess). `protocols: string[]` is not how you declare
-what a node speaks — **Address** is.
+**Rejected:** `Node.configure({ protocols: ["Http", "Unix"], proxy, listen })`;
+`Address.unix.range({ count: 2 })`; showing only single-arg `.add().add()` as the API.
 
 **Implies:** `Node.configure` either dies or shrinks to leftovers that aren’t
 Address/proxy/listen; tip example in §3.3.3 follows D27.
