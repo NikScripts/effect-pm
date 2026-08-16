@@ -10,6 +10,10 @@ export const normalizeExampleRel = (pathOrKey: string): string => {
   if (atExamples >= 0) return unified.slice(atExamples + 1);
   const atDocsLast = unified.lastIndexOf("/docs/last/site/");
   if (atDocsLast >= 0) return unified.slice(atDocsLast + 1);
+  // Vite collapses `../../../../docs/last/site` → `../../../last/site` (via docs/).
+  const atLastSite = unified.lastIndexOf("/last/site/");
+  if (atLastSite >= 0) return `docs${unified.slice(atLastSite)}`;
+  if (unified.startsWith("last/site/")) return `docs/${unified}`;
   return unified.replace(/^\.?\//, "");
 };
 
