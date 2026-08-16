@@ -418,102 +418,137 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — HttpApiBuilder-shaped, one module (play 2026-08-16)
+#### Play B — cleaner + vs tip (play 2026-08-16, rev 2)
 
-**Not Eng’d.** New API — not a rename of tip `listen`/`http`/`unix`.
+**Not Eng’d.** Same scenario as tip [`forward-proxy`](../../examples/node/forward-proxy/) —
+stable Http → forward → Unix A/B → `activate`. One module. No `NodeBuilder` rename.
 
-**Why Effect splits HttpApi / HttpApiBuilder:** one description drives **server +
-OpenAPI + typed client**. We don’t mint OpenAPI/clients from `Node` today —
-services already dial via `node: Worker`. So the **product cut** (connect-to vs
-this-process) can live as **regions on one `Node` module** unless a second
-module earns its keep later. Name `NodeBuilder` not required for this play.
+**Why not HttpApi’s two-step `group` + `layer(api)`?** Effect merges **many groups**
+into one API layer. A Hyperlink **process** is usually **one role**. So collapse to
+one call: `Node.layer(node, handlers => …)`.
 
-**Analogy:**
-
-| HttpApi | Play B (`Node`) |
-|---------|-----------------|
-| `HttpApi.make.add(Group)` | `Node.make.add(Address).proxy()` |
-| `HttpApiBuilder.group(api, id, h => h.handle(…))` | `Node.handle(node, h => h.listen(…).forward/serve(…))` |
-| `HttpApiBuilder.layer(api)` | `Node.layer(handle)` / `Layer.launch` |
-| Groups partition the full API | **Roles are intentionally partial** (edge ≠ backend A) — S5, not HttpApi completeness |
+##### Side by side
 
 ```ts
-import * as Address from "hyperlink-ts/Address"
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
-import * as Node from "hyperlink-ts/Node"
-import * as Update from "hyperlink-ts/Update"
-import * as WorkPool from "hyperlink-ts/WorkPool"
-import { Effect, Layer, Schema } from "effect"
+// ─────────────── TIP (forward-proxy today) ───────────────
+class Worker extends Node.make(
+  "examples/forward-proxy/Worker",
+  Address.http(":18765"),
+) {}
 
-// ── description (connect-to) ───────────────────────────────────────────────
-class Worker extends Node.make("fleet/Worker")
-  .add(
-    Address.http(":8080"),
-    Address.unix({ A: "/var/run/w.A.sock", B: "/var/run/w.B.sock" }),
-  )
+class WorkerPrivate extends Worker.pipe(
+  Address.unix({
+    A: "/tmp/…-a.sock",
+    B: "/tmp/…-b.sock",
+  }),
+  NodePolicy.proxy("Prefer"),
+) {}
+
+const edge = Node.withPolicy(
+  WorkerPrivate,
+  NodePolicy.listen("Primary"),
+  NodePolicy.active("A"),
+  NodePolicy.advertise("Primary"),
+)
+const backendA = Node.withPolicy(
+  WorkerPrivate,
+  NodePolicy.as("A"),
+  NodePolicy.listen(["A"]),
+)
+
+const edgeLayer = Node.http(edge, [Node.forward(edge, Probe)])
+const aLayer = Node.unix(backendA, [
+  Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
+])
+
+yield* Node.activate(WorkerPrivate, "B")
+
+
+// ─────────────── PLAY B ───────────────
+class Worker extends Node.make("examples/forward-proxy/Worker")
+  .add(Address.http(":18765"))
   .proxy()
 {}
 
-class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
-  payload: Schema.Struct({ id: Schema.String }),
-  node: Worker,
-}) {}
-class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
-  tip: Hyperlink.effect(Schema.String),
-  node: Worker,
-}) {}
+class WorkerPrivate extends Worker.add(
+  Address.unix({
+    A: "/tmp/…-a.sock",
+    B: "/tmp/…-b.sock",
+  }),
+) {}
 
-// ── this process: edge (Primary + forward) ─────────────────────────────────
-const edge = Node.handle(Worker, (h) =>
-  h.listen("Primary").forward(Probe, Jobs),
+const edgeLayer = Node.layer(WorkerPrivate, (h) =>
+  h.listen("Primary").active("A").forward(Probe),
 )
 
-yield* Layer.launch(Node.layer(edge))
-
-// ── this process: backend labeled A (serve) ────────────────────────────────
-const side = "A" as const
-const backend = Node.handle(Worker, (h) =>
-  h.as(side)
-    .listen("As")
-    .policy(LookupPolicy.yieldRefuse)
-    .serve(Jobs, { effect: () => Effect.void })
-    .serve(Probe, { tip: Effect.succeed("v1") }),
+const aLayer = Node.layer(WorkerPrivate, (h) =>
+  h.as("A").listen("As").serve(Probe, { tip: Effect.succeed("v1") }),
 )
 
-yield* Layer.launch(Node.layer(backend))
-
-// ── flip / cutover (Update still own module) ───────────────────────────────
-yield* Node.activate(Worker, "B")
-// Update.execute(plan) → up → handoff → activate → retire (β)
+yield* Node.activate(WorkerPrivate, "B")
 ```
 
-**Handlers bag (play):** fluent, returns the bag (like `Handlers.handle`).
+##### What got simpler
 
-| Method | Role |
-|--------|------|
-| `listen("Primary" \| "As" \| "All" \| …)` | Which declared addresses **this process** binds |
-| `as(label)` | This process **is** that labeled side |
-| `forward(…tags)` / `forwardAll` | Primary forwards (honors `.proxy()`) |
-| `serve(tag, impl)` | Implement a service on the bound dials |
-| `policy(…fragments)` | Process-local policy stamp (same both-ways options) |
-| `active(label)` | Seed Prefer-target — or keep `Node.configure` / activate only |
+| Tip | Play B |
+|-----|--------|
+| `make(key, Address)` + `.pipe(Address…)` | `make(key).add(…)` / `class extends X.add(…)` |
+| `NodePolicy.proxy("Prefer")` | `.proxy()` on description |
+| `withPolicy` + `NodePolicy.*` fragments | handlers bag (`listen` / `as` / `active`) |
+| `Node.http(edge, [Node.forward(edge, Probe)])` — edge twice, pick protocol | `Node.layer(node, h => h.listen(…).forward(Probe))` — protocol from listen set |
+| `Node.unix(backend, [Hyperlink.serve(…)])` | `h.serve(Probe, …)` inside the same bag |
 
-**Forks (owner):**
+##### Full tiny program (play)
 
-1. **One module vs `NodeBuilder`** — play assumes one; split only if description
-   gains other consumers (docs/client-gen) like HttpApi.
-2. **`Node.handle` vs constructable** `class Edge extends Node.handle(Worker, …)` —
-   HttpApi uses free functions for builder; constructable was for description.
-3. **Completeness** — do **not** require every address handled in one process
-   (that would fight S5). Optional: if `.proxy()`, edge handle must `forward` or
-   explicitly opt out.
-4. **`configure` bag** — still D10 on `Node`, or fold listen/as/active into the
-   handlers bag only (play folds; bag may die).
+```ts
+class Probe extends Hyperlink.Service<Probe>()("…/Probe", {
+  tip: Hyperlink.effect(Schema.String),
+}) {}
 
-**Rejected in this play:** `NodeBuilder.listen = Node.listen`; `.pipe` widen;
-`listen(Worker, "A")` as if A were a listen mode; second `make` of `fleet/Worker`;
-`"Prefer"` string; novel multi-file demos.
+class Worker extends Node.make("…/Worker")
+  .add(Address.http(":18765"))
+  .proxy()
+{}
+class WorkerPrivate extends Worker.add(
+  Address.unix({ A: "/tmp/a.sock", B: "/tmp/b.sock" }),
+) {}
+
+const program = Effect.gen(function* () {
+  const tipA = yield* (yield* Probe).tip
+  yield* Node.activate(WorkerPrivate, "B")
+  const tipB = yield* (yield* Probe).tip
+  // tipA === "v1", tipB === "v2"
+}).pipe(
+  Effect.provide(
+    Hyperlink.client(Probe, Worker).pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Node.layer(WorkerPrivate, (h) =>
+            h.listen("Primary").active("A").forward(Probe),
+          ),
+          Node.layer(WorkerPrivate, (h) =>
+            h.as("A").listen("As").serve(Probe, {
+              tip: Effect.succeed("v1"),
+            }),
+          ),
+          Node.layer(WorkerPrivate, (h) =>
+            h.as("B").listen("As").serve(Probe, {
+              tip: Effect.succeed("v2"),
+            }),
+          ),
+        ),
+      ),
+    ),
+  ),
+)
+```
+
+**Still open:** where `advertise` lives (handlers vs default Primary); whether
+`serve`/`forward` need protocol siblings at all; one module stays unless
+description grows other consumers.
+
+**Rejected:** `NodeBuilder.` prefix; `.pipe` address widen; `"Prefer"`; second
+`make` of the same key.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
