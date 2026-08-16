@@ -361,15 +361,27 @@ import { Effect, Layer, Schema } from "effect"
 class Worker extends Node.make("fleet/Worker")
   .add(
     Address.http(":8080"),
-    ...Address.range(
-      Address.unix("/var/run/w.0.sock"),
-      Address.unix("/var/run/w.1.sock"),
-    ), // optional helper → Address[]; or list them yourself
+    ...Address.range(":8080", ":8090"), // 3rd arg: custom range fn (optional)
   )
   .proxy("Prefer")
 {}
+```
 
-// Services have a node
+For unix locals, same helper shape once inputs are paths — or list them:
+
+```ts
+class Worker extends Node.make("fleet/Worker")
+  .add(
+    Address.http(":8080"),
+    Address.unix("/var/run/w.0.sock"),
+    Address.unix("/var/run/w.1.sock"),
+  )
+  .proxy("Prefer")
+{}
+```
+
+```ts
+// Services have a node (rest of example unchanged)
 class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
   payload: Schema.Struct({ id: Schema.String }),
   node: Worker,
@@ -430,7 +442,7 @@ class Worker extends Node.make("fleet/Worker")
 |---------|-----|
 | Identity | `Node.make(key)` |
 | Addresses | `.add(Address, …Address)` — variadic like HttpApi.`add(Group, …)` |
-| Range sugar | `Address.range(from, to, fn?)` → array to spread — **not** `Address.unix.range` |
+| Range sugar | **`Address.range(":8080", ":8090", fn?)`** → array to spread (owner API) |
 | Proxy | `.proxy("Prefer")` |
 | Listen | `Node.listen` |
 | Services → node | `node: Worker` |
@@ -496,8 +508,8 @@ dream demos that need a novel to explain.
 
 - **Addresses / protocols** → `Address.*` + `Node.make(…).add(Address, …Address)`
   (variadic, like HttpApi.`add(Group, …Group)`).
-- Optional range sugar → **`Address.range(from, to, fn?)`** returns an array to
-  spread into `.add` — **not** `Address.unix.range({ count })`.
+- Optional range sugar → **`Address.range(":8080", ":8090", fn?)`** → array to
+  spread into `.add` (owner API). **Not** `Address.unix.range({ count })`.
 - **Proxy** → constructable method `.proxy("Prefer")` (HttpApi.`middleware`-shaped).
 - **Listen / as / active** → process-role API (`Node.listen`, `Node.activate`, …).
 - **Services** declare `node: Worker`.
