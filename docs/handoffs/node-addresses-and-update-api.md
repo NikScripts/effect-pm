@@ -476,6 +476,23 @@ dream demos that need a novel to explain.
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
 | **D25** | **`Node.make` does not take `Address[]`** — `make(key)` or chain **`.add(Address)`**; no array arity |
 | **D26** | **Nodes = HttpApi constructable** — `make` + **`.add`** / `class extends X.add(…)`; **not** `.pipe` |
+| **D27** | **Address owns protocols/dials**; **`.proxy` / `Node.listen` are separate APIs** — no `protocols:[]` in configure |
+
+#### D27 — Address vs proxy/listen split (locked 2026-08-16)
+
+**Choice:**
+
+- **Addresses / protocols** → `Address.*` + `Node.make(…).add(Address…)` only.
+- **Proxy** → constructable method `.proxy("Prefer")` (HttpApi.`middleware`-shaped).
+- **Listen / as / active** → process-role API (`Node.listen`, `Node.activate`, …).
+- **Services** declare `node: Worker`.
+
+**Rejected:** `Node.configure({ protocols: ["Http", "Unix"], proxy, listen })` as one
+bag (that was the repeated mess). `protocols: string[]` is not how you declare
+what a node speaks — **Address** is.
+
+**Implies:** `Node.configure` either dies or shrinks to leftovers that aren’t
+Address/proxy/listen; tip example in §3.3.3 follows D27.
 
 #### D26 — Node direction = HttpApi constructable (locked 2026-08-15)
 
@@ -524,59 +541,11 @@ detail; **never** an array second arg.
 **Implies:** Tip still has `pipe` + `Address[]` — remove/replace on Eng. §3.4.4
 updated.
 
-#### D23 — Auto addresses from protocols + proxy (revised again 2026-08-15)
+**Owner point:** Prefer not hand-minting every backend sock. Declare **primary +
+local unix range via Address**, enable **`.proxy`**, use **`Node.listen`** for
+process roles. Runtime picks dials from the unix range. See § example (D27).
 
-**Owner point (do not miss):** Prefer **not** providing backend addresses at all.
-Specify that the node **supports protocols**, enable **proxy**, **let it do the
-rest**. Optionally **narrow** with a range or a specific address. Labels are
-plain strings when you use them — no special A/B system, no `Address.ipc`, no
-required pool-index/`as: 0` ritual as the product DX.
-
-**Not the point:** Inventing `Address.ipc({ pool: 2 })`, “labeled address-less
-addresses,” activate-by-index as the main story, or a hand-rolled range DSL
-apps must learn. (`Address.range` is optional sugar at most — “not hard to do
-yourself.” Keep `Address.unix` unless we deliberately rename unix→ipc globally.)
-
-**Target DX — minimal:**
-
-```ts
-class Worker extends Node.make("fleet/Worker") {}
-
-// protocols + proxy → runtime mints primary + available unix dials (key/range)
-Node.configure(Worker, {
-  protocols: ["Http", "Unix"],
-  proxy: "Prefer",
-})
-
-// edge / backends are roles on the same identity — still no sock strings
-const edge = Node.configure(Worker, { listen: "Primary" })
-const live = Node.configure(Worker, { listen: "Proxy" }) // or whatever name = “available backends”
-// bring-up + activate use the auto-minted available dials
-
-Hyperlink.client(Probe, Worker) // stable primary
-```
-
-**Narrow only when you care:**
-
-```ts
-Node.configure(Worker, { protocols: ["Http", "Unix"], proxy: "Prefer" })
-// pin primary when you care
-Worker.add(Address.http(":8080"))
-```
-
-**Ties to addressless (already Eng’d on legacy `Node.Service`):** serve with no
-path → mint unix + claim by key; client `lookupClient(Tag)` dials by key. Same
-spirit for `Node.make`: protocols declared, dials from key — **`unixFromKey`
-bind still pending** on the make path.
-
-**Rejected as product SSOT:** the prior “unresolved pool + `as: 0` +
-`activate(1)`” sketch — too manual, missed the point.
-
-**Open for Eng (keep thin):** exact `protocols` bag shape; how many available
-unix dials proxy implies by default (e.g. 2); how `activate` names an
-auto-minted dial without forcing apps to pass paths (internal slot ok —
-**apps** shouldn’t need to). Optional key-derived range as collision avoidance,
-not a user-facing A/B mint API.
+~~Prior wrong sketch: `configure({ protocols: ["Http", "Unix"], proxy, listen })`.~~
 
 #### D24 — Type-catch conflicting addresses
 
