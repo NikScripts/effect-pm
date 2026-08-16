@@ -418,7 +418,8 @@ yield* Update.execute(
 | Addresses | `.add(Address, …)` — variadic like HttpApi.`add(Group, …)` |
 | Address inputs | **single \| array \| record \| `Address.range(from, to, fn?)`** |
 | Nesting | **`Address.http(Address.range(…))`** / **`Address.unix(Address.range(…))`** |
-| Proxy | `.proxy("Prefer")` |
+| Range typing | **D29** — overloads; default alg from `from`/`to` shape; `fn` override |
+| Proxy | `.proxy("Prefer")` (omit = no proxy) |
 | Listen | `Node.listen` |
 | Services → node | `node: Worker` |
 
@@ -476,6 +477,60 @@ dream demos that need a novel to explain.
 | **D26** | **Nodes = HttpApi constructable** — `make` + **`.add`** / `class extends X.add(…)`; **not** `.pipe` |
 | **D27** | **Address owns protocols/dials**; **`.proxy` / `Node.listen` separate**; Address inputs = single \| array \| record \| `Address.range` |
 | **D28** | **`Address.http(Address.range(…))` / `Address.unix(Address.range(…))`** — range nests in the protocol factory |
+| **D29** | **`Address.range` typed by `from`/`to` shape** — default algs; overloads; `fn` override; protocol factory type-checks the nest |
+
+#### D29 — `Address.range` typing + default algorithms (locked 2026-08-16)
+
+**Choice:** `Address.range(from, to, fn?)` is **protocol-blind**. It only sees the
+two endpoints (and optional override). It does **not** know it sits inside
+`Address.http` / `Address.unix` / `Address.ws`.
+
+**Safe typing (Eng):**
+
+1. **Overloads / branded range result** so different endpoint kinds produce
+   distinguishable range values (port-ish vs path-ish vs …).
+2. **`Address.http` / `unix` / `ws` overload on that result** — they accept only
+   ranges whose endpoint kind fits that protocol’s dial vocabulary. Nesting is
+   type-checked at the factory, not inside `range`.
+3. **`http` vs `ws`:** both take the same port/URL dial shapes. A range from
+   `":8080"` → `":8090"` is fine for either; the factory stamps the protocol.
+   Range does not need to tell Http from Ws.
+
+**Default algorithms** — pick from `from`/`to` shape (same family required):
+
+| Detected shape | Example | Default fill |
+|----------------|---------|--------------|
+| `:` + decimal port | `":8080"` … `":8090"` | inclusive port sequence → `":8080"`, `":8081"`, … |
+| bare port number | `8080` … `8090` | same sequence as numbers / `:${n}` family |
+| path with trailing numeric segment | `"/var/run/w.0.sock"` … `"/var/run/w.1.sock"` | bump that segment (Eng fills middle) |
+| (more shapes as Eng needs) | … | … |
+
+Unrecognized / mismatched endpoint pair → **type error** when possible, else
+runtime reject. No silent wrong fill.
+
+**Override:** third arg `fn` replaces the default algorithm entirely
+(`Address.range(from, to, fn)`). Caller owns the array of dials.
+
+```ts
+// default — detect ":digits" → port walk
+Address.http(Address.range(":8080", ":8090"))
+
+// same dial family works for ws — factory stamps protocol
+Address.ws(Address.range(":8080", ":8090"))
+
+// path family → unix
+Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock"))
+
+// custom fill
+Address.http(Address.range(":8080", ":8090", (from, to) => [/* … */]))
+```
+
+**Rejected:** `range` taking a protocol tag; separate `Address.http.range` /
+`Address.unix.range`; guessing protocol from ports alone; requiring callers to
+pass algorithm name when shape is obvious.
+
+**Implies:** Eng ships overload surface + at least port (`:n` / number) and
+trailing-numeric-path defaults; `.test-d.ts` for nest accept/reject.
 
 #### D28 — Address inputs: single | array | record | nested range (locked 2026-08-16)
 
@@ -491,7 +546,7 @@ Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock"))
 
 `Address.range(from, to, fn?)` is the owner range tool (optional 3rd = custom
 fn). It is **not** spread bare into `.add` as the primary story — wrap with the
-protocol: `Address.http(Address.range(…))`.
+protocol: `Address.http(Address.range(…))`. Typing of range + nest: **D29**.
 
 **Rejected:** `Address.unix.range({ count })`; range-only as a peer of `.add`
 without a protocol factory.
