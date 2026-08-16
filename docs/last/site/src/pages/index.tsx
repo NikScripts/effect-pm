@@ -7,7 +7,7 @@ export class Home extends Page.static(
   <article data-page="home">
     <h1>last.ts</h1>
     <p>
-      Dogfood site — chrome is <strong>View kits</strong>: leaf HTML lives in{" "}
+      Dogfood site — layout is <strong>View kits</strong>: leaf HTML lives in{" "}
       <code>ui/*</code> via <code>View.make</code> defaults;{" "}
       <code>Tree</code> / <code>Frame</code> compose with zero DOM.
     </p>
