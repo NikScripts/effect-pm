@@ -343,83 +343,88 @@ revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
 #### Target Node API — one example (SSOT)
 
-Forget the kitchen-sink sketch. This is the product example:
+Addresses/protocols via **`Address` + `.add`** (HttpApi-style). **Proxy / listen
+are a different API** — not a `protocols: []` bag. Services declare their node.
 
 ```ts
+import * as Address from "hyperlink-ts/Address"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Launcher from "hyperlink-ts/Launcher"
-import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 import * as Node from "hyperlink-ts/Node"
 import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
-import { Effect, Schema } from "effect"
+import { Effect, Layer, Schema } from "effect"
 
-// Tags
+// ── Node: primary + local unix range (Address only — no protocols bag) ──
+class Worker extends Node.make("fleet/Worker")
+  .add(Address.http(":8080"))
+  .add(Address.unix.range({ count: 2 })) // local available dials; key-derived range OK
+  .proxy("Prefer") // constructable method — like HttpApi.middleware, NOT configure
+{}
+
+// ── Services belong to the node ─────────────────────────────────────
 class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
   payload: Schema.Struct({ id: Schema.String }),
+  node: Worker,
 }) {}
+
 class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
   tip: Hyperlink.effect(Schema.String),
+  node: Worker,
 }) {}
 
-// One identity — no addresses, no A/B
-class Worker extends Node.make("fleet/Worker") {}
+// ── Process roles — listen API only (not mixed with Address) ────────
+const edge = Node.listen(Worker, "Primary")
+const local = Node.listen(Worker, "Unix") // bind from the unix range
 
-// ── edge process ───────────────────────────────────────────────────
-const edge = Node.configure(Worker, {
-  protocols: ["Http", "Unix"],
-  proxy: "Prefer",
-  listen: "Primary",
-})
-
+// Edge process — primary http, forward to Active unix
 yield* Layer.launch(
   Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])]),
 )
 
-// ── backend process (same class; auto unix from protocols) ─────────
-const backend = Node.configure(Worker, {
-  protocols: ["Http", "Unix"],
-  proxy: "Prefer",
-  listen: "Available",
-})
-
+// Backend process — one dial from the unix range
 yield* Node.launch(
-  backend,
-  Node.unix(backend, [
+  local,
+  Node.unix(local, [
     WorkPool.serve(Jobs, { effect: () => Effect.void }),
     Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
   ], { assumeToken }),
 )
 
-// ── any client — always the same dial ──────────────────────────────
-const probe = yield* Probe.pipe(
-  Effect.provide(Hyperlink.client(Probe, Worker)),
+// Client — node’s primary; never rebinds on cutover
+const tip = yield* Probe.pipe(
+  Effect.flatMap((p) => p.tip),
+  Effect.provide(Hyperlink.client(Probe)), // Probe already carries Worker
 )
-yield* probe.tip // "v1"
 
-// ── redeploy ───────────────────────────────────────────────────────
-// file-swap / new image → tip will be "v2" on the new process
+// Redeploy — new local from the same unix range; execute flips Active
 yield* Update.execute(
   yield* Update.plan({
     steps: [{
-      target: Worker.key,
+      target: Worker,
       successor: {
-        node: backend,
+        node: local,
         process: Launcher.command("pnpm", ["exec", "tsx", "worker.ts"]),
       },
     }],
   }),
 )
-// up new → handoff pending Jobs → activate → retire old
-
-yield* probe.tip // "v2" — same Worker client, no rebind
 ```
 
-**That’s the whole story:** `make` → `configure(protocols + proxy)` → serve/forward →
-`Update.execute`. Addresses are minted. Labels optional. No `.pipe`. No address
-arrays. No forged second make.
+**Split (do not merge into one bag):**
 
-Narrow later with `.add(Address.http(":8080"))` only when you must pin something.
+| Concern | API |
+|---------|-----|
+| Identity | `Node.make(key)` |
+| Addresses / protocols | `.add(Address.http…)` / `.add(Address.unix…)` / `.add(Address.unix.range…)` |
+| Proxy | `.proxy("Prefer")` on the constructable (HttpApi.`middleware`-shaped) |
+| Listen / as / active | `Node.listen` / `Node.as` / `Node.activate` — **process role API** |
+| Services → node | `node: Worker` on the Service |
+| Cutover | `Update.plan` → `simulate` → `execute` |
+
+**Rejected in this example:** `configure({ protocols: ["Http", "Unix"], proxy, listen })`
+as one bag; addressless-only dream with no primary; repeating the same proto bag
+on every role.
 
 **Quality bar (owner 2026-08-15):** D1–D26 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
