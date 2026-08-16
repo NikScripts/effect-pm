@@ -343,32 +343,25 @@ revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
 #### Target Node API — one example (SSOT)
 
-Like HttpApi / HttpApiBuilder (**D31**): **`Node`** is the connect-to
-description; **`NodeBuilder`** binds and serves it. `.add(...pieces)` takes
-several at once. Each `Address.http` / `Address.unix` / … accepts **single |
-array | record** (and **`Address.range`** nested). `.proxy()` is declared on
-`Node`; listen / serve / flip live on `NodeBuilder`. Services declare their node.
+**Product 1 (`Node`)** is locked: HttpApi-shaped description. **Product 2** (serve /
+process / flip) is a real second product (**D31**) — its API is **not** designed.
+Do **not** treat `NodeBuilder.listen = Node.listen` rename as the answer.
 
 ```ts
 import * as Address from "hyperlink-ts/Address"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import * as Launcher from "hyperlink-ts/Launcher"
 import * as Node from "hyperlink-ts/Node"
-import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
-import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
-import { Effect, Layer, Schema } from "effect"
+import { Schema } from "effect"
 
 // Address input shapes: single | array | record | range
 Address.http(":8080")
 Address.http([8080, 8081])
 Address.http({ blue: 8080, green: 8081 })
-Address.http(Address.range(":8080", ":8090")) // 3rd arg: custom fn
-Address.unix("/var/run/w.sock")
-Address.unix(["/var/run/w.0.sock", "/var/run/w.1.sock"])
-Address.unix({ blue: "/var/run/w.blue.sock", green: "/var/run/w.green.sock" })
+Address.http(Address.range(":8080", ":8090"))
 Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock"))
 
+/** Connect-to — description only (D26–D30). */
 class Worker extends Node.make("fleet/Worker")
   .add(
     Address.http(":8080"),
@@ -386,188 +379,45 @@ class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
   node: Worker,
 }) {}
 
-const edge = NodeBuilder.listen(Worker, "Primary")
-const local = NodeBuilder.listen(Worker, "Unix")
-
-yield* Layer.launch(
-  NodeBuilder.http(edge, [NodeBuilder.forwardAll(edge, [Probe, Jobs])]),
-)
-
-yield* NodeBuilder.launch(
-  local,
-  NodeBuilder.unix(local, [
-    WorkPool.serve(Jobs, { effect: () => Effect.void }),
-    Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
-  ], { assumeToken }),
-)
-
-yield* Update.execute(
-  yield* Update.plan({
-    steps: [{
-      target: Worker,
-      successor: {
-        node: local,
-        process: Launcher.command("pnpm", ["exec", "tsx", "worker.ts"]),
-      },
-    }],
-  }),
-)
+// Serve / listen / forward / activate / launch / Update β:
+// → second product (D31). Shape open — see D31. Tip still on Node.* until designed.
 ```
 
 | Concern | API |
 |---------|-----|
-| **Connect-to (description)** | **`Node`** — `make` / `.add` / `.proxy()` (**D31**) |
-| **Serve / process / flip** | **`NodeBuilder`** — `listen` / `http` / `unix` / `launch` / `forward` / `activate` / role overlays (**D31**) |
-| Identity | `Node.make(key)` |
-| Addresses | `.add(Address, …)` — variadic like HttpApi.`add(Group, …)` |
+| **Connect-to (description)** | **`Node`** — `make` / `.add` / `.proxy()` |
+| **Serve / process / flip** | **Second product** — name provisional `NodeBuilder`; **shape TBD** (D31) |
 | Address inputs | **single \| array \| record \| `Address.range(from, to, fn?)`** |
 | Nesting | **`Address.http(Address.range(…))`** / **`Address.unix(Address.range(…))`** |
-| Range typing | **D29** — overloads; default alg from `from`/`to` shape; `fn` override |
-| Proxy (declared) | **`Node.….proxy()`** — on description, like HttpApi middleware (**D30**) |
-| Listen / serve | **`NodeBuilder.listen` / `.http` / `.unix`** |
+| Proxy (declared) | **`.proxy()`** on `Node` (**D30**) |
 | Services → node | `node: Worker` (description) |
-| Fleet cutover | **`Update`** (composes with Builder; own module) |
+| Fleet cutover | **`Update`** (own module; composes with serve product) |
 
-**Rejected:** bare `...Address.range` as the only shown use; `Address.unix.range({ count })`.
+**Rejected:** bare `...Address.range` as the only shown use; `Address.unix.range({ count })`;
+**prefix-rename** of tip listen/http/unix onto `NodeBuilder` as “done.”
 
-#### Dream full API — play sketch (not Eng’d)
+#### Dream full API — play sketch (**STRUCK 2026-08-16**)
 
-One identity, three process roles (edge / backend / updater), one worker entry.
-Labels are plain strings. No forged second `make`, no Prefer string, no manual
-queue copy. **Play only** — revise freely; short SSOT example above still wins
-on conflicts until promoted.
+~~Multi-file edge/backend/client/update “dream”~~ — **trash.** Agent slapped
+`NodeBuilder.` onto tip `Node.listen` / `http` / `unix` / `launch` / `forward`
+and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 
-```ts
-// ── shared.ts ───────────────────────────────────────────────────────────────
-import * as Address from "hyperlink-ts/Address"
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import * as Node from "hyperlink-ts/Node"
-import * as WorkPool from "hyperlink-ts/WorkPool"
-import { Schema } from "effect"
+**Breaks in that sketch (do not resurrect):**
 
-/** Product 1 — thing to connect to (clients import this file only). */
-class Worker extends Node.make("fleet/Worker")
-  .add(
-    Address.http(":8080"),
-    Address.unix({
-      A: "/var/run/w.A.sock",
-      B: "/var/run/w.B.sock",
-    }),
-    // or: Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock"))
-  )
-  .proxy()
-{}
+| Break | Why |
+|-------|-----|
+| Rename-as-design | Effect Builder is `group` + handlers → `layer(api)`, not `Node.listen` with a new prefix |
+| `.pipe(configure, policy)` on listen result | **D26** — not `.pipe`; overlays are not address-widen pipe |
+| `listen(Worker, "A"\|"B")` | Confuses listen **mode** (`Primary` / protocol) with **`as` label** |
+| Second `Node.make("fleet/Worker")` as “WorkerHttp” beside `Worker` | Forged dual make of one key (**D7** / identity lie) |
+| Invented `NodeBuilder.configure` / `.policy` | **D10/D22** named `Node.configure` / `Node.policy` — move needs a real retarget, not a guess |
+| Invented `Launcher.command(…, { env })` | Not locked |
+| Novel-length multi-file demo | Fails quality bar (“dream demos that need a novel”) |
+| Claimed membership table = Eng shape | D31 product cut ≠ API |
 
-class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
-  payload: Schema.Struct({ id: Schema.String }),
-  node: Worker,
-}) {}
-
-class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
-  tip: Hyperlink.effect(Schema.String),
-  node: Worker,
-}) {}
-
-export { Worker, Jobs, Probe }
-
-// ── client.ts ───────────────────────────────────────────────────────────────
-import { Effect } from "effect"
-import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
-import { Jobs, Probe } from "./shared.js"
-
-// Connect-to only — no NodeBuilder. Policy via Layer provide (D14).
-const program = Effect.gen(function* () {
-  const jobs = yield* Jobs
-  const probe = yield* Probe
-  yield* jobs.offer({ id: "1" })
-  return yield* probe.tip
-}).pipe(Effect.provide(LookupPolicy.yieldAccept))
-
-// ── edge.ts ─────────────────────────────────────────────────────────────────
-import { Effect, Layer } from "effect"
-import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
-import { Jobs, Probe, Worker } from "./shared.js"
-
-// Product 2 — this process is the stable Http front (Primary).
-const edge = NodeBuilder.listen(Worker, "Primary")
-// optional seed: NodeBuilder.configure(edge, { active: "A" })
-
-yield* Layer.launch(
-  NodeBuilder.http(edge, [
-    NodeBuilder.forwardAll(edge, [Probe, Jobs]),
-  ]),
-)
-
-// ── worker.ts ───────────────────────────────────────────────────────────────
-import { Config, Effect } from "effect"
-import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
-import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
-import { Jobs, Probe, Worker } from "./shared.js"
-
-// One entry (D8). Which labeled side = Config/argv, not a second file.
-const side = yield* Config.string("SIDE") // "A" | "B"
-const tip = yield* Config.string("TIP")   // "v1" | "v2"
-
-const backend = NodeBuilder.listen(Worker, side).pipe(
-  // process-role overlays live on Builder (D31)
-  (n) => NodeBuilder.configure(n, { as: side, listen: [side] }),
-  (n) => NodeBuilder.policy(n, LookupPolicy.yieldRefuse),
-)
-
-yield* NodeBuilder.launch(
-  backend,
-  NodeBuilder.unix(backend, [
-    WorkPool.serve(Jobs, {
-      effect: (job) => Effect.log(`job ${job.id} on ${side}`),
-    }),
-    Hyperlink.serve(Probe, { tip: Effect.succeed(tip) }),
-  ], { assumeToken }),
-)
-
-// ── update.ts ───────────────────────────────────────────────────────────────
-import { Effect } from "effect"
-import * as Launcher from "hyperlink-ts/Launcher"
-import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
-import * as Update from "hyperlink-ts/Update"
-import { Worker } from "./shared.js"
-
-// Bring up B → baked handoff → activate B → drain A (Update β / D2).
-// No queue copy. No verifyOff story.
-const successor = NodeBuilder.listen(Worker, "B")
-
-const plan = yield* Update.plan({
-  steps: [{
-    target: Worker,
-    successor: {
-      node: successor,
-      process: Launcher.command("pnpm", [
-        "exec", "tsx", "worker.ts",
-      ], {
-        env: { SIDE: "B", TIP: "v2" },
-      }),
-    },
-  }],
-})
-
-const report = yield* Update.simulate(plan)
-yield* Update.execute(plan)
-// execute owns: up → releaseEnqueueHandoff → NodeBuilder.activate(Worker, "B")
-//              → retire A
-
-// manual flip still possible for ops:
-// yield* NodeBuilder.activate(Worker, "B")
-
-// ── optional: widen description without new identity ────────────────────────
-class WorkerHttp extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
-class WorkerFull extends WorkerHttp
-  .add(Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock")))
-  .proxy()
-{}
-// WorkerHttp unchanged — .add returns a new constructable (D26)
-```
-
-**Reads as:** declare once → edge forwards → backends serve labels → Update flips
-Active. Clients never import Builder. Builder never re-`make`s the key.
+**Open (must design before another play sketch):** what is `NodeBuilder` *actually*?
+Mirror HttpApiBuilder (`group` / handler registration / `layer(description)`), or a
+different serve constructable — **not** a prefix on today’s listen siblings.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
@@ -623,51 +473,44 @@ dream demos that need a novel to explain.
 | **D28** | **`Address.http(Address.range(…))` / `Address.unix(Address.range(…))`** — range nests in the protocol factory |
 | **D29** | **`Address.range` typed by `from`/`to` shape** — default algs; overloads; `fn` override; protocol factory type-checks the nest |
 | **D30** | **`.proxy()`** — no mode string; presence = on, omit = off (`"Prefer"` retired) |
-| **D31** | **Two products:** `Node` (connect-to / description) + `NodeBuilder` (serve / process / flip) — HttpApi / HttpApiBuilder |
+| **D31** | **Two products** (connect-to vs serve) — cut locked; **Builder shape TBD** (rename ≠ design) |
 
-#### D31 — `Node` + `NodeBuilder` (locked 2026-08-16)
+#### D31 — two products; Builder shape open (locked cut 2026-08-16; shape corrected same day)
 
-**Choice:** Two public products, same cut as Effect **HttpApi** / **HttpApiBuilder**.
+**Choice (cut):** Connecting and serving are **two products** — same *reason*
+HttpApi ≠ HttpApiBuilder exist.
 
-| Product | Module | Job |
-|---------|--------|-----|
-| **Connect-to** | **`Node`** | Identity + addresses + declared proxy — what clients dial, Directory advertises, services name (`node: Worker`), Update **targets** |
-| **Serve / run** | **`NodeBuilder`** | This process binds, serves, forwards, activates, launches, applies process-role overlays — what you run and flip |
+| Product | Job |
+|---------|-----|
+| **Connect-to** | Identity + addresses + declared `.proxy()` — clients dial, Directory, `node: Worker`, Update **targets** → module **`Node`** |
+| **Serve / run** | This process binds, serves or forwards, activates, launches, process roles → **second module** (provisional name `NodeBuilder`) |
+
+**Not chosen (shape):** Prefixing tip APIs (`listen` / `http` / `unix` / `launch` /
+`forward` / `activate`) with `NodeBuilder.` is **rejected as the design**. Effect’s
+Builder is approximately:
 
 ```ts
-// Product 1 — description (import Node only on clients / tags)
-class Worker extends Node.make("fleet/Worker")
-  .add(Address.http(":8080"), Address.unix(...))
-  .proxy()
-{}
-
-// Product 2 — this OS process
-const edge = NodeBuilder.listen(Worker, "Primary")
-NodeBuilder.http(edge, [NodeBuilder.forwardAll(edge, [Probe, Jobs])])
-NodeBuilder.activate(Worker, "B")
+HttpApiBuilder.group(Api, "ids", (h) => h.handle("getUser", ...))
+HttpApiBuilder.layer(Api) // description + registered handlers → Layer
 ```
 
-**Membership (Eng target):**
+Node’s serve product must be designed to that bar (or an equally intentional
+constructable) — including how **one description** fans into **edge vs labeled
+backend** process roles without forged makes, without `.pipe` widen, without
+confusing listen-mode with `as` labels.
 
-| `Node` | `NodeBuilder` | Own module (not Builder) |
-|--------|---------------|---------------------------|
-| `make` / `.add` / `.proxy()` | `listen` / `http` / `unix` / `ws` / `nPipe` | **`Update`** — fleet plan/simulate/execute |
-| types / guards for the description | `launch` / `shutdown` / `drain` | **`LookupPolicy`** / **`LookupConfig`** |
-| | `forward` / `forwardAll` / `activate` | **`Address`** |
-| | process overlays (`configure` / `as` / listen-role / `policy` stamp if any) | **`Launcher`** |
+**Still on `Node` (description):** `make` / `.add` / `.proxy()`.
 
-**Why:** Owner — connecting and serving are different products. One barrel mixing
-“thing to dial” with “thing to bind and update” lies. Clients should not need
-serve APIs; serve code should take a `Node` description, not redefine identity.
+**Still open for the serve product:** listen / protocol bind / forward / activate /
+launch / where `configure` + `policy` live (today D10 says `Node.configure` /
+`Node.policy` — retarget only with an explicit lock).
 
-**Rejected:** single `Node` kitchen-sink forever; putting `.add` / `.proxy()` on
-Builder; a third “NodeRuntime” name without cause (prefer **NodeBuilder** to
-mirror Effect); folding Update into NodeBuilder (Update stays compose API).
+**Rejected:** “add Builder and done”; membership tables that only rename; dream
+sketches that invent Builder APIs ahead of that design.
 
-**Implies:** Tip re-exports / moves listen·http·unix·launch·forward·activate off
-`Node` onto `NodeBuilder` on Eng; subpath `@nikscripts/…/NodeBuilder`; docs and
-examples import both. `.proxy()` stays on **`Node`** (declared capability, like
-HttpApi middleware) — Builder *honors* it when listening Primary.
+**Implies:** Tip runtime stays on `Node.*` until serve product is designed. No
+`NodeBuilder` Eng from rename. Next play sketch only after a real Builder shape
+passes owner review.
 
 #### D30 — `.proxy()` not `.proxy("Prefer")` (locked 2026-08-16)
 
