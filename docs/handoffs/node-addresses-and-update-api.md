@@ -418,34 +418,23 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — vs tip (play 2026-08-16, rev 3)
+#### Play B — vs tip (play 2026-08-16, rev 4)
 
-**Not Eng’d.** One module. One `Node.layer` per process role.
+**Not Eng’d.** Serve shape only — description/`make` unchanged in this play.
 
 ```ts
 // tip
-class Worker extends Node.make(key, Address.http(":18765")) {}
-class WorkerPrivate extends Worker.pipe(
-  Address.unix({ A, B }),
-  NodePolicy.proxy("Prefer"),
-) {}
-const edge = Node.withPolicy(
-  WorkerPrivate,
-  NodePolicy.listen("Primary"),
-  NodePolicy.active("A"),
+Node.http(
+  Node.withPolicy(WorkerPrivate, NodePolicy.listen("Primary"), NodePolicy.active("A")),
+  [Node.forward(edge, Probe)],
 )
-Node.http(edge, [Node.forward(edge, Probe)])
 Node.unix(
   Node.withPolicy(WorkerPrivate, NodePolicy.as("A"), NodePolicy.listen(["A"])),
   [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })],
 )
 
 // play
-class Worker extends Node.make(key).add(Address.http(":18765")).proxy() {}
-class WorkerPrivate extends Worker.add(Address.unix({ A, B })) {}
-Node.layer(WorkerPrivate, (h) =>
-  h.listen("Primary").active("A").forward(Probe),
-)
+Node.layer(WorkerPrivate, (h) => h.listen("Primary").active("A").forward(Probe))
 Node.layer(WorkerPrivate, (h) =>
   h.as("A").listen("As").serve(Probe, { tip: Effect.succeed("v1") }),
 )
