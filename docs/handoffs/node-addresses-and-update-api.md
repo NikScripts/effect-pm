@@ -343,8 +343,10 @@ revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
 #### Target Node API — one example (SSOT)
 
-Addresses/protocols via **`Address` + `.add`** (HttpApi-style). **Proxy / listen
-are a different API** — not a `protocols: []` bag. Services declare their node.
+Like HttpApi: **`.add(...pieces)` takes several at once**. Addresses come from
+**`Address.*`**. Range helper (if any) is **`Address.range(from, to, fn?)` →
+array** you spread — **not** `Address.unix.range({ count })` (illegal). Proxy /
+listen stay separate APIs. Services declare their node.
 
 ```ts
 import * as Address from "hyperlink-ts/Address"
@@ -355,34 +357,36 @@ import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Layer, Schema } from "effect"
 
-// ── Node: primary + local unix range (Address only — no protocols bag) ──
+// HttpApi-shaped: make + .add(a, b, c) — multiple in one call
 class Worker extends Node.make("fleet/Worker")
-  .add(Address.http(":8080"))
-  .add(Address.unix.range({ count: 2 })) // local available dials; key-derived range OK
-  .proxy("Prefer") // constructable method — like HttpApi.middleware, NOT configure
+  .add(
+    Address.http(":8080"),
+    ...Address.range(
+      Address.unix("/var/run/w.0.sock"),
+      Address.unix("/var/run/w.1.sock"),
+    ), // optional helper → Address[]; or list them yourself
+  )
+  .proxy("Prefer")
 {}
 
-// ── Services belong to the node ─────────────────────────────────────
+// Services have a node
 class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
   payload: Schema.Struct({ id: Schema.String }),
   node: Worker,
 }) {}
-
 class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
   tip: Hyperlink.effect(Schema.String),
   node: Worker,
 }) {}
 
-// ── Process roles — listen API only (not mixed with Address) ────────
+// Process roles — listen API (not Address, not proxy)
 const edge = Node.listen(Worker, "Primary")
-const local = Node.listen(Worker, "Unix") // bind from the unix range
+const local = Node.listen(Worker, "Unix")
 
-// Edge process — primary http, forward to Active unix
 yield* Layer.launch(
   Node.http(edge, [Node.forwardAll(edge, [Probe, Jobs])]),
 )
 
-// Backend process — one dial from the unix range
 yield* Node.launch(
   local,
   Node.unix(local, [
@@ -391,13 +395,11 @@ yield* Node.launch(
   ], { assumeToken }),
 )
 
-// Client — node’s primary; never rebinds on cutover
 const tip = yield* Probe.pipe(
   Effect.flatMap((p) => p.tip),
-  Effect.provide(Hyperlink.client(Probe)), // Probe already carries Worker
+  Effect.provide(Hyperlink.client(Probe)),
 )
 
-// Redeploy — new local from the same unix range; execute flips Active
 yield* Update.execute(
   yield* Update.plan({
     steps: [{
@@ -411,22 +413,32 @@ yield* Update.execute(
 )
 ```
 
-**Split (do not merge into one bag):**
+**Without the optional range helper** (owner: not hard to do yourself):
+
+```ts
+class Worker extends Node.make("fleet/Worker")
+  .add(
+    Address.http(":8080"),
+    Address.unix("/var/run/w.0.sock"),
+    Address.unix("/var/run/w.1.sock"),
+  )
+  .proxy("Prefer")
+{}
+```
 
 | Concern | API |
 |---------|-----|
 | Identity | `Node.make(key)` |
-| Addresses / protocols | `.add(Address.http…)` / `.add(Address.unix…)` / `.add(Address.unix.range…)` |
-| Proxy | `.proxy("Prefer")` on the constructable (HttpApi.`middleware`-shaped) |
-| Listen / as / active | `Node.listen` / `Node.as` / `Node.activate` — **process role API** |
-| Services → node | `node: Worker` on the Service |
-| Cutover | `Update.plan` → `simulate` → `execute` |
+| Addresses | `.add(Address, …Address)` — variadic like HttpApi.`add(Group, …)` |
+| Range sugar | `Address.range(from, to, fn?)` → array to spread — **not** `Address.unix.range` |
+| Proxy | `.proxy("Prefer")` |
+| Listen | `Node.listen` |
+| Services → node | `node: Worker` |
 
-**Rejected in this example:** `configure({ protocols: ["Http", "Unix"], proxy, listen })`
-as one bag; addressless-only dream with no primary; repeating the same proto bag
-on every role.
+**Rejected:** `Address.unix.range({ count: 2 })`; only single-arg chained `.add().add()`
+as the shown style; `configure({ protocols, proxy, listen })`.
 
-**Quality bar (owner 2026-08-15):** D1–D26 stand. On top of them — every Eng’d
+**Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
 tools** (k8s Deployments + Services, Envoy/edge VIP flip, Nomad/systemd + LB).
 If a step is harder than “declare identity → role overlays → plan/simulate/execute”
