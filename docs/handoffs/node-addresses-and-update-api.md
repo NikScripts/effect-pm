@@ -418,45 +418,22 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — vs tip (play 2026-08-16, rev 5)
+#### Play B — vs tip (play 2026-08-16, rev 6)
 
 **Not Eng’d.** Serve shape only.
 
-**Tip — edge**
-```ts
-const edge = Node.withPolicy(
-  WorkerPrivate,
-  NodePolicy.listen("Primary"),
-  NodePolicy.active("A"),
-)
-Node.http(edge, [Node.forward(edge, Probe)])
-```
+| | Tip | Play |
+|--|-----|------|
+| Edge | `withPolicy(listen, active)` then `http(forward)` | `layer`: listen → active → forward |
+| Backend | `withPolicy(as, listen)` then `unix(serve)` | `layer`: as → listen → serve |
 
-**Play — edge**
 ```ts
 Node.layer(WorkerPrivate, (h) =>
   h.listen("Primary").active("A").forward(Probe),
 )
-```
 
-**Tip — backend A**
-```ts
-const a = Node.withPolicy(
-  WorkerPrivate,
-  NodePolicy.as("A"),
-  NodePolicy.listen(["A"]),
-)
-Node.unix(a, [
-  Hyperlink.serve(Probe, { tip: Effect.succeed("v1") }),
-])
-```
-
-**Play — backend A**
-```ts
 Node.layer(WorkerPrivate, (h) =>
-  h.as("A").listen("As").serve(Probe, {
-    tip: Effect.succeed("v1"),
-  }),
+  h.as("A").listen("As").serve(Probe, { tip: Effect.succeed("v1") }),
 )
 ```
 
