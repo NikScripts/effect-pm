@@ -418,22 +418,65 @@ and called D31 done. That is **not** an HttpApi / HttpApiBuilder design.
 **Open:** serve product shape — see **Play B** below (HttpApiBuilder-shaped;
 second module optional).
 
-#### Play B — vs tip (play 2026-08-16, rev 6)
+#### Play B — vs tip (play 2026-08-16, rev 7)
 
-**Not Eng’d.** Serve shape only.
+**Not Eng’d.** Serve shape only. Piped combinators
+([`behaviour-via-piped-combinators`](../standards/hyperlink-services.md#behaviour-via-piped-combinators)) —
+not a fluent handlers bag.
 
-| | Tip | Play |
-|--|-----|------|
-| Edge | `withPolicy(listen, active)` then `http(forward)` | `layer`: listen → active → forward |
-| Backend | `withPolicy(as, listen)` then `unix(serve)` | `layer`: as → listen → serve |
+**Tip — edge**
 
-```ts
-Node.layer(WorkerPrivate, (h) =>
-  h.listen("Primary").active("A").forward(Probe),
+``` ts
+Node.http(
+  Node.withPolicy(
+    WorkerPrivate,
+    NodePolicy.listen("Primary"),
+    NodePolicy.active("A"),
+  ),
+  [Node.forward(edge, Probe)],
 )
+```
 
-Node.layer(WorkerPrivate, (h) =>
-  h.as("A").listen("As").serve(Probe, { tip: Effect.succeed("v1") }),
+**Play — edge**
+
+``` ts
+Node.layer(
+  WorkerPrivate.pipe(
+    Node.listen("Primary"),
+    Node.active("A"),
+    Node.forward(Probe),
+  ),
+)
+```
+
+**Tip — backend**
+
+``` ts
+Node.unix(
+  Node.withPolicy(
+    WorkerPrivate,
+    NodePolicy.as("A"),
+    NodePolicy.listen(["A"]),
+  ),
+  [
+    Hyperlink.serve(Probe, {
+      tip: Effect.succeed("v1"),
+    }),
+  ],
+)
+```
+
+**Play — backend**
+
+``` ts
+Node.layer(
+  WorkerPrivate.pipe(
+    Node.as("A"),
+    Node.listen("As"),
+    Node.serve(Probe, {
+      tip: Effect.succeed("v1"),
+    }),
+  ),
 )
 ```
 
