@@ -343,10 +343,11 @@ revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
 #### Target Node API — one example (SSOT)
 
-Like HttpApi: **`.add(...pieces)` takes several at once**. Each `Address.http` /
-`Address.unix` / … accepts **single | array | record** (and **`Address.range`**
-nested: `Address.http(Address.range(…))`). Proxy / listen stay separate.
-Services declare their node.
+Like HttpApi / HttpApiBuilder (**D31**): **`Node`** is the connect-to
+description; **`NodeBuilder`** binds and serves it. `.add(...pieces)` takes
+several at once. Each `Address.http` / `Address.unix` / … accepts **single |
+array | record** (and **`Address.range`** nested). `.proxy()` is declared on
+`Node`; listen / serve / flip live on `NodeBuilder`. Services declare their node.
 
 ```ts
 import * as Address from "hyperlink-ts/Address"
@@ -1003,9 +1004,10 @@ the old Reference builder onto Service factories — Eng detail under this lock.
 
 #### D16 — Proxy on = forward + Active
 
-**Choice:** When proxy is **on** (`.proxy()` / D30 — not a `"Prefer"` string),
-primary listeners run `Node.forward` / `forwardAll` toward the **Active** label.
-Live flip = `Node.activate(node, label)` (and Update β calls that). Not a client
+**Choice:** When proxy is **on** (`.proxy()` on **`Node`** / D30 — not a
+`"Prefer"` string), primary listeners (via **`NodeBuilder`**) run `forward` /
+`forwardAll` toward the **Active** label. Live flip =
+`NodeBuilder.activate(node, label)` (and Update β calls that). Not a client
 Redirect SDK; not Advice-as-the-only-flip for β.
 
 **Why:** §4 owner lean. Advice/sticky remain for S6 and non-proxy fleets.
