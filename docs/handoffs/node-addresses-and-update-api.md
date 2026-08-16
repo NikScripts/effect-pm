@@ -423,29 +423,32 @@ second module optional).
 **Not Eng’d.** One module. One `Node.layer` per process role.
 
 ```ts
-// tip                                              // play
-class Worker extends Node.make(                     class Worker extends Node.make(key)
-  key, Address.http(":18765"),                        .add(Address.http(":18765"))
-) {}                                                  .proxy()
-                                                    {}
-class WorkerPrivate extends Worker.pipe(            class WorkerPrivate extends Worker.add(
-  Address.unix({ A, B }),                             Address.unix({ A, B }),
-  NodePolicy.proxy("Prefer"),                       ) {}
+// tip
+class Worker extends Node.make(key, Address.http(":18765")) {}
+class WorkerPrivate extends Worker.pipe(
+  Address.unix({ A, B }),
+  NodePolicy.proxy("Prefer"),
 ) {}
-
-const edge = Node.withPolicy(                       const edge = Node.layer(WorkerPrivate, (h) =>
-  WorkerPrivate,                                      h.listen("Primary").active("A").forward(Probe),
-  NodePolicy.listen("Primary"),                     )
+const edge = Node.withPolicy(
+  WorkerPrivate,
+  NodePolicy.listen("Primary"),
   NodePolicy.active("A"),
 )
 Node.http(edge, [Node.forward(edge, Probe)])
+Node.unix(
+  Node.withPolicy(WorkerPrivate, NodePolicy.as("A"), NodePolicy.listen(["A"])),
+  [Hyperlink.serve(Probe, { tip: Effect.succeed("v1") })],
+)
 
-const a = Node.withPolicy(                          const a = Node.layer(WorkerPrivate, (h) =>
-  WorkerPrivate,                                      h.as("A").listen("As").serve(Probe, {
-  NodePolicy.as("A"),                                   tip: Effect.succeed("v1"),
-  NodePolicy.listen(["A"]),                           }),
-)                                                   )
-Node.unix(a, [Hyperlink.serve(Probe, { tip: … })])
+// play
+class Worker extends Node.make(key).add(Address.http(":18765")).proxy() {}
+class WorkerPrivate extends Worker.add(Address.unix({ A, B })) {}
+Node.layer(WorkerPrivate, (h) =>
+  h.listen("Primary").active("A").forward(Probe),
+)
+Node.layer(WorkerPrivate, (h) =>
+  h.as("A").listen("As").serve(Probe, { tip: Effect.succeed("v1") }),
+)
 ```
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
