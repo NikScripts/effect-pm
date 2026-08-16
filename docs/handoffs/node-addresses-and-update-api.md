@@ -430,6 +430,145 @@ yield* Update.execute(
 
 **Rejected:** bare `...Address.range` as the only shown use; `Address.unix.range({ count })`.
 
+#### Dream full API — play sketch (not Eng’d)
+
+One identity, three process roles (edge / backend / updater), one worker entry.
+Labels are plain strings. No forged second `make`, no Prefer string, no manual
+queue copy. **Play only** — revise freely; short SSOT example above still wins
+on conflicts until promoted.
+
+```ts
+// ── shared.ts ───────────────────────────────────────────────────────────────
+import * as Address from "hyperlink-ts/Address"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Schema } from "effect"
+
+/** Product 1 — thing to connect to (clients import this file only). */
+class Worker extends Node.make("fleet/Worker")
+  .add(
+    Address.http(":8080"),
+    Address.unix({
+      A: "/var/run/w.A.sock",
+      B: "/var/run/w.B.sock",
+    }),
+    // or: Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock"))
+  )
+  .proxy()
+{}
+
+class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
+  payload: Schema.Struct({ id: Schema.String }),
+  node: Worker,
+}) {}
+
+class Probe extends Hyperlink.Service<Probe>()("fleet/Probe", {
+  tip: Hyperlink.effect(Schema.String),
+  node: Worker,
+}) {}
+
+export { Worker, Jobs, Probe }
+
+// ── client.ts ───────────────────────────────────────────────────────────────
+import { Effect } from "effect"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
+import { Jobs, Probe } from "./shared.js"
+
+// Connect-to only — no NodeBuilder. Policy via Layer provide (D14).
+const program = Effect.gen(function* () {
+  const jobs = yield* Jobs
+  const probe = yield* Probe
+  yield* jobs.offer({ id: "1" })
+  return yield* probe.tip
+}).pipe(Effect.provide(LookupPolicy.yieldAccept))
+
+// ── edge.ts ─────────────────────────────────────────────────────────────────
+import { Effect, Layer } from "effect"
+import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
+import { Jobs, Probe, Worker } from "./shared.js"
+
+// Product 2 — this process is the stable Http front (Primary).
+const edge = NodeBuilder.listen(Worker, "Primary")
+// optional seed: NodeBuilder.configure(edge, { active: "A" })
+
+yield* Layer.launch(
+  NodeBuilder.http(edge, [
+    NodeBuilder.forwardAll(edge, [Probe, Jobs]),
+  ]),
+)
+
+// ── worker.ts ───────────────────────────────────────────────────────────────
+import { Config, Effect } from "effect"
+import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
+import { Jobs, Probe, Worker } from "./shared.js"
+
+// One entry (D8). Which labeled side = Config/argv, not a second file.
+const side = yield* Config.string("SIDE") // "A" | "B"
+const tip = yield* Config.string("TIP")   // "v1" | "v2"
+
+const backend = NodeBuilder.listen(Worker, side).pipe(
+  // process-role overlays live on Builder (D31)
+  (n) => NodeBuilder.configure(n, { as: side, listen: [side] }),
+  (n) => NodeBuilder.policy(n, LookupPolicy.yieldRefuse),
+)
+
+yield* NodeBuilder.launch(
+  backend,
+  NodeBuilder.unix(backend, [
+    WorkPool.serve(Jobs, {
+      effect: (job) => Effect.log(`job ${job.id} on ${side}`),
+    }),
+    Hyperlink.serve(Probe, { tip: Effect.succeed(tip) }),
+  ], { assumeToken }),
+)
+
+// ── update.ts ───────────────────────────────────────────────────────────────
+import { Effect } from "effect"
+import * as Launcher from "hyperlink-ts/Launcher"
+import * as NodeBuilder from "hyperlink-ts/NodeBuilder"
+import * as Update from "hyperlink-ts/Update"
+import { Worker } from "./shared.js"
+
+// Bring up B → baked handoff → activate B → drain A (Update β / D2).
+// No queue copy. No verifyOff story.
+const successor = NodeBuilder.listen(Worker, "B")
+
+const plan = yield* Update.plan({
+  steps: [{
+    target: Worker,
+    successor: {
+      node: successor,
+      process: Launcher.command("pnpm", [
+        "exec", "tsx", "worker.ts",
+      ], {
+        env: { SIDE: "B", TIP: "v2" },
+      }),
+    },
+  }],
+})
+
+const report = yield* Update.simulate(plan)
+yield* Update.execute(plan)
+// execute owns: up → releaseEnqueueHandoff → NodeBuilder.activate(Worker, "B")
+//              → retire A
+
+// manual flip still possible for ops:
+// yield* NodeBuilder.activate(Worker, "B")
+
+// ── optional: widen description without new identity ────────────────────────
+class WorkerHttp extends Node.make("fleet/Worker").add(Address.http(":8080")) {}
+class WorkerFull extends WorkerHttp
+  .add(Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock")))
+  .proxy()
+{}
+// WorkerHttp unchanged — .add returns a new constructable (D26)
+```
+
+**Reads as:** declare once → edge forwards → backends serve labels → Update flips
+Active. Clients never import Builder. Builder never re-`make`s the key.
+
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
 tools** (k8s Deployments + Services, Envoy/edge VIP flip, Nomad/systemd + LB).
