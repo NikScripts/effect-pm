@@ -19,14 +19,14 @@ class Sidebar extends View.make<Sidebar>()(
   ),
 ) {}
 
-class Shell extends View.make<Shell>()("last-ts/docs/Shell") {}
+class Panel extends View.make<Panel>()("last-ts/docs/Panel") {}
 
-const shellLayer = Layer.effect(
-  Shell,
+const panelLayer = Layer.effect(
+  Panel,
   Effect.gen(function* () {
     const Side = yield* Sidebar;
     return () => (
-      <div data-demo="shell" className="slot-shell">
+      <div data-demo="panel" className="slot-panel">
         <Side />
         <div className="slot-body">Page body</div>
       </div>
@@ -34,16 +34,16 @@ const shellLayer = Layer.effect(
   }),
 );
 
-class SettingsShell extends View.make<SettingsShell>()(
-  "last-ts/docs/SettingsShell",
+class SettingsPanel extends View.make<SettingsPanel>()(
+  "last-ts/docs/SettingsPanel",
 ) {}
 
-const settingsShellLayer = Layer.effect(
-  SettingsShell,
+const settingsPanelLayer = Layer.effect(
+  SettingsPanel,
   Effect.gen(function* () {
     const Side = yield* Sidebar;
     return () => (
-      <div data-demo="settings-shell" className="slot-shell">
+      <div data-demo="settings-panel" className="slot-panel">
         <Side />
         <div className="slot-body">Settings</div>
       </div>
@@ -58,8 +58,8 @@ const settingsShellLayer = Layer.effect(
   ),
 );
 
-const DefaultApp = Last.provide(Shell, shellLayer);
-const SettingsApp = Last.provide(SettingsShell, settingsShellLayer);
+const DefaultApp = Last.provide(Panel, panelLayer);
+const SettingsApp = Last.provide(SettingsPanel, settingsPanelLayer);
 
 export function ViewDemo(): React.ReactElement {
   const [mode, setMode] = React.useState<"default" | "settings">("default");
