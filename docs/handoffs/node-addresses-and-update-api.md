@@ -343,10 +343,10 @@ revise. Until overridden, this is the dream SSOT (not yet Eng’d).
 
 #### Target Node API — one example (SSOT)
 
-Like HttpApi: **`.add(...pieces)` takes several at once**. Addresses come from
-**`Address.*`**. Range helper (if any) is **`Address.range(from, to, fn?)` →
-array** you spread — **not** `Address.unix.range({ count })` (illegal). Proxy /
-listen stay separate APIs. Services declare their node.
+Like HttpApi: **`.add(...pieces)` takes several at once**. Each `Address.http` /
+`Address.unix` / … accepts **single | array | record** (and **`Address.range`**
+nested: `Address.http(Address.range(…))`). Proxy / listen stay separate.
+Services declare their node.
 
 ```ts
 import * as Address from "hyperlink-ts/Address"
@@ -357,17 +357,23 @@ import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Layer, Schema } from "effect"
 
-// Owner range API: Address.range(from, to, fn?) → Address[]
+// Address input shapes: single | array | record | range
+Address.http(":8080")
+Address.http([8080, 8081])
+Address.http({ blue: 8080, green: 8081 })
+Address.http(Address.range(":8080", ":8090")) // 3rd arg: custom fn
+Address.unix("/var/run/w.sock")
+Address.unix(["/var/run/w.0.sock", "/var/run/w.1.sock"])
+Address.unix({ blue: "/var/run/w.blue.sock", green: "/var/run/w.green.sock" })
+Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock"))
+
 class Worker extends Node.make("fleet/Worker")
   .add(
     Address.http(":8080"),
-    ...Address.range(":8081", ":8082"), // 3rd arg: custom range fn
+    Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock")),
   )
   .proxy("Prefer")
 {}
-
-// Or without the helper — list dials yourself
-// .add(Address.http(":8080"), Address.unix("/var/run/w.0.sock"), Address.unix("/var/run/w.1.sock"))
 
 class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", {
   payload: Schema.Struct({ id: Schema.String }),
@@ -409,13 +415,14 @@ yield* Update.execute(
 | Concern | API |
 |---------|-----|
 | Identity | `Node.make(key)` |
-| Addresses | `.add(Address, …Address)` — variadic like HttpApi.`add(Group, …)` |
-| Range | **`Address.range(":8080", ":8090", fn?)`** → array to spread (owner) |
+| Addresses | `.add(Address, …)` — variadic like HttpApi.`add(Group, …)` |
+| Address inputs | **single \| array \| record \| `Address.range(from, to, fn?)`** |
+| Nesting | **`Address.http(Address.range(…))`** / **`Address.unix(Address.range(…))`** |
 | Proxy | `.proxy("Prefer")` |
 | Listen | `Node.listen` |
 | Services → node | `node: Worker` |
 
-**Rejected:** `Address.unix.range({ count: 2 })`; `Address.range(Address.unix…, …)`.
+**Rejected:** bare `...Address.range` as the only shown use; `Address.unix.range({ count })`.
 
 **Quality bar (owner 2026-08-15):** D1–D27 stand. On top of them — every Eng’d
 surface must be **as easy to set up and as extendable as the best A/B / rollout
@@ -467,7 +474,27 @@ dream demos that need a novel to explain.
 | **D24** | **Type-level dial overlap** for literal concrete dials; runtime for auto/resolved |
 | **D25** | **`Node.make` does not take `Address[]`** — `make(key)` or chain **`.add(Address)`**; no array arity |
 | **D26** | **Nodes = HttpApi constructable** — `make` + **`.add`** / `class extends X.add(…)`; **not** `.pipe` |
-| **D27** | **Address owns protocols/dials**; **`.proxy` / `Node.listen` are separate APIs** — no `protocols:[]` in configure |
+| **D27** | **Address owns protocols/dials**; **`.proxy` / `Node.listen` separate**; Address inputs = single \| array \| record \| `Address.range` |
+| **D28** | **`Address.http(Address.range(…))` / `Address.unix(Address.range(…))`** — range nests in the protocol factory |
+
+#### D28 — Address inputs: single | array | record | nested range (locked 2026-08-16)
+
+**Choice:** Every protocol factory (`http` / `unix` / `ws` / …) accepts:
+
+```ts
+Address.http(":8080")                              // single
+Address.http([8080, 8081])                         // array
+Address.http({ blue: 8080, green: 8081 })          // record (labels)
+Address.http(Address.range(":8080", ":8090", fn?)) // range nested in http
+Address.unix(Address.range("/var/run/w.0.sock", "/var/run/w.1.sock"))
+```
+
+`Address.range(from, to, fn?)` is the owner range tool (optional 3rd = custom
+fn). It is **not** spread bare into `.add` as the primary story — wrap with the
+protocol: `Address.http(Address.range(…))`.
+
+**Rejected:** `Address.unix.range({ count })`; range-only as a peer of `.add`
+without a protocol factory.
 
 #### D27 — Address vs proxy/listen split (locked 2026-08-16)
 
@@ -475,8 +502,8 @@ dream demos that need a novel to explain.
 
 - **Addresses / protocols** → `Address.*` + `Node.make(…).add(Address, …Address)`
   (variadic, like HttpApi.`add(Group, …Group)`).
-- Optional range sugar → **`Address.range(":8080", ":8090", fn?)`** → array to
-  spread into `.add` (owner API). **Not** `Address.unix.range({ count })`.
+- Optional range → **`Address.http(Address.range(":8080", ":8090", fn?))`** /
+  **`Address.unix(Address.range(…))`** (D28).
 - **Proxy** → constructable method `.proxy("Prefer")` (HttpApi.`middleware`-shaped).
 - **Listen / as / active** → process-role API (`Node.listen`, `Node.activate`, …).
 - **Services** declare `node: Worker`.
