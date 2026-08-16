@@ -6,7 +6,7 @@
  */
 import { Effect, Layer } from "effect";
 import * as View from "last-ts/View";
-import { Greeter } from "../ui/Greeter";
+import * as Greeter from "../ui/Greeter";
 
 export class Hello extends View.make<Hello, { readonly who: string }>()(
   "examples/ui/view-typed-jsx/Hello",
@@ -16,7 +16,7 @@ export class Hello extends View.make<Hello, { readonly who: string }>()(
 export const helloLayer = Layer.effect(
   Hello,
   Effect.gen(function* () {
-    const GreeterView = yield* Greeter;
+    const GreeterView = yield* Greeter.Greeter;
     return (props: { readonly who: string }) => (
       <GreeterView name={props.who} />
     );

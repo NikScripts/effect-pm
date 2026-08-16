@@ -5,8 +5,8 @@
  */
 import { Effect, Layer } from "effect";
 import * as View from "last-ts/View";
-import { Outer, Middle } from "../ui/Frame";
-import { Hello, helloLayer } from "./Hello";
+import * as Frame from "../ui/Frame";
+import * as Hello from "./Hello";
 
 export class AppRoot extends View.make<AppRoot>()(
   "examples/ui/view-typed-jsx/App",
@@ -15,9 +15,9 @@ export class AppRoot extends View.make<AppRoot>()(
 export const appLayer = Layer.effect(
   AppRoot,
   Effect.gen(function* () {
-    const HelloView = yield* Hello;
-    const OuterView = yield* Outer;
-    const MiddleView = yield* Middle;
+    const HelloView = yield* Hello.Hello;
+    const OuterView = yield* Frame.Outer;
+    const MiddleView = yield* Frame.Middle;
     return (_props: {}) => (
       <OuterView>
         <MiddleView>
@@ -26,4 +26,4 @@ export const appLayer = Layer.effect(
       </OuterView>
     );
   }),
-).pipe(Layer.provide(helloLayer));
+).pipe(Layer.provide(Hello.helloLayer));

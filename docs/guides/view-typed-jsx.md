@@ -31,12 +31,13 @@ examples/ui/view-typed-jsx/
     Greeter.tsx     leaf DOM (View.make 2nd-arg default)
     Frame.tsx       Outer / Middle leaf shells
   lib/
-    Hello.tsx       Hello Tag + helloLayer (yield* Greeter)
+    Hello.tsx       Hello Tag + helloLayer (yield* Greeter.Greeter)
     AppRoot.tsx     AppRoot Tag + appLayer (yield* Frame + Hello)
-  App.tsx           Last.provide(AppRoot, appLayer)
+  App.tsx           Last.provide(AppRoot.AppRoot, AppRoot.appLayer)
 ```
 
 Leaf Views own DOM. Composition Layers / `AppRoot` place Views only — **zero HTML**.
+`import * as` for last-ts and local modules (lock).
 
 ## Greeter (leaf)
 
@@ -72,9 +73,9 @@ Hover **`App`** → discharged root (`ViewFn`, no open `R`).
 
 | Symbol | Role |
 |--------|------|
-| `Greeter` / `Outer` / `Middle` | Leaf References — HTML in the mint default |
-| `helloLayer` / `appLayer` | Const Layers — `yield*` deps; never `static layer` |
-| `App` | `Last.provide(AppRoot, appLayer)` → JSX-legal component |
+| `Greeter.Greeter` / `Frame.Outer` / `Frame.Middle` | Leaf References — HTML in the mint default |
+| `Hello.helloLayer` / `AppRoot.appLayer` | Const Layers — `yield*` deps; never `static layer` |
+| `App` | `Last.provide(AppRoot.AppRoot, AppRoot.appLayer)` → JSX-legal component |
 
 ## Live render
 

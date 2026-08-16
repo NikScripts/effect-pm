@@ -5,18 +5,18 @@
  */
 import * as React from "react";
 import "../styles/widgets.css";
-import { App } from "../../../../examples/ui/view-typed-jsx/App.tsx";
+import * as Demo from "../../../../examples/ui/view-typed-jsx/App.tsx";
 
 export function ViewJsxIsland(): React.ReactElement {
   return (
     <div className="hl-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <span className="font-medium text-card-foreground">
-          App = Last.provide(AppRoot, appLayer)
+          App = Last.provide(AppRoot.AppRoot, AppRoot.appLayer)
         </span>
         <span className="text-xs text-muted-foreground">live · Last.provide</span>
       </div>
-      <App />
+      <Demo.App />
     </div>
   );
 }

@@ -6,10 +6,10 @@
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
  */
 import * as Last from "last-ts/Last";
-import { AppRoot, appLayer } from "./lib/AppRoot";
+import * as AppRoot from "./lib/AppRoot";
 
 /** Yield* Services in Layers; fulfill the root Tag at the edge. */
-export const App = Last.provide(AppRoot, appLayer);
+export const App = Last.provide(AppRoot.AppRoot, AppRoot.appLayer);
 
 App;
 // ^?

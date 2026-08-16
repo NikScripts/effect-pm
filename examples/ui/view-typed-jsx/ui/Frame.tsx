@@ -3,7 +3,7 @@
  *
  * Leaf shell Views — DOM defaults only. Composition places these; it never owns tags.
  */
-import * as React from "react";
+import type * as React from "react";
 import * as View from "last-ts/View";
 
 export class Outer extends View.make<Outer, {
