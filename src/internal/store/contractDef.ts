@@ -479,9 +479,10 @@ const classifyCustomMethod = (
     retype<CustomMethodEntry>({ _tag: CUSTOM_EFFECT, effect } as never);
   const customFnEntry = (fn: never): CustomMethodEntry =>
     retype<CustomMethodEntry>({ _tag: CUSTOM_FN, fn } as never);
-  const isEffectLike = (u: unknown): boolean =>
-    typeof u === "object" && u !== null && "_op" in u && (u as { readonly _op: string })._op === "Effect";
-  if (isEffectLike(value)) {
+  // Boolean guard (not an inline narrow): keeps `value` as `unknown` at the call site, so the
+  // any-channel Effect type from `isEffect`'s predicate never surfaces in a typed position.
+  const effectLike: boolean = Effect.isEffect(value);
+  if (effectLike) {
     return customEffectEntry(eraseUnknown(value));
   }
   if (typeof value === "function") {
