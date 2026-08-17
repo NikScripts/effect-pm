@@ -18,12 +18,13 @@ export type { RouteGroup } from "./asRoutesBrand";
 export type { AsRoutesEffect } from "./asRoutesBrand";
 export { AsRoutesTypeId } from "./asRoutesBrand";
 
+/** @internal */
 export type AsRoutesOptions = {
   /** Include `/health` + `/health/*nodeId` (default `true`). */
   readonly health?: boolean | undefined;
 };
 
-/** Leaf destinations generated for one Group member name. */
+/** Leaf destinations generated for one Group member name. @internal */
 export type LeafRouteLikes<K extends string> =
   | Route.Endpoint<K, `/${string}`>
   | Route.Endpoint<`${K}Logs`, `/${string}`>
@@ -44,6 +45,7 @@ type NestedGroupRouteLike<
 /**
  * Union of {@link RouteLike}s for a members record (finite depth).
  * Mirrors {@link membersToRoutes}.
+ * @internal
  */
 export type MembersRouteLikes<
   M extends Record<string, unknown>,
@@ -57,11 +59,16 @@ export type MembersRouteLikes<
     }[keyof M & string]
   : never;
 
-/** `/health` + `/health/*nodeId` when `health` is not false. */
+/** `/health` + `/health/*nodeId` when `health` is not false. @internal */
 export type HealthRouteLikes =
   | Route.Endpoint<"health", "/health">
-  | Route.Endpoint<"nodeHealth", "/health/*nodeId", { readonly nodeId: string }>;
+  | Route.Endpoint<
+      "nodeHealth",
+      "/health/*nodeId",
+      Schema.Struct<{ readonly nodeId: typeof Schema.String }>
+    >;
 
+/** @internal */
 export type AsRoutesItemsOf<
   M extends Record<string, unknown>,
   WithHealth extends boolean = true,
@@ -84,10 +91,10 @@ const formatPath = (keys: ReadonlyArray<string>): Route.Path => {
   return href as Route.Path;
 };
 
-const target = <Id extends string, PathType extends Route.Path, Params>(
-  endpoint: Route.Endpoint<Id, PathType, Params>,
+const target = <E extends Route.Constraint>(
+  endpoint: E,
   value: Route.TargetValue,
-): Route.Endpoint<Id, PathType, Params> =>
+): E =>
   Route.annotate(endpoint, Route.Target, value);
 
 const leafEndpoints = (
@@ -164,7 +171,7 @@ const healthRoutes = (): Array<Route.RouteLike> => [
   ),
 ];
 
-/** Sync list of destinations for a Group tree (tests / tooling). */
+/** Sync list of destinations for a Group tree (tests / tooling). @internal */
 export const routesOf = (
   root: RouteGroup,
   options?: AsRoutesOptions,
@@ -184,6 +191,7 @@ export const routesOf = (
  * Route.group("hub", { topLevel: true }).effect(Group.asRoutes(ServicesHub))
  * // urls.Nwsl.HttpApi(), urls.nodeHealth(nodeId), …
  * ```
+ * @internal
  */
 export function asRoutes<
   const Root extends {

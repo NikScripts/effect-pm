@@ -17,13 +17,13 @@ import { dual } from "effect/Function";
 import { pipeArguments } from "effect/Pipeable";
 import { hasProperty } from "effect/Predicate";
 
-/** Brand key shared by every policy family (value = family id). */
+/** Brand key shared by every policy family (value = family id). @internal */
 export const BrandKey = "~hyperlink-ts/PolicyBuilder" as const;
 
-/** Runtime config slot on a branded policy. */
+/** Runtime config slot on a branded policy. @internal */
 export const ConfigKey = "~hyperlink-ts/PolicyBuilder/Config" as const;
 
-/** TypeId on family constructables. */
+/** TypeId on family constructables. @internal */
 export const DefTypeId = "~hyperlink-ts/PolicyBuilder/Def" as const;
 
 /**
@@ -78,7 +78,7 @@ export type PolicyBuilderMergePolicyList<
   Id extends string,
   Ps extends ReadonlyArray<PolicyBuilderPolicy<Id, object>>,
 > = Ps extends readonly []
-  ? {}
+  ? Record<never, never>
   : Ps extends readonly [PolicyBuilderPolicy<Id, infer H>]
     ? H
     : Ps extends readonly [
@@ -88,7 +88,7 @@ export type PolicyBuilderMergePolicyList<
       ? Rest extends ReadonlyArray<PolicyBuilderPolicy<Id, object>>
         ? PolicyBuilderMergeConfigs<H, PolicyBuilderMergePolicyList<Id, Rest>>
         : H
-      : {};
+      : Record<never, never>;
 
 /**
  * Config object shape derived from a keys map (optional per key, schema types).
@@ -139,7 +139,7 @@ export type PolicyBuilderConfigFromFragments<
     readonly value: unknown;
   }>,
 > = Fs extends readonly []
-  ? {}
+  ? Record<never, never>
   : Fs extends readonly [
       infer H extends { readonly _tag: string; readonly value: unknown },
       ...infer Rest,
@@ -153,7 +153,7 @@ export type PolicyBuilderConfigFromFragments<
           PolicyBuilderConfigFromFragments<Rest>
         >
       : { readonly [P in H["_tag"]]: H["value"] }
-    : {};
+    : Record<never, never>;
 
 /** Flat PascalCase Context.References on a Def (one per key). @internal */
 export type PolicyBuilderRefsOfKeys<
@@ -287,7 +287,7 @@ export interface PolicyBuilderDefMethods<
   readonly [DefTypeId]: typeof DefTypeId;
   readonly id: Id;
   readonly keys: Keys;
-  new (_: never): {};
+  new (_: never): Record<never, never>;
   /**
    * Widen with a Schema-backed key (HttpApi.`add` analogue).
    *
@@ -638,5 +638,10 @@ export const makeProto = (options: DefData): PolicyBuilderDef<any, any> => {
  */
 export const make = <const Id extends string>(
   id: Id,
-): PolicyBuilderDef<Id, {}> =>
-  makeProto({ id, keys: {} }) as unknown as PolicyBuilderDef<Id, {}>;
+): PolicyBuilderDef<Id, Record<never, never>> =>
+  // SAFE: makeProto assembles the Def surface (id, keys, add/matchers) field-by-field below;
+  // TS cannot relate the runtime prototype build to the branded Def type. No runtime value to validate.
+  makeProto({ id, keys: {} }) as unknown as PolicyBuilderDef<
+    Id,
+    Record<never, never>
+  >;

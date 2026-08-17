@@ -32,6 +32,7 @@ type NodePolicyValue = NodePolicy.Policy<NodePolicyConfig>;
 
 /** Runtime stamp on a made node. @internal */
 export const AddressesKey = "~hyperlink-ts/Node/addresses" as const;
+/** @internal */
 export const NodePolicyConfigKey = "~hyperlink-ts/Node/nodePolicy" as const;
 
 const isNodePolicyLayer = (u: unknown): u is NodePolicyValue =>
@@ -274,7 +275,7 @@ export const make = <
   Key,
   address.NormalizeAddresses<Input>,
   LabelsOf<address.NormalizeAddresses<Input>>,
-  {}
+  Record<never, never>
 > => {
   const addresses = address.toAddressList(
     input,

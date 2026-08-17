@@ -944,7 +944,7 @@ export type DefaultsInput<D extends DefaultsBag> = {
 /** Prior piped bag on a Tag, or `{}`. @internal */
 type PriorDefaults<T> = T extends { readonly [defaultsSym]: infer P extends DefaultsBag }
   ? P
-  : {};
+  : Record<never, never>;
 
 /** Merged piped bag after applying `D` onto `T`'s prior defaults. @internal */
 type MergedDefaultsBag<T, D extends DefaultsBag> = PriorDefaults<T> & D;
@@ -997,7 +997,7 @@ export type TagWithDefaults<T, D extends DefaultsBag> = T & {
  */
 export type DefaultsOf<T> = T extends { readonly [defaultsSym]: infer D extends DefaultsBag }
   ? D
-  : {};
+  : Record<never, never>;
 
 /**
  * Handle shape including a piped {@link defaults} bag.
@@ -3005,7 +3005,7 @@ export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired
 }> {
   override get message() {
     return (
-      `Identity "${this.tag}" needs Lookup.Identity and a dialable self ` +
+      `Identity "${this.tag}" needs Identity.Service and a dialable self ` +
       `(Node.unix/http/ws listen or Hyperlink.nodes([Node])). ` +
       `Pipe Layer.provide(Lookup.client) / Lookup.layer / Lookup.layerOptions.`
     );

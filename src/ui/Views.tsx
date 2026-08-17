@@ -16,9 +16,9 @@ import type { LeafTag } from "./widgetRegistry";
 import * as View from "last-ts/View";
 
 export type ViewKind = Data.TaggedEnum<{
-  Card: {};
-  Detail: {};
-  Page: {};
+  Card: Record<never, never>;
+  Detail: Record<never, never>;
+  Page: Record<never, never>;
 }>;
 
 /**
