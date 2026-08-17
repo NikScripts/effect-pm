@@ -121,6 +121,9 @@ export const handle: {
   (fn: Handle): <E extends Constraint>(self: E) => E;
   <E extends Constraint>(self: E, fn: Handle): E;
 } = dual(2, <E extends Constraint>(self: E, fn: Handle): E =>
+  // SAFE: Constraint.annotate erases to Constraint but returns the same endpoint shape with
+  // one annotation added; restating E preserves the caller's typed catalog. No runtime value
+  // beyond the endpoint itself to validate.
   self.annotate(Handler, fn) as E,
 );
 
@@ -226,7 +229,9 @@ export const annotate = <E extends Constraint, I, S>(
   self: E,
   tag: Context.Key<I, S>,
   value: S,
-): E => self.annotate(tag, value) as E;
+): E =>
+  // SAFE: same erasure as `handle` above — annotate preserves the endpoint's shape.
+  self.annotate(tag, value) as E;
 
 /** Join two absolute path templates. @public */
 export const joinPath: (prefix: Path | "/", path: Path | "/") => Path =

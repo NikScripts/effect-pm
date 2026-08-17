@@ -18,7 +18,8 @@ export type DocumentLink = {
   readonly media?: string;
   readonly as?: string;
   readonly type?: string;
-  readonly crossOrigin?: string;
+  /** The DOM attribute's closed vocabulary — typed here so render needs no cast. */
+  readonly crossOrigin?: "anonymous" | "use-credentials" | "";
   readonly sizes?: string;
 };
 

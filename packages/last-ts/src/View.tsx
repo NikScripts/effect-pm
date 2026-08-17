@@ -388,6 +388,8 @@ const makePrototype = <
       >;
       return makePrototype<NextProps, NextReq, NextAnnotations>({
         ...bag,
+        // SAFE: omitted annotations mean NewAnnotations inferred its default (empty bag);
+        // {} is that value. Pure optional-generic defaulting, nothing to validate.
         ...(next ?? ({} as NewAnnotations)),
       });
     },
@@ -397,8 +399,11 @@ const makePrototype = <
       let defaultView: ViewFn<NextProps> | undefined;
       let extra: AnyAnnotations = {};
       if (typeof second === "function") {
+        // SAFE: erased overload impl — the typed Prototype["Service"] contract above already
+        // pinned this arg as ViewFn<NextProps>; the runtime guard re-checks it is a function.
         defaultView = second as ViewFn<NextProps>;
         if (third !== undefined && typeof third === "object" && third !== null) {
+          // SAFE: guarded non-null object; the contract typed it as the annotations bag.
           extra = third as AnyAnnotations;
         }
       } else if (
@@ -406,12 +411,14 @@ const makePrototype = <
         typeof second === "object" &&
         second !== null
       ) {
+        // SAFE: guarded non-null object; the contract typed it as the annotations bag.
         extra = second as AnyAnnotations;
       }
       const merged = { ...bag, ...extra };
       const stamped = {
         [annotationsSym]: merged,
         [kindSym]: kind,
+        // SAFE: phantom props stamp — never read at runtime, only its type is.
         Type: undefined as unknown as NextProps,
       };
       if (defaultView !== undefined) {
@@ -422,6 +429,8 @@ const makePrototype = <
       }
       const base = Context.Service<Self, ViewFn<NextProps>>()(key);
       return Object.assign(base, stamped);
+    // SAFE: never-erased impl behind the typed Service contract of the Prototype interface;
+    // the overloads above are the source of truth. No runtime value to validate.
     }) as Prototype<Props, Requirement, Annotations>["Service"]),
 });
 
@@ -441,6 +450,7 @@ export const Prototype =
     Annotations
   > =>
     makePrototype<Props, NextRequirement<Requirement, Annotations>, Annotations>(
+      // SAFE: omitted annotations mean Annotations inferred its default (empty bag).
       (annotations ?? {}) as Annotations,
     );
 

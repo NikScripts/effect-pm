@@ -63,6 +63,8 @@ export const make =
       static readonly Head = Head;
       declare static readonly "~last-ts/Document/fields": FieldsOf<Extras>;
     };
+    // SAFE: class-factory erasure — the statics assembled above ARE the AnyDocument shape;
+    // TS cannot compose the abstract-constructor intersection from the build.
     return Doc as unknown as (abstract new (_: never) => Record<never, never>) &
       AnyDocument<Extras>;
   };
@@ -71,6 +73,7 @@ const isDocumentClass = (u: unknown): u is AnyDocument =>
   typeof u === "function" &&
   u !== null &&
   DocumentTypeId in u &&
+  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
   (u as unknown as AnyDocument)[DocumentTypeId] === DocumentTypeId;
 
 /** Package default Document. @public */
@@ -110,7 +113,7 @@ export class Default extends make()(
             media={l.media}
             as={l.as}
             type={l.type}
-            crossOrigin={l.crossOrigin as "anonymous" | "use-credentials" | "" | undefined}
+            crossOrigin={l.crossOrigin}
             sizes={l.sizes}
           />
         ))}
@@ -165,9 +168,12 @@ export const transform: {
   second?: (prev: any) => any,
 ): Patch<any, any> => {
   if (typeof first === "function" && !isDocumentClass(first) && second === undefined) {
+    // SAFE: guarded to a bare function; the overloads above pinned its real signature.
     return core.makePatch(first as (prev: any) => any);
   }
+  // SAFE: in the two-arg overload `second` is the transform fn per the contract above.
   return core.makePatch(second as (prev: any) => any);
+  // SAFE: erased impl behind the typed overloads — they are the source of truth.
 }) as typeof transform;
 
 /** @public */
@@ -272,6 +278,8 @@ export const provide = <const Args extends ReadonlyArray<ProvideArg>>(
   doc: AnyDocument<any>,
   ...args: Args
 ): core.ProvideResult<Cell, Args> =>
+  // SAFE: ProvideResult only refines the Layer error channel by Args at the type level;
+  // makeCell performs the actual runtime validation (throws on missing title).
   Layer.succeed(Cell, makeCell(doc, ...args)) as core.ProvideResult<
     Cell,
     Args

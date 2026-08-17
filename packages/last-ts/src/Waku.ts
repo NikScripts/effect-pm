@@ -67,7 +67,10 @@ const stubService = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
     search: "",
     href: "/",
     match: undefined,
-    urls: binding.urls,
+    // SAFE: the typed UrlBuilder<A> and UrlBuilderLoose describe the same runtime record —
+    // literal PathHref returns vs `string` — but strict function variance can't relate the
+    // method shapes. Purely a type-level widening of the same value.
+    urls: binding.urls as Route.UrlBuilderLoose,
     go: () => undefined,
     to: () => undefined,
     back: () => undefined,
@@ -78,7 +81,7 @@ const stubService = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
     ...(options?.registry !== undefined
       ? { _handlers: options.registry }
       : {}),
-  } as Router.Service;
+  };
 };
 
 /**

@@ -76,6 +76,9 @@ export const make =
       static readonly render = render;
       static readonly Component = Component;
     };
+    // SAFE: class-factory erasure — Cls carries the statics assembled above and
+    // Object.assign grafts the Reference; TS can't compose an abstract-constructor
+    // intersection from that build. No runtime value to validate.
     return Object.assign(Cls, reference) as unknown as (abstract new (
       _: never,
     ) => Record<never, never>) &

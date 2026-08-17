@@ -68,17 +68,19 @@ const isLayoutClass = (u: unknown): u is AnyLayout =>
   typeof u === "function" &&
   u !== null &&
   LayoutTypeId in u &&
+  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
   (u as unknown as AnyLayout)[LayoutTypeId] === LayoutTypeId;
 
 /** Resolve a layout class or bare FC to a zero-prop component. @internal */
 export const toComponent = (layout: AnyLayout | React.FC): React.FC =>
-  isLayoutClass(layout) ? layout.Component : (layout as React.FC);
+  isLayoutClass(layout) ? layout.Component : layout;
 
 const isGroupImpl = (u: unknown): u is GroupImplLike =>
   typeof u === "object" &&
   u !== null &&
   "handlers" in u &&
   "layout" in u &&
+  // SAFE: inside the guard that proves the shape — the instanceof check IS the validation.
   (u as GroupImplLike).handlers instanceof Map;
 
 const patchGroupLayouts = <A,>(
@@ -91,6 +93,7 @@ const patchGroupLayouts = <A,>(
       next.set(key, { ...value, layout: component });
     }
   }
+  // SAFE: same entries as ctx (values only re-skinned with a layout) — A is restated, not invented.
   return Context.makeUnsafe(next) as Context.Context<A>;
 };
 
@@ -141,6 +144,8 @@ export const make =
       static readonly render = render;
       static readonly Component = Component;
     };
+    // SAFE: class-factory erasure — statics assembled above, Reference grafted on; TS cannot
+    // compose the abstract-constructor intersection from the build. Nothing to validate.
     return Object.assign(Cls, reference) as unknown as (abstract new (
       _: never,
     ) => Record<never, never>) &
@@ -190,6 +195,8 @@ export const provide = (layout: AnyLayout | React.FC): ProvideOp => {
       Effect.gen(function* () {
         const ctx = yield* Effect.scoped(
           Layer.build(
+            // SAFE: providing Slot is exactly what discharges R (R = Slot in every caller);
+            // TS cannot subtract a provided service from a generic R. Nothing to validate.
             Layer.provide(self, Layer.succeed(Slot, component)) as Layer.Layer<
               A,
               E,
@@ -199,6 +206,7 @@ export const provide = (layout: AnyLayout | React.FC): ProvideOp => {
         );
         return patchGroupLayouts(ctx, component);
       }),
+      // SAFE: restates the same discharge (Exclude<R, Slot>) on the wrapper Layer.
     ) as Layer.Layer<A, E, Exclude<R, Slot>>;
 
   return new Proxy(layerProvide, {
@@ -214,5 +222,7 @@ export const provide = (layout: AnyLayout | React.FC): ProvideOp => {
     getPrototypeOf() {
       return Object.getPrototypeOf(effect);
     },
+    // SAFE: the Proxy merges the dual surfaces (Effect + Layer transform) ProvideOp declares;
+    // both delegates are typed above. TS cannot type a Proxy union structurally.
   }) as unknown as ProvideOp;
 };

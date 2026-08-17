@@ -10,7 +10,8 @@ import * as Provider from "../lib/Provider";
 
 // Waku debug channel calls `crypto.randomUUID`. Tailscale `http://100.x`
 // is not a secure context — polyfill so the dogfood URL works.
-const webCrypto = globalThis.crypto as Crypto | undefined;
+const webCrypto: Crypto | undefined =
+  typeof globalThis.crypto === "object" ? globalThis.crypto : undefined;
 if (
   webCrypto !== undefined &&
   typeof webCrypto.randomUUID !== "function" &&
@@ -19,8 +20,8 @@ if (
   webCrypto.randomUUID = (): `${string}-${string}-${string}-${string}-${string}` => {
     const bytes = new Uint8Array(16);
     webCrypto.getRandomValues(bytes);
-    bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-    bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+    bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+    bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
     const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
       "",
     );

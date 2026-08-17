@@ -32,6 +32,7 @@ export type Constraint = HttpApiEndpoint.Constraint & {
   readonly query?: Schema.Top | undefined;
   readonly headers?: Schema.Top | undefined;
   readonly success?: ReadonlySet<Schema.Top> | undefined;
+  readonly error?: ReadonlySet<Schema.Top> | undefined;
   readonly annotations: Context.Context<never>;
   prefix(prefix: string): Constraint;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): Constraint;
@@ -89,9 +90,12 @@ export const get = <
     query: options?.query,
     headers: options?.headers,
     success: pageSuccess.Page,
+    // SAFE: forwards the caller-typed error option; the slot constraint (ErrorNoStream)
+    // is unexpressible through RequestOptions without re-deriving get's whole generic row.
     error: options?.error as never,
   });
-  // Brand so IsPageEndpoint survives success codec wraps.
+  // SAFE: brand-only intersection on the value get() just returned — no shape change;
+  // IsPageEndpoint reads the brand after success codec wraps.
   return endpoint as typeof endpoint & pageSuccess.PageEndpointBrand;
 };
 
@@ -141,28 +145,35 @@ export const params: {
   ): ReParams<E, S>;
 } = dual(2, (self: Constraint, schema: Schema.Top): Constraint => {
   const success = Array.from(self.success ?? [pageSuccess.Page]);
-  const error = Array.from(
-    (self as { readonly error?: ReadonlySet<Schema.Top> }).error ?? [],
-  );
+  const error = Array.from(self.error ?? []);
+  // SAFE: an endpoint path is absolute by construction (get requires `/${string}`);
+  // the erased Constraint stores it as string.
   const next = HttpApiEndpoint.get(self.identifier, self.path as Path, {
     params: schema,
-    query: self.query as Schema.Top | undefined,
-    headers: self.headers as Schema.Top | undefined,
+    query: self.query,
+    headers: self.headers,
     success:
       success.length === 0 ? pageSuccess.Page
       : success.length === 1 ? success[0]!
       : success,
+    // SAFE: `error` re-feeds schemas read off the endpoint itself; the option slot's
+    // ErrorNoStream constraint is unexpressible for an erased ReadonlySet round-trip.
     error: (error.length === 0 ? undefined
     : error.length === 1 ? error[0]!
     : error) as never,
   });
+  // SAFE: a field-for-field rebuild of the same endpoint with one schema swapped — the
+  // typed overloads above (ReParams) are the source of truth; the brand survives because
+  // the success set is carried over verbatim.
   return next.annotateMerge(
-    self.annotations as Context.Context<never>,
+    self.annotations,
   ) as unknown as Constraint & pageSuccess.PageEndpointBrand;
 });
 
 /** Join `/a` + `/b` → `/a/b`; `/a` + `/` → `/a`. */
 export const joinPath = (prefix: Path | "/", path: Path | "/"): Path => {
+  // SAFE (all three): every branch returns a string that starts with "/" by construction;
+  // TS cannot carry the template-literal proof through slice/concat.
   if (path === "/") return (prefix === "/" ? "/" : prefix) as Path;
   if (prefix === "/") return path as Path;
   const left = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;

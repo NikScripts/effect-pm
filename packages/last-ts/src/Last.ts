@@ -102,7 +102,7 @@ export const kindOf = (tag: unknown): string | undefined => {
     tag !== null &&
     kindSym in tag
   ) {
-    const value = (tag as { readonly [kindSym]: unknown })[kindSym];
+    const value: unknown = tag[kindSym];
     return typeof value === "string" ? value : undefined;
   }
   return undefined;

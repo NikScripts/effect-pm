@@ -146,7 +146,7 @@ export const RuntimeProvider = <R, E = never>(props: {
 }): React.ReactElement =>
   React.createElement(
     RuntimeContext.Provider,
-    { value: props.runtime as AnyRuntime },
+    { value: props.runtime },
     props.children,
   );
 

@@ -40,7 +40,7 @@ export const layer: Layer.Layer<
     return Object.assign(service, {
       /** @internal builder registry for Outlet */
       _handlers: registry,
-    }) as Router.Service;
+    });
   }),
 );
 

@@ -313,7 +313,9 @@ export const link = <A extends ApiConstraint>(
   const Link = (props: LinkProps<A>): React.ReactElement => {
     const router = useRouter();
     return linkRender.useRenderLink(
-      props as linkRender.RenderLinkProps<A>,
+      props,
+      // SAFE: the installed router IS the one built for catalog A (link(api) is authored
+      // beside it); Service erases A, so the typed builder is restated, not invented.
       router.urls as Route.UrlBuilder<A>,
       router,
     );
@@ -349,7 +351,7 @@ export const UnboundLink = (props: UnboundLinkProps): React.ReactElement => {
   const router = useRouter();
   return linkRender.useRenderLink(
     props,
-    router.urls as Route.UrlBuilderLoose,
+    router.urls,
     router,
   );
 };
