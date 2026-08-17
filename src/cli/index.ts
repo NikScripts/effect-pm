@@ -147,7 +147,7 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliHyperlinkTag) =>
 const membersOf = (tree: CliTree): Record<string, CliNode> =>
   Group.isGroup(tree) ? Group.members(tree) : tree;
 
-/** Flatten a node to leaf tags keyed by slash-joined command path segments. */
+/** Flatten a node to leaf tags keyed by slash-joined command path segments. @internal */
 export const leavesOf = (
   node: CliNode,
   path: ReadonlyArray<string> = [],
@@ -230,6 +230,7 @@ const buildCommand = (tree: CliTree, rootName: string) => {
   );
 };
 
+/** @public */
 export type CliOptions = {
   readonly name?: string;
   readonly version: string;

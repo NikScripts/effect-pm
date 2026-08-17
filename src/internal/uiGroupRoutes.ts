@@ -12,13 +12,14 @@ const isGroupNode = (x: unknown): x is RouteGroup => Group.isGroup(x);
 const encodeKey = (key: string): string =>
   key.split("/").map(encodeURIComponent).join("/");
 
-/** Format resolved keys as a URL pathname. */
+/** Format resolved keys as a URL pathname. @internal */
 export const formatGroupPath = (keys: ReadonlyArray<string>): string =>
   keys.length === 0 ? "/" : `/${keys.map(encodeKey).join("/")}`;
 
 /**
  * Walk `root` by `segments` (case-insensitive). Trailing segment after a leaf is
  * a sub-view; root `"health"` is the node-status shell page.
+ * @internal
  */
 export const resolveGroupRoute = (
   root: RouteGroup,
@@ -80,7 +81,7 @@ const memberKeyOf = (member: unknown): string | undefined =>
     ? (member as { readonly key: string }).key
     : undefined;
 
-/** Short-name path from `root` to `target` (Group or leaf). */
+/** Short-name path from `root` to `target` (Group or leaf). @internal */
 export const pathToMember = (
   root: RouteGroup,
   target: unknown,

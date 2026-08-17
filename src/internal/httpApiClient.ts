@@ -935,7 +935,7 @@ export const httpApiClientLayerForTag = <
   ) as unknown as Layer.Layer<Self, never, HttpClient.HttpClient>;
 };
 
-/** @alias {@link httpApiClientLayerForTag} — public Gate name. */
+/** @alias {@link httpApiClientLayerForTag} — public Gate name. @internal */
 export const httpApiClientLayer = httpApiClientLayerForTag;
 
 export { MetricsKeyCollision, httpApiMetricsNestSpec };

@@ -113,6 +113,7 @@ export type ResolvedTagListenTarget =
       readonly count: number;
     };
 
+/** @internal */
 export const resolveTagListenTarget = (
   tag: Hyperlink.PipeableTag,
   third: unknown,

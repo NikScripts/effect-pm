@@ -46,6 +46,7 @@ export {
 
 export { use } from "./internal/observeUse";
 
+/** @public */
 export declare namespace Observe {
   export type Recipe<Svc, Out> = import("./internal/observe").Recipe<Svc, Out>;
   export type Pack<Svc, Out extends object> =

@@ -147,6 +147,7 @@ export const assertNoDialOverlap = (
   }
 };
 
+/** @internal */
 export const unixFromKey: UnixFromKeySentinel = {
   [UnixFromKeyBrand]: UnixFromKeyBrand,
   _tag: "UnixFromKey",
@@ -154,11 +155,13 @@ export const unixFromKey: UnixFromKeySentinel = {
   kind: "IpcSocket",
 };
 
+/** @internal */
 export const isUnixFromKey = (u: unknown): u is UnixFromKeySentinel =>
   typeof u === "object" &&
   u !== null &&
   (u as { readonly _tag?: unknown })._tag === "UnixFromKey";
 
+/** @internal */
 export const isAddressValue = (u: unknown): u is AddressValue =>
   typeof u === "object" &&
   u !== null &&

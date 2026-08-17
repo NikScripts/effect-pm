@@ -53,26 +53,26 @@ import {
 import { pack as priorityPack } from "./priorityViewPack";
 import { pack as workPoolQueuePack } from "./workPoolViewPack";
 
-/** Live queue status (from the contract schema). */
+/** Live queue status (from the contract schema). @public */
 export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
 /** A `WorkPool.priority` queue's live status — re-export of {@link PriorityStatus}. @public */
 export type { PriorityStatus };
-/** Live queue metrics (from the contract schema). */
+/** Live queue metrics (from the contract schema). @public */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
-/** Live daemon status (from the contract schema). */
+/** Live daemon status (from the contract schema). @public */
 export type DaemonStatus = Schema.Schema.Type<typeof daemonStatus>;
-/** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
+/** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. @public */
 export type ScheduleEntry = Schema.Schema.Type<typeof daemonScheduleEntry>;
 
 /** A captured log line for the log pane. @public */
 export type { LogLine };
-/** A windowed metrics sample for the chart. */
+/** A windowed metrics sample for the chart. @public */
 export interface MetricPoint {
   readonly t: number;
   readonly throughput: number;
   readonly latency: number;
 }
-/** A windowed API-usage sample for the API chart. */
+/** A windowed API-usage sample for the API chart. @public */
 export interface ApiPoint {
   readonly t: number;
   readonly throughput: number;
@@ -163,7 +163,7 @@ interface PriorityService {
   readonly stop: Effect.Effect<void>;
 }
 
-/** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. */
+/** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. @public */
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
 /** A `WorkPool.priority` tag — yieldable for its live service. @public */
 export type PriorityTag<R = never> = Effect.Effect<PriorityService, never, R> & { readonly key: string };
@@ -201,9 +201,9 @@ export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & 
 type GateService = Pick<GateHandle<unknown, unknown, never>, "status">;
 /** A Gate tag — yieldable for its live service. @public */
 export type GateTag<R = never> = Effect.Effect<GateService, never, R> & { readonly key: string };
-/** A daemon tag — yieldable for its live service. */
+/** A daemon tag — yieldable for its live service. @public */
 export type DaemonTag<R = never> = Effect.Effect<DaemonService, never, R> & { readonly key: string };
-/** An API-metrics tag — yieldable for its live service. */
+/** An API-metrics tag — yieldable for its live service. @public */
 export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
 
 /**
@@ -219,15 +219,15 @@ export type GroupNode = {
   readonly members: Record<string, unknown>;
 };
 
-/** A read/stream value atom (error channel erased — widgets only read success). */
+/** A read/stream value atom (error channel erased — widgets only read success). @public */
 export type ValueAtom<A> = Atom.Atom<AsyncResult.AsyncResult<A, unknown>>;
-/** A no-arg command trigger. */
+/** A no-arg command trigger. @public */
 export type CommandAtom = Atom.AtomResultFn<void, unknown, unknown>;
 
-/** Any reactive runtime that provides the dashboard's tags. */
+/** Any reactive runtime that provides the dashboard's tags. @public */
 export type DashboardRuntime<R = never, ER = never> = Atom.AtomRuntime<R, ER>;
 
-/** The atoms + controls one queue card needs — all derived from the tag. */
+/** The atoms + controls one queue card needs — all derived from the tag. @public */
 export interface QueueBundle {
   readonly status: ValueAtom<Option.Option<QueueStatus>>;
   readonly lifecycle: ValueAtom<{ readonly _tag: string }>;
@@ -281,7 +281,7 @@ export interface ShardMapBundle {
 export interface GateBundle {
   readonly status: ValueAtom<GateStatus>;
 }
-/** The atoms + controls one daemon card needs — derived from the tag. */
+/** The atoms + controls one daemon card needs — derived from the tag. @public */
 export interface DaemonBundle {
   readonly status: ValueAtom<DaemonStatus>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
@@ -296,6 +296,7 @@ export interface DaemonBundle {
   readonly clearSchedule: CommandAtom;
 }
 /** The atoms one node dot/detail needs — its live status (up, readiness rollup, per-HyperService).
+ * @public
  *  Read-only. */
 export interface NodeBundle {
   readonly id: string;
@@ -306,7 +307,7 @@ export interface NodeBundle {
    *  when a HyperService (or its dependency) degrades. */
   readonly health: ValueAtom<ReadonlyArray<number>>;
 }
-/** The atoms one HttpApiClient (API) card needs — read-only (no commands). */
+/** The atoms one HttpApiClient (API) card needs — read-only (no commands). @public */
 export interface ApiBundle {
   /** Cumulative usage snapshot (totals + top endpoints), via `usage.changes`. */
   readonly status: ValueAtom<ApiUsageSnapshot>;
@@ -324,6 +325,7 @@ export interface ApiBundle {
 
 /** A node that backs one or more of a group's resources — its id (the `Node.Service` key) plus the
  *  transport key itself. Read straight off the tags (`nodeOf`), so the dashboard's node list is the
+ * @public
  *  distinct nodes its HyperServices are bound to — no separate registry. */
 export interface NodeRef {
   readonly id: string;
@@ -331,6 +333,7 @@ export interface NodeRef {
 }
 
 /** Walk a group tree and collect the distinct nodes its HyperServices are bound to. A nodeless
+ * @public
  *  (local/in-process) group yields `[]` — node dots appear only when HyperServices name a node. */
 export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
   const seen = new Map<string, NodeRef>();
@@ -349,6 +352,7 @@ export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
 };
 
 /** A tag's wire identity ({@link wireKeyOf}, falling back to `key`) — what a node's status
+ * @public
  *  snapshot reports for each served resource. */
 export const tagWireKey = (member: unknown): string | undefined => {
   if ((typeof member !== "object" && typeof member !== "function") || member === null) {
@@ -363,6 +367,7 @@ export const tagWireKey = (member: unknown): string | undefined => {
 };
 
 /** The {@link NodeRef} a HyperService tag is bound to (its `Node.Service`), or `undefined` for a nodeless
+ * @public
  *  tag — lets a HyperService page read its own readiness from its node's status handle. */
 export const serviceNodeRef = (tag: unknown): NodeRef | undefined => {
   const node = nodeOf(tag);
@@ -371,6 +376,7 @@ export const serviceNodeRef = (tag: unknown): NodeRef | undefined => {
 
 /** The leaf HyperService tag in a group tree whose wire key is `key` (as reported by a node's
  *  `Node.Status.services[].key`), or `undefined` if not found. Lets the node page open a served
+ * @public
  *  HyperService's detail directly (without round-tripping through the group route). */
 export const leafByKey = (group: unknown, key: string): unknown => {
   const walk = (node: unknown): unknown => {
@@ -414,7 +420,7 @@ export const isGateTag = (m: unknown): m is GateTag =>
 
 export { serviceLogsAtom };
 
-/** Build (once per runtime+tag) the atom bundle for a queue tag — thin wrap over WorkPoolView.pack. */
+/** Build (once per runtime+tag) the atom bundle for a queue tag — thin wrap over WorkPoolView.pack. @public */
 export const queueBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   tag: QueueTag<R>,
@@ -462,20 +468,20 @@ export const apiBundle = <R, ER>(
   tag: ApiTag<R>,
 ): ApiBundle => Observe.bind(runtime)(tag, apiMetricsPack);
 
-/** Build (once per runtime+node) the atom bundle for a node's live status — thin wrap over NodeView.bind. */
+/** Build (once per runtime+node) the atom bundle for a node's live status — thin wrap over NodeView.bind. @public */
 export const nodeStatusBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   ref: NodeRef,
 ): NodeBundle => nodeViewBind(runtime)(ref);
 
-/** Walk a `Group.Service` tree to its leaf resource tags (WorkPools + Daemons), raw. */
+/** Walk a `Group.Service` tree to its leaf resource tags (WorkPools + Daemons), raw. @public */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
   Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 
-/** Only the queue leaves of a tree. */
+/** Only the queue leaves of a tree. @public */
 export const queueLeaves = (node: GroupNode): ReadonlyArray<QueueTag> =>
   leafTags(node).filter(isQueueTag);
 
-/** Only the daemon leaves of a tree. */
+/** Only the daemon leaves of a tree. @public */
 export const daemonLeaves = (node: GroupNode): ReadonlyArray<DaemonTag> =>
   leafTags(node).filter(isDaemonTag);

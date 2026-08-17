@@ -98,6 +98,7 @@ const adaptRecord = <R>(
 /**
  * Adapt a service handle to Promise / async using `context` (default empty — wire clients with
  * `R = never`). Failures reject the Promise / async iterator.
+ * @internal
  */
 export const adaptPromiseHandle = <R = never>(
   service: object,

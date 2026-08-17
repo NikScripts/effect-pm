@@ -15,12 +15,12 @@ export const errorSym: unique symbol = Symbol.for(
   "hyperlink-ts/Gate/error",
 );
 
-/** Stable Tag metadata — rate-limit bucket key (not under the renameable nest). */
+/** Stable Tag metadata — rate-limit bucket key (not under the renameable nest). @internal */
 export const rateLimitKeySym: unique symbol = Symbol.for(
   "hyperlink-ts/Gate/rateLimitKey",
 );
 
-/** Stable Tag metadata — wire nest path for limiter fields (v1 `"metrics"`). */
+/** Stable Tag metadata — wire nest path for limiter fields (v1 `"metrics"`). @internal */
 export const metricsKeySym: unique symbol = Symbol.for(
   "hyperlink-ts/Gate/metricsKey",
 );

@@ -7,6 +7,7 @@ import { Context, Data, Effect, Option } from "effect";
 import type { CliTree } from "./types";
 
 /** Input for {@link Tui.open}: the same Group (or record) the CLI was built from, plus the
+ * @public
  *  member-key path to focus (`[]` = root grid, `["Mail"]` = Mail detail). */
 export type TuiOpenInput = {
   readonly tree: CliTree;

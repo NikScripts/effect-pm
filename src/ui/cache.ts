@@ -13,16 +13,16 @@ import { now } from "./now";
 const available = typeof localStorage !== "undefined";
 const NS = "wow-dash/";
 
-/** A cached accumulator snapshot. */
+/** A cached accumulator snapshot. @internal */
 export interface CacheEntry<A> {
   readonly at: number;
   readonly items: ReadonlyArray<A>;
 }
 
-/** How long a snapshot counts as "fresh" (skip the server query within this window). */
+/** How long a snapshot counts as "fresh" (skip the server query within this window). @internal */
 export const FRESH_MS = 30_000;
 
-/** Read a cached snapshot (or undefined). */
+/** Read a cached snapshot (or undefined). @internal */
 export const readCache = <A>(key: string): CacheEntry<A> | undefined => {
   if (!available) return undefined;
   try {
@@ -35,7 +35,7 @@ export const readCache = <A>(key: string): CacheEntry<A> | undefined => {
 
 const lastWrite = new Map<string, number>();
 
-/** Persist a snapshot, throttled per key (~2s) so frequent updates don't thrash storage. */
+/** Persist a snapshot, throttled per key (~2s) so frequent updates don't thrash storage. @internal */
 export const writeCache = <A>(key: string, items: ReadonlyArray<A>): void => {
   if (!available) return;
   const ts = now();

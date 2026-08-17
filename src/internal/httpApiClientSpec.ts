@@ -48,6 +48,7 @@ export const httpApiMetricsNestSpec = {
   }),
 } as const;
 
+/** @internal */
 export type HttpApiMetricsNestSpec = typeof httpApiMetricsNestSpec;
 
 /**

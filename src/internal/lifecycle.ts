@@ -118,6 +118,7 @@ const eventFromTransition = (from: State, to: State): Option.Option<Event> => {
   return Option.none();
 };
 
+/** @internal */
 export const events = <R>(self: Lifecycle<R>): Stream.Stream<Event> =>
   SubscriptionRef.changes(self.state).pipe(
     Stream.zipWithPrevious,
@@ -130,6 +131,7 @@ export const events = <R>(self: Lifecycle<R>): Stream.Stream<Event> =>
     ),
   );
 
+/** @internal */
 export const start = <R>(
   self: Lifecycle<R>,
 ): Effect.Effect<void, Illegal, R> =>
@@ -150,6 +152,7 @@ export const start = <R>(
     }
   });
 
+/** @internal */
 export const pause = <R>(
   self: Lifecycle<R>,
 ): Effect.Effect<void, Unsupported | Illegal, R> =>
@@ -167,6 +170,7 @@ export const pause = <R>(
     yield* SubscriptionRef.set(self.state, paused);
   });
 
+/** @internal */
 export const resume = <R>(
   self: Lifecycle<R>,
 ): Effect.Effect<void, Unsupported | Illegal, R> =>
@@ -184,6 +188,7 @@ export const resume = <R>(
     yield* SubscriptionRef.set(self.state, running);
   });
 
+/** @internal */
 export const stop = <R>(
   self: Lifecycle<R>,
 ): Effect.Effect<void, never, R> =>
@@ -206,6 +211,7 @@ export const stop = <R>(
     yield* SubscriptionRef.set(self.state, self.afterStop);
   });
 
+/** @internal */
 export function make<R = never>(
   options: MakeOptions<R> & { readonly latch: Latch.Latch },
 ): Effect.Effect<LifecyclePausable<R>, never, R | Scope.Scope>;

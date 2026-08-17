@@ -9,12 +9,12 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 /** Narrow a type-erased value at the adapter edge without surfacing `unknown` channels. */
 const edge = <T>(value: never): T => value;
 
-/** Tag shape: yieldable service + stable key for atom identity. */
+/** Tag shape: yieldable service + stable key for atom identity. @internal */
 export type AtomTag<Svc, R = never> = Effect.Effect<Svc, never, R> & {
   readonly key: string;
 };
 
-/** Live atom from a push source. */
+/** Live atom from a push source. @internal */
 export type LiveAtom<A, E = never> = Atom.Atom<
   AsyncResult.AsyncResult<A, E | Cause.NoSuchElementError>
 >;
@@ -50,6 +50,7 @@ const toLiveStream = <A, E>(selected: LiveSource<A, E>): Stream.Stream<A, E> => 
 
 /**
  * Canonical channel id from a select lambda so `q.status` and `q.status.changes` share one atom.
+ * @internal
  */
 export const channelKeyOf = (tagKey: string, select: (...args: never) => unknown): string => {
   const s = Function.prototype.toString.call(select).replace(/\s+/g, "");
@@ -116,6 +117,7 @@ const cachedFn = <Arg, A, E>(
   return created;
 };
 
+/** @internal */
 export type AtomBound<R, ER> = {
   <A, E = never>(source: LiveSource<A, E>): LiveAtom<A, E | ER>;
   <Svc, A, E = never>(
@@ -126,6 +128,7 @@ export type AtomBound<R, ER> = {
 
 /**
  * `Hyperlink.atom(runtime)` — live Subscribable / Stream → `Atom<AsyncResult>`.
+ * @internal
  */
 export const atom = <R, ER>(runtime: Atom.AtomRuntime<R, ER>): AtomBound<R, ER> => {
   function bound<A, E>(source: LiveSource<A, E>): LiveAtom<A, E | ER>;
@@ -158,6 +161,7 @@ export const atom = <R, ER>(runtime: Atom.AtomRuntime<R, ER>): AtomBound<R, ER> 
 
 /**
  * `Hyperlink.query(runtime)` — one-shot Effect read → `Atom<AsyncResult>`.
+ * @internal
  */
 export const query =
   <R, ER>(runtime: Atom.AtomRuntime<R, ER>) =>
@@ -171,6 +175,7 @@ export const query =
 
 /**
  * `Hyperlink.fn(runtime)` — command → `AtomResultFn`.
+ * @internal
  */
 export const fn =
   <R, ER>(runtime: Atom.AtomRuntime<R, ER>) =>

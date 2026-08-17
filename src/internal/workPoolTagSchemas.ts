@@ -12,14 +12,17 @@
 
 import { Schema } from "effect";
 
+/** @internal */
 export const successSym: unique symbol = Symbol.for(
   "hyperlink-ts/WorkPool/success",
 );
 
+/** @internal */
 export const errorSym: unique symbol = Symbol.for(
   "hyperlink-ts/WorkPool/error",
 );
 
+/** @internal */
 export const itemSchemaSym: unique symbol = Symbol.for(
   "hyperlink-ts/WorkPool/itemSchema",
 );

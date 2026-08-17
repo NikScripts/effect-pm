@@ -8,16 +8,17 @@
  */
 import { utcDateFromMillis } from "../internal/utcDate";
 
-/** Current epoch milliseconds. */
+/** Current epoch milliseconds. @internal */
 export const now = (): number => Date.now();
 
-/** A `Date` for display formatting from epoch millis (UTC-constructed, formatted locally). */
+/** A `Date` for display formatting from epoch millis (UTC-constructed, formatted locally). @internal */
 export const dateFromMillis = (millis: number): Date => utcDateFromMillis(millis);
 
-/** A compact 24-hour clock string (`HH:MM:SS`, no AM/PM) for log timestamps. */
+/** A compact 24-hour clock string (`HH:MM:SS`, no AM/PM) for log timestamps. @internal */
 export const fmtClock = (millis: number): string => dateFromMillis(millis).toLocaleTimeString([], { hour12: false });
 
 /** Parse an `<input type="datetime-local">` value (local wall time) to epoch millis — `undefined`
+ * @internal
  *  if blank/invalid. Confined here since it constructs a `Date` to interpret the local zone. */
 export const millisFromLocalInput = (value: string): number | undefined => {
   if (value === "") return undefined;
@@ -25,7 +26,7 @@ export const millisFromLocalInput = (value: string): number | undefined => {
   return Number.isNaN(ms) ? undefined : ms;
 };
 
-/** Epoch ms → the value an `<input type="datetime-local">` shows (local wall time). */
+/** Epoch ms → the value an `<input type="datetime-local">` shows (local wall time). @internal */
 export const toLocalInput = (millis: number): string => {
   const d = dateFromMillis(millis);
   const p = (n: number): string => String(n).padStart(2, "0");
@@ -34,7 +35,7 @@ export const toLocalInput = (millis: number): string => {
 
 const DAY_MS = 86_400_000;
 
-/** Local midnight (epoch ms) of the day containing `millis`. */
+/** Local midnight (epoch ms) of the day containing `millis`. @internal */
 export const startOfDayMillis = (millis: number): number => {
   const d = dateFromMillis(millis);
   return (
@@ -43,10 +44,10 @@ export const startOfDayMillis = (millis: number): number => {
   );
 };
 
-/** Local midnight (epoch ms) of the Sunday that starts the week containing `millis`. */
+/** Local midnight (epoch ms) of the Sunday that starts the week containing `millis`. @internal */
 export const startOfWeekMillis = (millis: number): number =>
   startOfDayMillis(millis) - dateFromMillis(millis).getDay() * DAY_MS;
 
-/** A short weekday + day-of-month label for a day, e.g. "Mon 3". */
+/** A short weekday + day-of-month label for a day, e.g. "Mon 3". @internal */
 export const fmtDayLabel = (millis: number): string =>
   dateFromMillis(millis).toLocaleDateString([], { weekday: "short", day: "numeric" });

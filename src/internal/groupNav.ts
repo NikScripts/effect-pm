@@ -16,10 +16,12 @@ import {
 
 export type { RouteGroup };
 
+/** @internal */
 export type MemberTag =
   | LeafTag
   | { readonly key: string; readonly members: Record<string, unknown> };
 
+/** @internal */
 export type State = {
   readonly keys: ReadonlyArray<string>;
   readonly trail: ReadonlyArray<RouteGroup>;
@@ -59,7 +61,7 @@ const trailFromKeys = (
   };
 };
 
-/** Resolve Group UI state from the current router location + root Group. */
+/** Resolve Group UI state from the current router location + root Group. @internal */
 export const state = (
   root: RouteGroup,
   router: Router.Service,
@@ -115,6 +117,7 @@ const setKeys = (
   router.go(formatGroupPath(keys), replace === true ? { replace: true } : undefined);
 };
 
+/** @internal */
 export const open = (
   root: RouteGroup,
   router: Router.Service,
@@ -124,6 +127,7 @@ export const open = (
   if (path !== undefined) setKeys(root, router, path);
 };
 
+/** @internal */
 export const openKey = (
   root: RouteGroup,
   router: Router.Service,
@@ -133,12 +137,14 @@ export const openKey = (
   setKeys(root, router, [...current.keys, key]);
 };
 
+/** @internal */
 export const up = (root: RouteGroup, router: Router.Service): void => {
   const keys = state(root, router).keys;
   if (keys.length === 0) return;
   setKeys(root, router, keys.slice(0, -1), true);
 };
 
+/** @internal */
 export const openLogs = (
   root: RouteGroup,
   router: Router.Service,
@@ -148,6 +154,7 @@ export const openLogs = (
   if (path !== undefined) setKeys(root, router, [...path, "logs"]);
 };
 
+/** @internal */
 export const openSchedule = (
   root: RouteGroup,
   router: Router.Service,
@@ -157,7 +164,7 @@ export const openSchedule = (
   if (path !== undefined) setKeys(root, router, [...path, "schedule"]);
 };
 
-/** `urls.health()` when present, else `/health`. */
+/** `urls.health()` when present, else `/health`. @internal */
 export const openHealth = (router: Router.Service): void => {
   const health = (router.urls as Record<string, unknown>)["health"];
   if (typeof health === "function") {
@@ -167,7 +174,7 @@ export const openHealth = (router: Router.Service): void => {
   router.go("/health");
 };
 
-/** `urls.nodeHealth(id)` when present, else `/health/<id>`. */
+/** `urls.nodeHealth(id)` when present, else `/health/<id>`. @internal */
 export const openNode = (router: Router.Service, nodeId: string): void => {
   const nodeHealth = (router.urls as Record<string, unknown>)["nodeHealth"];
   if (typeof nodeHealth === "function") {
@@ -177,5 +184,7 @@ export const openNode = (router: Router.Service, nodeId: string): void => {
   router.go(formatGroupPath(["health", nodeId]));
 };
 
+/** @internal */
 export const toHref = formatGroupPath;
+/** @internal */
 export const isGroupMember = Group.isGroup;

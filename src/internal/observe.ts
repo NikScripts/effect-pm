@@ -26,21 +26,21 @@ const edge = <T>(value: never): T => value;
 const RecipeTypeId: unique symbol = Symbol.for("hyperlink/Observe/Recipe");
 const PackTypeId: unique symbol = Symbol.for("hyperlink/Observe/Pack");
 
-/** Bind context — caches parent recipe outputs so `map` shares one upstream atom. */
+/** Bind context — caches parent recipe outputs so `map` shares one upstream atom. @internal */
 export type BindContext = {
   readonly runtime: Atom.AtomRuntime<never, never>;
   readonly tag: AtomTag<unknown, never>;
   readonly recipeOut: WeakMap<object, unknown>;
 };
 
-/** Unbound recipe. `_svc` is phantom so `Svc` stays in the type. */
+/** Unbound recipe. `_svc` is phantom so `Svc` stays in the type. @internal */
 export type Recipe<Svc, Out> = {
   readonly [RecipeTypeId]: typeof RecipeTypeId;
   readonly bind: (ctx: BindContext) => Out;
   readonly _svc?: Svc;
 };
 
-/** Unbound pack. `_svc` is phantom so `Svc` stays in the type. */
+/** Unbound pack. `_svc` is phantom so `Svc` stays in the type. @internal */
 export type Pack<Svc, Out extends object> = {
   readonly [PackTypeId]: typeof PackTypeId;
   readonly bind: (ctx: BindContext) => Out;
@@ -53,6 +53,7 @@ type FoldAtom<A> = Atom.Atom<
   AsyncResult.AsyncResult<A, Cause.NoSuchElementError>
 >;
 
+/** @internal */
 export type BoundOf<R> = R extends Recipe<infer _S, infer Out>
   ? Out
   : R extends Pack<infer _S, infer Out>
@@ -89,6 +90,7 @@ const toLiveStream = <A, E>(selected: LiveSource<A, E>): StreamT.Stream<A, E> =>
 
 /**
  * Build a custom recipe from a bind function (tag-aware / node-scoped fields).
+ * @internal
  */
 export const recipe = <Svc, Out>(bind: (ctx: BindContext) => Out): Recipe<Svc, Out> => ({
   [RecipeTypeId]: RecipeTypeId,
@@ -99,6 +101,7 @@ const makeRecipe = recipe;
 
 /**
  * Build a named pack from a bind function (escape hatch for complex family surfaces).
+ * @internal
  */
 export const packOf = <Svc, Out extends object>(
   id: string,
@@ -136,6 +139,7 @@ const runField = <Svc>(
 
 /**
  * Live Subscribable / Stream → `Atom<AsyncResult>` (unbound).
+ * @internal
  */
 export const atom = <Svc, A, E = never>(
   select: (svc: Svc) => LiveSource<A, E>,
@@ -151,6 +155,7 @@ export const atom = <Svc, A, E = never>(
 
 /**
  * One-shot Effect read → `Atom<AsyncResult>` (unbound).
+ * @internal
  */
 export const query = <Svc, A, E = never>(
   select: (svc: Svc) => Effect.Effect<A, E>,
@@ -166,6 +171,7 @@ export const query = <Svc, A, E = never>(
 
 /**
  * Command → `AtomResultFn` (unbound).
+ * @internal
  */
 export const fn = <Svc, Arg = void, A = void, E = never>(
   select: (
@@ -181,6 +187,7 @@ export const fn = <Svc, Arg = void, A = void, E = never>(
     ),
   );
 
+/** @internal */
 export type FoldOptions<Svc, I, Acc> = {
   readonly initial: (tag: { readonly key: string }) => Acc;
   readonly step: (acc: Acc, item: I) => Acc;
@@ -192,6 +199,7 @@ export type FoldOptions<Svc, I, Acc> = {
 
 /**
  * Fold a live stream (optional seed prefix) into one atom — shared parent for {@link map}.
+ * @internal
  */
 export const fold = <Svc, I, Acc>(
   select: (svc: Svc) => LiveSource<I, never>,
@@ -233,6 +241,7 @@ export const fold = <Svc, I, Acc>(
 
 const foldCache = new WeakMap<object, Map<string, Atom.Atom<unknown>>>();
 
+/** @internal */
 export type ScanOptions<Svc, I, A> = {
   readonly map: (item: I) => A;
   readonly cap: number;
@@ -246,6 +255,7 @@ export type ScanOptions<Svc, I, A> = {
 
 /**
  * Scan a stream into a capped history array (optional local cache + seed).
+ * @internal
  */
 export const scan = <Svc, I, A>(
   select: (svc: Svc) => LiveSource<I, never>,
@@ -269,6 +279,7 @@ export const scan = <Svc, I, A>(
 
 /**
  * Poll an Effect on a spaced schedule → live atom.
+ * @internal
  */
 export const poll = <Svc, A, E = never>(
   select: (svc: Svc) => Effect.Effect<A, E>,
@@ -297,6 +308,7 @@ export const poll = <Svc, A, E = never>(
 
 /**
  * Project a recipe’s success value (shares upstream bind via context cache).
+ * @internal
  */
 export const map = <Svc, A, B, E>(
   recipe: Recipe<Svc, Atom.Atom<AsyncResult.AsyncResult<A, E>>>,
@@ -314,6 +326,7 @@ type StructOut<Fields> = {
 
 /**
  * Build a pack from named recipes (or nested packs).
+ * @internal
  */
 export const struct = <
   Svc,
@@ -336,6 +349,7 @@ export const struct = <
 /**
  * Merge two packs (right wins on key clash).
  * Right pack may require a wider service (`SvcB`); left’s service must extend it.
+ * @internal
  */
 export const merge = <
   SvcA extends SvcB,
@@ -350,6 +364,7 @@ export const merge = <
 
 /**
  * Pipe-friendly merge: `pipe(left, Observe.and(right))`.
+ * @internal
  */
 export const and =
   <SvcB, B extends object>(right: Pack<SvcB, B>) =>
@@ -360,6 +375,7 @@ export const and =
 
 /**
  * Stable pack id for HMR-safe memo keys.
+ * @internal
  */
 export const named = <Svc, Out extends object>(
   id: string,
@@ -373,6 +389,7 @@ const packMemoKey = (tagKey: string, pack: Pack<any, any>): string =>
 
 /**
  * Discharge a pack against a tag under an explicit runtime.
+ * @internal
  */
 export const bind =
   <R, ER>(runtime: Atom.AtomRuntime<R, ER>) =>

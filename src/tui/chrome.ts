@@ -6,10 +6,10 @@
  *
  */
 
-/** A HyperService's folded lifecycle state — the key of the default status theme. */
+/** A HyperService's folded lifecycle state — the key of the default status theme. @internal */
 export type Status = "idle" | "running" | "paused" | "draining" | "off";
 
-/** Terminal color per {@link Status} (Ink color names). */
+/** Terminal color per {@link Status} (Ink color names). @internal */
 export const statusColor: Record<Status, string> = {
   idle: "gray",
   running: "green",
@@ -18,7 +18,7 @@ export const statusColor: Record<Status, string> = {
   off: "red",
 };
 
-/** Glyph per {@link Status}. */
+/** Glyph per {@link Status}. @internal */
 export const statusIcon: Record<Status, string> = {
   idle: "○",
   running: "►",
@@ -31,6 +31,7 @@ export const statusIcon: Record<Status, string> = {
  * An always-present **invisible** Ink border (spaces) so toggling a visible border on/off
  * never shifts layout — pass it as `borderStyle` for the "off" state.
  *
+ * @internal
  */
 export const blankBorder = {
   topLeft: " ",
@@ -43,14 +44,14 @@ export const blankBorder = {
   left: " ",
 } as const;
 
-/** A horizontal bar string (`███░░░`) of `width`, filled to `value / max`. */
+/** A horizontal bar string (`███░░░`) of `width`, filled to `value / max`. @internal */
 export const bar = (value: number, max: number, width: number): string => {
   const filled = max <= 0 ? 0 : Math.min(width, Math.round((value / max) * width));
   return "█".repeat(filled) + "░".repeat(width - filled);
 };
 
 const SPARK = "▁▂▃▄▅▆▇█";
-/** A unicode sparkline (`▁▃▅█`) for a numeric series, scaled to its own max. */
+/** A unicode sparkline (`▁▃▅█`) for a numeric series, scaled to its own max. @internal */
 export const spark = (values: ReadonlyArray<number>): string => {
   if (values.length === 0) {
     return "";
@@ -59,13 +60,14 @@ export const spark = (values: ReadonlyArray<number>): string => {
   return values.map((v) => SPARK[Math.min(7, Math.floor((v / max) * 7))] ?? " ").join("");
 };
 
-/** Format milliseconds as seconds (`1.2s`). */
+/** Format milliseconds as seconds (`1.2s`). @internal */
 export const fmt = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 /**
  * Compact a count to ≤4 chars (`16k`, `1.3k`, `1.2M`) so deep live values never overflow a
  * fixed-width terminal column.
  *
+ * @internal
  */
 export const compact = (n: number): string =>
   n < 1000
@@ -76,5 +78,5 @@ export const compact = (n: number): string =>
         ? `${Math.round(n / 1000)}k`
         : `${(n / 1_000_000).toFixed(1)}M`;
 
-/** Display name from a tag id — the last `/` segment (`@acme/queues/Mail` → `Mail`). */
+/** Display name from a tag id — the last `/` segment (`@acme/queues/Mail` → `Mail`). @internal */
 export const displayName = (key: string): string => key.split("/").pop() ?? key;

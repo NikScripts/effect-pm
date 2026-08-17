@@ -239,6 +239,7 @@ export interface GateMetrics {
   readonly exceeded: Hyperlink.Subscribable<number>;
 }
 
+/** @public */
 export interface Gate<
   Payload,
   Success = void,
@@ -1089,6 +1090,7 @@ const handoffOptionOf = (
   return undefined;
 };
 
+/** @public */
 export const serveRemote = <
   Self,
   I extends Schema.Top,

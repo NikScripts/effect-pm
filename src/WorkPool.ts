@@ -1784,6 +1784,7 @@ export type PriorityInstanceSpec<F extends Schema.Struct.Fields> = Omit<
 };
 
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
+ * @public
  *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. */
 export const priorityKind = "hyperlink-ts/WorkPool/priority";
 
