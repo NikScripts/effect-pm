@@ -277,7 +277,7 @@ const isContextKey = (u: unknown): u is Context.Key<any, any> =>
 export type PropsOfLinked<C> = C extends React.ComponentType<infer P extends object>
   ? P
   : Context.Service.Shape<C> extends (props: infer P extends object) => any ? P
-  : {};
+  : Record<never, never>;
 
 type PathKeysOf<M> = M extends {
   readonly "~last-ts/pathKeys": infer K extends readonly string[];
@@ -307,9 +307,9 @@ type AttrFullProps<A extends ApiConstraint> = {
 export type DestPropsFromOpts<
   A extends ApiConstraint,
   O extends LinkOpts<A>,
-> = [O] extends [{ readonly out: string }] ? {}
+> = [O] extends [{ readonly out: string }] ? Record<never, never>
   : [O] extends [{ readonly to: (urls: UrlBuilder<A>) => infer R }] ? (
-      [R] extends [string] ? {}
+      [R] extends [string] ? Record<never, never>
         : [R] extends [{ readonly "~last-ts/pathKeys": readonly string[] }]
           ? PathParamProps<R>
         : [R] extends [object] ? GroupToProp<R>
@@ -322,7 +322,7 @@ export type DestPropsFromOpts<
 type LinkedProps<
   A extends ApiConstraint,
   O extends LinkOpts<A>,
-  C = {},
+  C = Record<never, never>,
 > = PropsOfLinked<C> & LinkAnchorProps & DestPropsFromOpts<A, O>;
 
 /**
@@ -349,17 +349,23 @@ export const link: {
   const Component = isComponent(second) ? second : undefined;
   let opts: LinkOpts<any> | undefined;
   let layer: Layer.Layer<unknown, never, never> | undefined;
+  // Boolean guards (not inline narrows): keep `third` / `fourth` as `unknown` at the cast
+  // sites, so the unknown-channel Layer type from `isLayer`'s predicate never lands in a
+  // typed position. SAFE: an overload-checked kit Layer is stored erased; it is only
+  // Layer.built into the ambient link context.
+  const thirdIsLayer: boolean = Layer.isLayer(third);
+  const fourthIsLayer: boolean = Layer.isLayer(fourth);
   if (Component !== undefined) {
-    if (Layer.isLayer(third)) {
+    if (thirdIsLayer) {
       opts = undefined;
       layer = third as Layer.Layer<unknown, never, never>;
     } else {
       opts = third as LinkOpts<any> | undefined;
-      layer = Layer.isLayer(fourth)
+      layer = fourthIsLayer
         ? (fourth as Layer.Layer<unknown, never, never>)
         : undefined;
     }
-  } else if (Layer.isLayer(third)) {
+  } else if (thirdIsLayer) {
     opts = second as LinkOpts<any>;
     layer = third as Layer.Layer<unknown, never, never>;
   } else {

@@ -5,6 +5,7 @@ import * as Context from "effect/Context";
 import { dual } from "effect/Function";
 import * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
+import type * as HttpMethod from "effect/unstable/http/HttpMethod";
 import { HttpApiEndpoint } from "effect/unstable/httpapi";
 import * as pageSuccess from "./pageSuccess";
 import type { RequestOptions } from "./routeRequest";
@@ -40,6 +41,11 @@ export type Constraint = HttpApiEndpoint.Constraint & {
 /**
  * Page destination — `HttpApiEndpoint.get` with {@link pageSuccess.Page} success.
  * Params/Query phantoms preserved for {@link pageSuccess.PagePropsFromEndpoint}.
+ *
+ * The slots mirror what `HttpApiEndpoint.get` actually returns on this Effect
+ * version: params/query/headers arrive as `toCodecStringTree` codecs and the
+ * success schema as a `toCodecJson` codec — declaring the bare schemas here
+ * would type an endpoint the constructor never produces.
  */
 export type Route<
   Id extends string = string,
@@ -51,11 +57,11 @@ export type Route<
   Id,
   "GET",
   PathType,
-  Params,
-  Query,
+  [Params] extends [never] ? never : Schema.toCodecStringTree<Params>,
+  [Query] extends [never] ? never : Schema.toCodecStringTree<Query>,
   never,
-  Headers,
-  pageSuccess.Page,
+  [Headers] extends [never] ? never : Schema.toCodecStringTree<Headers>,
+  Schema.toCodecJson<pageSuccess.Page>,
   never
 >;
 
@@ -92,13 +98,47 @@ export const get = <
 export type { RequestOptions } from "./routeRequest";
 
 /**
+ * The endpoint type after a params swap — every slot of `E` preserved, the
+ * Params slot rebuilt as the `toCodecStringTree` codec `HttpApiEndpoint.get`
+ * mints for `S`. Keeping this typed (not erased to {@link Constraint}) is what
+ * keeps a catalog's {@link UrlBuilder} / paths literal after `Route.params`.
+ */
+export type ReParams<E, S extends Schema.Top> = E extends {
+  readonly identifier: infer Id extends string;
+  readonly method: infer Method extends HttpMethod.HttpMethod;
+  readonly path: infer PathType extends string;
+  readonly "~Query": infer Query extends Schema.Top;
+  readonly "~Payload": infer Payload extends Schema.Top;
+  readonly "~Headers": infer Headers extends Schema.Top;
+  readonly "~Success": infer Success extends Schema.Top;
+  readonly "~Error": infer Err extends Schema.Top;
+}
+  ? HttpApiEndpoint.HttpApiEndpoint<
+      Id,
+      Method,
+      PathType,
+      Schema.toCodecStringTree<S>,
+      Query,
+      Payload,
+      Headers,
+      Success,
+      Err
+    > &
+      (E extends pageSuccess.PageEndpointBrand ? pageSuccess.PageEndpointBrand
+      : unknown)
+  : Constraint;
+
+/**
  * Attach / replace params schema (rebuilds the endpoint — HttpApi has no setter).
  */
 export const params: {
   <S extends Schema.Top>(
     schema: S,
-  ): (self: Constraint) => Constraint;
-  <S extends Schema.Top>(self: Constraint, schema: S): Constraint;
+  ): <E extends Constraint>(self: E) => ReParams<E, S>;
+  <E extends Constraint, S extends Schema.Top>(
+    self: E,
+    schema: S,
+  ): ReParams<E, S>;
 } = dual(2, (self: Constraint, schema: Schema.Top): Constraint => {
   const success = Array.from(self.success ?? [pageSuccess.Page]);
   const error = Array.from(

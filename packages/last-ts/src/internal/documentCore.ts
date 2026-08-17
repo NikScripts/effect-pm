@@ -58,8 +58,8 @@ export type BaseFieldsPartial = {
   readonly styles?: ReadonlyArray<string>;
 };
 
-export type FieldsOf<Extras extends object = {}> = BaseFields & Extras;
-export type FieldsPartialOf<Extras extends object = {}> = BaseFieldsPartial &
+export type FieldsOf<Extras extends object = Record<never, never>> = BaseFields & Extras;
+export type FieldsPartialOf<Extras extends object = Record<never, never>> = BaseFieldsPartial &
   Partial<Extras>;
 
 /** Phantom contrib bag on sugars for {@link ProvideResult}. @internal */
@@ -71,7 +71,7 @@ export const ContributesTypeId = "~last-ts/Document/contributes" as const;
  *
  * @public
  */
-export type Patch<F extends object = BaseFields, C extends object = {}> = {
+export type Patch<F extends object = BaseFields, C extends object = Record<never, never>> = {
   readonly [PatchTypeId]: typeof PatchTypeId;
   readonly transform: (prev: F) => F;
   readonly [ContributesTypeId]?: C;
@@ -83,7 +83,7 @@ export const isPatch = (u: unknown): u is Patch<any, any> =>
   PatchTypeId in u &&
   (u as Patch)[PatchTypeId] === PatchTypeId;
 
-export const makePatch = <F extends object, C extends object = {}>(
+export const makePatch = <F extends object, C extends object = Record<never, never>>(
   transform: (prev: F) => F,
 ): Patch<F, C> => ({
   [PatchTypeId]: PatchTypeId,
@@ -131,14 +131,14 @@ export type ProvideRequired = {
 /** Contrib bag of one provide arg (patch phantom or object literal). @internal */
 export type ContribOf<A> = A extends Patch<any, infer C> ? C
   : A extends object ? A
-  : {};
+  : Record<never, never>;
 
 /** Left→right fold of provide arg contribs. @internal */
 export type FoldContribs<Args extends ReadonlyArray<unknown>> =
-  Args extends readonly [] ? {}
+  Args extends readonly [] ? Record<never, never>
   : Args extends readonly [infer Head, ...infer Tail]
     ? MergeLast<ContribOf<Head>, FoldContribs<Tail>>
-    : {};
+    : Record<never, never>;
 
 /**
  * {@link Layer} when contribs cover provide-required keys; else a diagnostic.

@@ -23,7 +23,7 @@ export type RequestValue = {
  * @public
  */
 export class Request extends Context.Service<Request, RequestValue>()(
-  "last-ts/Page/Request",
+  "last-ts/internal/pageServices/Request",
 ) {}
 
 /**
@@ -52,5 +52,5 @@ export type DocumentApi = {
  * @internal
  */
 export class Document extends Context.Service<Document, DocumentApi>()(
-  "last-ts/Page/Document",
+  "last-ts/internal/pageServices/Document",
 ) {}

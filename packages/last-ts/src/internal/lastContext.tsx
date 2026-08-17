@@ -81,6 +81,7 @@ export const EffectReactContext = React.createContext<
 >(null);
 
 export const EffectContextProvider = (props: {
+  // Any provider context fits here; lookups are spec-driven and dynamic.
   readonly context: Context.Context<any>;
   readonly children: React.ReactNode;
 }): React.ReactElement =>
@@ -139,12 +140,12 @@ const registerBags = (
  */
 export const context = <const S extends Spec>(
   spec: S,
-): (abstract new () => {}) & LastContextClass<S> => {
+): (abstract new () => Record<never, never>) & LastContextClass<S> => {
   abstract class Ctx {
     static readonly [LastContextTypeId] = LastContextTypeId;
     static readonly spec = spec;
   }
-  return Ctx as unknown as (abstract new () => {}) & LastContextClass<S>;
+  return Ctx as unknown as (abstract new () => Record<never, never>) & LastContextClass<S>;
 };
 
 /** Active ContextScope classes mounted for the current match (catalog→group→route). */
@@ -392,24 +393,17 @@ export const provideContext: {
     Exclude<R, ServicesOf<C>> | R2
   >;
 } = ((
-  first: Layer.Layer<any, any, any> | LastContextClass<any>,
-  second?: Layer.Layer<any, any, any>,
+  first: Layer.Layer<never> | LastContextClass<any>,
+  second?: Layer.Layer<never>,
 ) => {
-  const kit = second ?? (first as Layer.Layer<any, any, any>);
-  const ctxClass = second !== undefined
-    ? (first as LastContextClass)
-    : undefined;
-  return <A, E, R>(
-    self: Layer.Layer<A, E, R>,
-  ): Layer.Layer<any, any, any> => {
-    const merged = Layer.provideMerge(self, kit);
-    if (ctxClass === undefined) {
-      return merged;
-    }
-    // Type-level discharge of ServicesOf<Ctx>; runtime is provideMerge only.
-    return merged;
-  };
-}) as typeof provideContext;
+  const kit = second !== undefined ? second : (first as Layer.Layer<never>);
+  // Type-level discharge of ServicesOf<Ctx> lives in the overloads above;
+  // runtime is provideMerge only, for both the kit-only and ctx+kit forms.
+  return <A, E, R>(self: Layer.Layer<A, E, R>) =>
+    Layer.provideMerge(self, kit);
+  // SAFE: never-erased impl behind the typed overloads — the overloads restate the
+  // real channel algebra; the body only merges layers. No runtime value to validate.
+}) as unknown as typeof provideContext;
 
 const providerCache = new WeakMap<
   LastContextClass,

@@ -16,11 +16,11 @@ export type DocumentCell = FieldsCell<BaseFields> & {
 };
 
 export class Cell extends Context.Service<Cell, DocumentCell>()(
-  "last-ts/Document/Cell",
+  "last-ts/internal/documentReact/Cell",
 ) {}
 
 export class Fields extends Context.Service<Fields, BaseFields>()(
-  "last-ts/Document/Fields",
+  "last-ts/internal/documentReact/Fields",
 ) {}
 
 const CellReact = React.createContext<DocumentCell | null>(null);

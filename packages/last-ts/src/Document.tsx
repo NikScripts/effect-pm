@@ -18,10 +18,10 @@ export type DocumentMeta = core.DocumentMeta;
 export type DocumentLink = core.DocumentLink;
 export type DocumentScript = core.DocumentScript;
 export type BaseFields = core.BaseFields;
-export type FieldsOf<Extras extends object = {}> = core.FieldsOf<Extras>;
+export type FieldsOf<Extras extends object = Record<never, never>> = core.FieldsOf<Extras>;
 export type Patch<
   F extends object = BaseFields,
-  C extends object = {},
+  C extends object = Record<never, never>,
 > = core.Patch<F, C>;
 
 export const PatchTypeId = core.PatchTypeId;
@@ -34,7 +34,7 @@ export { Cell, Fields };
 
 const DocumentTypeId = "~last-ts/Document" as const;
 
-export type AnyDocument<Extras extends object = {}> = {
+export type AnyDocument<Extras extends object = Record<never, never>> = {
   readonly [DocumentTypeId]: typeof DocumentTypeId;
   readonly key: string;
   readonly render: docReact.HeadRender;
@@ -50,11 +50,11 @@ const identityTitle = (title: string): string => title;
  * @public
  */
 export const make =
-  <Extras extends object = {}>() =>
+  <Extras extends object = Record<never, never>>() =>
   (
     key: string,
     render: Effect.Effect<React.ReactNode, never, Fields>,
-  ): (abstract new (_: never) => {}) & AnyDocument<Extras> => {
+  ): (abstract new (_: never) => Record<never, never>) & AnyDocument<Extras> => {
     const Head = docReact.makeHeadComponent(render);
     const Doc = class {
       static readonly [DocumentTypeId] = DocumentTypeId;
@@ -63,7 +63,7 @@ export const make =
       static readonly Head = Head;
       declare static readonly "~last-ts/Document/fields": FieldsOf<Extras>;
     };
-    return Doc as unknown as (abstract new (_: never) => {}) &
+    return Doc as unknown as (abstract new (_: never) => Record<never, never>) &
       AnyDocument<Extras>;
   };
 
@@ -153,10 +153,10 @@ export const Head: Context.Reference<React.FC> = Context.Reference(
  * @public
  */
 export const transform: {
-  <F extends object, C extends object = {}>(
+  <F extends object, C extends object = Record<never, never>>(
     fn: (prev: F) => F,
   ): Patch<F, C>;
-  <D extends AnyDocument<any>, C extends object = {}>(
+  <D extends AnyDocument<any>, C extends object = Record<never, never>>(
     doc: D,
     fn: (prev: D["~last-ts/Document/fields"]) => D["~last-ts/Document/fields"],
   ): Patch<D["~last-ts/Document/fields"], C>;

@@ -46,8 +46,10 @@ type GroupMap<Groups extends GroupTop> = {
  */
 export class FromRoutes extends Context.Service<
   FromRoutes,
-  Context.Service<any, ReadonlyArray<uiRoute.Constraint>>
->()("last-ts/Router/FromRoutes") {}
+  // Identity is deliberately open (`unknown`, not `any`): any app service key fits, and the
+  // requirement is surfaced on the typed catalog `R` (resolveApi), not through this shape.
+  Context.Key<unknown, ReadonlyArray<uiRoute.Constraint>>
+>()("last-ts/internal/routes/FromRoutes") {}
 
 /**
  * Accumulated path prefix for deferred {@link GroupTop.from} destinations.
@@ -56,7 +58,7 @@ export class FromRoutes extends Context.Service<
  * @internal
  */
 export class GroupPrefix extends Context.Service<GroupPrefix, Path>()(
-  "last-ts/Router/GroupPrefix",
+  "last-ts/internal/routes/GroupPrefix",
 ) {}
 
 /**
@@ -68,7 +70,7 @@ export class GroupPrefix extends Context.Service<GroupPrefix, Path>()(
 export class ContextScope extends Context.Service<
   ContextScope,
   lastContextModule.LastContextClass
->()("last-ts/Router/ContextScope") {}
+>()("last-ts/internal/routes/ContextScope") {}
 
 /** {@link ../Last.ServicesOf} — type-only; avoids a runtime cycle with lastContext. */
 type lastContextServicesOf<C> = lastContextModule.ServicesOf<C>;
@@ -278,7 +280,7 @@ export interface Api<
   out DeferredGroups extends GroupTop = never,
   out Ctx = never,
 > extends Pipeable {
-  new(_: never): {};
+  new(_: never): Record<never, never>;
   readonly [TypeId]: typeof TypeId;
   readonly identifier: Id;
   readonly groups: GroupMap<Groups>;
@@ -351,7 +353,7 @@ export interface ApiConstraint {
     api: HttpApi.HttpApi<Id2, ApiGroups>,
   ): ApiConstraint;
   groupsEffect(
-    effect: Effect.Effect<Iterable<GroupTop>, never, unknown>,
+    effect: Effect.Effect<ReadonlyArray<GroupTop>, never, never>,
   ): ApiConstraint;
   prefix(prefix: Path): ApiConstraint;
   context(ctx: unknown): ApiConstraint;
@@ -393,7 +395,7 @@ export type RouteLike = uiRoute.Constraint | GroupTop;
  */
 export class FromEffect extends Context.Service<
   FromEffect,
-  Effect.Effect<Iterable<RouteLike>, never, unknown>
+  Effect.Effect<Iterable<RouteLike>, never, never>
 >()("last-ts/internal/routes/FromEffect") {}
 
 /**
@@ -403,7 +405,7 @@ export class FromEffect extends Context.Service<
  */
 export class FromGroups extends Context.Service<
   FromGroups,
-  Effect.Effect<Iterable<GroupTop>, never, unknown>
+  Effect.Effect<Iterable<GroupTop>, never, never>
 >()("last-ts/internal/routes/FromGroups") {}
 
 /** What {@link GroupTop.add} / {@link Api.add} accept (Router + Effect HttpApi). */
@@ -646,7 +648,7 @@ const groupProto = {
   },
   effect(
     this: GroupTop,
-    effect: Effect.Effect<Iterable<RouteLike>, never, unknown>,
+    effect: Effect.Effect<Iterable<RouteLike>, never, never>,
   ): GroupTop {
     // Always defer — interpret in resolveApi / RouterBuilder.layer (Effect R).
     return this.annotate(FromEffect, effect);
@@ -752,7 +754,7 @@ const appProto = {
   },
   groupsEffect(
     this: ApiConstraint,
-    effect: Effect.Effect<Iterable<GroupTop>, never, unknown>,
+    effect: Effect.Effect<Iterable<GroupTop>, never, never>,
   ): ApiConstraint {
     return this.annotate(FromGroups, effect);
   },
@@ -1335,7 +1337,7 @@ const applyPrefix = (
  */
 export const resolveGroup = (
   g: GroupTop,
-): Effect.Effect<GroupTop, never, unknown> =>
+): Effect.Effect<GroupTop, never, never> =>
   Effect.gen(function* () {
     const children: Record<string, GroupTop> = {};
     for (const [id, child] of Object.entries(g.groups)) {
@@ -1348,8 +1350,14 @@ export const resolveGroup = (
 
     const fromTag = Context.getOption(g.annotations, FromRoutes);
     if (Option.isSome(fromTag)) {
-      const destinations: ReadonlyArray<uiRoute.Constraint> = yield* fromTag
-        .value;
+      // SAFE: the stored key's Identifier is dynamic (`from(service)`); its requirement is
+      // surfaced on the typed catalog `R` (resolveApi), so this internal read erases it.
+      const destinations: ReadonlyArray<uiRoute.Constraint> = yield* (fromTag
+        .value as unknown as Effect.Effect<
+        ReadonlyArray<uiRoute.Constraint>,
+        never,
+        never
+      >);
       for (const route of destinations) {
         const next = applyPrefix(route, prefix) as uiRoute.Constraint;
         routes = { ...routes, [next.identifier]: next };

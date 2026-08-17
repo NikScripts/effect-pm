@@ -44,7 +44,7 @@ const toNode = (
 
 /** Run a page Effect with Request + layout Override, via Atom. */
 const PageEffectView = (props: {
-  readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
+  readonly effect: Effect.Effect<React.ReactNode>;
   readonly request: pageServices.RequestValue;
   readonly args: Route.HandleArgs;
   readonly override: Layout.OverrideCell;
@@ -64,8 +64,7 @@ const PageEffectView = (props: {
             },
           }),
         ) as Effect.Effect<
-          React.ReactNode | React.ComponentType<Record<string, never>>,
-          unknown
+          React.ReactNode | React.ComponentType<Record<string, never>>
         >,
       ),
     // Rematch when the location identity changes.
@@ -144,7 +143,7 @@ const MatchedBody = (props: {
 
 /** PageEffect + live layout override via {@link Layout.provide}. */
 const PageEffectWithLayout = (props: {
-  readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
+  readonly effect: Effect.Effect<React.ReactNode>;
   readonly request: pageServices.RequestValue;
   readonly args: Route.HandleArgs;
   readonly groupLayout: React.FC;

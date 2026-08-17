@@ -34,7 +34,7 @@ type SchemaType<S> = [S] extends [never] ? never
 type FieldBagType<P> = [P] extends [Schema.Struct.Fields]
   ? SchemaType<Schema.Struct<P>>
   : [P] extends [Schema.Top] ? SchemaType<P>
-  : {};
+  : Record<never, never>;
 
 /**
  * Normalize options.params into a value Type.
@@ -42,14 +42,14 @@ type FieldBagType<P> = [P] extends [Schema.Struct.Fields]
  * @internal
  */
 export type ParamsTypeOf<O> = O extends { readonly params?: infer P }
-  ? [P] extends [undefined] ? {}
+  ? [P] extends [undefined] ? Record<never, never>
   : FieldBagType<P>
-  : {};
+  : Record<never, never>;
 
 /**
  * @internal
  */
 export type QueryTypeOf<O> = O extends { readonly query?: infer Q }
-  ? [Q] extends [undefined] ? {}
+  ? [Q] extends [undefined] ? Record<never, never>
   : FieldBagType<Q>
-  : {};
+  : Record<never, never>;

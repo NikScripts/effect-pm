@@ -44,11 +44,14 @@ export type Request = {
 /**
  * Navigate / open / confirm / virtual-window / …
  *
+ * The requirement is the live Router; anything extra a custom handler needs
+ * arrives through the link's context merge (`Link` layer), not this signature.
+ *
  * @public
  */
 export type Handler = (
   request: Request,
-) => Effect.Effect<void, never, any>;
+) => Effect.Effect<void, never, RouterTag>;
 
 const defaultTo: Handler = (request) =>
   Effect.gen(function* () {

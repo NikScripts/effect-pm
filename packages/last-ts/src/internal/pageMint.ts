@@ -34,7 +34,7 @@ export interface AnyPage<
   out Options extends RequestOptions = RequestOptions,
   out M extends Mode = Mode,
 > extends Pipeable {
-  new(_: never): {};
+  new(_: never): Record<never, never>;
   readonly [TypeId]: typeof TypeId;
   readonly options: Options;
   readonly mode: M;
@@ -83,7 +83,9 @@ const makeProto = <
 
 type Body =
   | React.ReactElement
-  | React.ComponentType
+  // `never` props: accepts a component of ANY props shape (contravariance) — the host
+  // adapts the actual props (soft-nav `params` bags, Waku flats) at render time.
+  | React.ComponentType<never>
   | Effect.Effect<React.ReactNode, unknown, unknown>;
 
 type MakeOverload = {

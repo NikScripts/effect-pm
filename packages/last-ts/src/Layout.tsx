@@ -128,7 +128,7 @@ export const make =
   (
     key: string,
     render: BodyRender,
-  ): (abstract new (_: never) => {}) &
+  ): (abstract new (_: never) => Record<never, never>) &
     AnyLayout &
     Context.Reference<React.FC> => {
     const Component = layoutReact.makeBodyComponent(key, render);
@@ -143,7 +143,7 @@ export const make =
     };
     return Object.assign(Cls, reference) as unknown as (abstract new (
       _: never,
-    ) => {}) &
+    ) => Record<never, never>) &
       AnyLayout &
       Context.Reference<React.FC>;
   };

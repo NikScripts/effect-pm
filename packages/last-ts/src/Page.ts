@@ -69,7 +69,7 @@ export type Props<P extends AnyPage> = PropsFromOptions<P["options"]>;
  *
  * @public
  */
-export type Component<P extends object = {}> = (
+export type Component<P extends object = Record<never, never>> = (
   props: P,
 ) => React.ReactElement | null;
 

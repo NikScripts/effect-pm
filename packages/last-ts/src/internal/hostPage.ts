@@ -16,7 +16,8 @@ import type * as Route from "../Route";
  * Waku `createPage` wants a FunctionComponent; keep FC (not ComponentClass)
  * so weak React props checking still accepts host path props.
  */
-type HostComponent = React.FC;
+// Waku hands hosts flat route props (path, slug parts, query) — the wrapper adapts them.
+type HostComponent = React.FC<Record<string, unknown>>;
 
 export type HostPageStatic = {
   readonly render: "static";
@@ -174,20 +175,24 @@ const toComponent = (
     Fixed.displayName = "Page.default(element)";
     return Fixed;
   }
-  if (Effect.isEffect(body)) {
+  // Boolean guard (not an inline narrow) keeps `body` un-narrowed, so the any-channel
+  // Effect type from `isEffect`'s predicate never lands in a typed position.
+  const bodyIsEffect: boolean = Effect.isEffect(body);
+  if (bodyIsEffect) {
     // RSC host: run the Effect once per request. Do **not** import View /
     // AtomReact here — those are client-only (`createContext`) and break RSC.
     // Soft-nav Outlet still uses View.effect / Atom for live Effect pages.
-    const program = body;
-    const EffectPage = async (): Promise<React.ReactNode> => {
-      const node = await Effect.runPromise(
-        program as Effect.Effect<React.ReactNode>,
+    // SAFE: a Page mint's Effect body is contracted upstream to ReactNode success with no
+    // requirements (host pages are self-contained); channels are unobservable at runtime.
+    const program = body as Effect.Effect<React.ReactNode>;
+    // Plain Promise-returning fn (not `async`) — this is the React Server Component
+    // boundary; React awaits the returned Promise itself.
+    const EffectPage = (): Promise<React.ReactNode> =>
+      Effect.runPromise(program).then((node) =>
+        node === null || node === undefined || typeof node === "boolean"
+          ? null
+          : node,
       );
-      if (node === null || node === undefined || typeof node === "boolean") {
-        return null;
-      }
-      return node;
-    };
     EffectPage.displayName = "Page.default(effect)";
     return EffectPage as HostComponent;
   }

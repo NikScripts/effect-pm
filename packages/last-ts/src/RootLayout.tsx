@@ -63,7 +63,7 @@ export const make =
   (
     key: string,
     render: RootRender,
-  ): (abstract new (_: never) => {}) &
+  ): (abstract new (_: never) => Record<never, never>) &
     AnyRootLayout &
     Context.Reference<React.FC<{ readonly children: React.ReactNode }>> => {
     const Component = layoutReact.makeRootComponent(key, render);
@@ -78,7 +78,7 @@ export const make =
     };
     return Object.assign(Cls, reference) as unknown as (abstract new (
       _: never,
-    ) => {}) &
+    ) => Record<never, never>) &
       AnyRootLayout &
       Context.Reference<React.FC<{ readonly children: React.ReactNode }>>;
   };

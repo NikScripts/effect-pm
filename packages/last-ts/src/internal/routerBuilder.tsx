@@ -45,7 +45,7 @@ export type HandlerRuntime =
     }
   | {
       readonly _tag: "PageEffect";
-      readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
+      readonly effect: Effect.Effect<React.ReactNode>;
     }
   | {
       readonly _tag: "Api";
@@ -71,11 +71,11 @@ export class Registry extends Context.Service<
     readonly api: ApiConstraint;
     readonly groups: ReadonlyMap<string, GroupImpl>;
   }
->()("last-ts/RouterBuilder/Registry") {}
+>()("last-ts/internal/routerBuilder/Registry") {}
 
 /** Catalog value for transport Layers. @public */
 export class Catalog extends Context.Service<Catalog, ApiConstraint>()(
-  "last-ts/RouterBuilder/Catalog",
+  "last-ts/internal/routerBuilder/Catalog",
 ) {}
 
 const GROUP_KEY_PREFIX = "last-ts/Router/Group/";
@@ -120,10 +120,15 @@ type HandleAllExtraKeys<
 
 type HandlersResult<A> = A extends Effect.Effect<infer H, any, any> ? H : A;
 
-type MissingHandlerNames<H extends Handlers<any, any>> = Exclude<
-  keyof H["~EndpointsByIdentifier"],
-  H["~HandledIdentifiers"]
->;
+// A `string`-keyed endpoint map means the group's endpoints are Effect-derived
+// (`.effect` / `.groupsEffect`) — the identifiers aren't statically enumerable, so
+// completeness can't be checked and the group counts as handled.
+type MissingHandlerNames<H extends Handlers<any, any>> =
+  string extends keyof H["~EndpointsByIdentifier"] ? never
+    : Exclude<
+      keyof H["~EndpointsByIdentifier"],
+      H["~HandledIdentifiers"]
+    >;
 
 type ValidateHandlersReturn<
   A,
@@ -139,7 +144,7 @@ type ValidateHandlersReturn<
  * @public
  */
 export interface Handlers<
-  EndpointsByIdentifier extends Record<string, uiRoute.Constraint> = {},
+  EndpointsByIdentifier extends Record<string, uiRoute.Constraint> = Record<never, never>,
   HandledIdentifiers extends keyof EndpointsByIdentifier = never,
 > extends Pipeable {
   readonly [HandlersTypeId]: typeof HandlersTypeId;
@@ -257,10 +262,16 @@ const registerHandler = (
     return self;
   }
 
-  if (Effect.isEffect(handler)) {
+  // Boolean guard (not an inline narrow) keeps `handler` un-narrowed, so the any-channel
+  // Effect type from `isEffect`'s predicate never lands in a typed position.
+  const handlerIsEffect: boolean = Effect.isEffect(handler);
+  if (handlerIsEffect) {
     self.handlers.set(identifier, {
       _tag: "PageEffect",
-      effect: handler as Effect.Effect<React.ReactNode, unknown, unknown>,
+      // SAFE: a page handler's Effect is contracted upstream (HandlerForEndpoint) to
+      // ReactNode success; Request/Override are provided at render. Channels are erased
+      // in the registry and unobservable at runtime.
+      effect: handler as Effect.Effect<React.ReactNode>,
     });
     return self;
   }

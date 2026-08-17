@@ -9,5 +9,5 @@ import type { Service } from "./router";
 
 /** @internal */
 export class Router extends Context.Service<Router, Service>()(
-  "last-ts/Router",
+  "last-ts/internal/routerTag/Router",
 ) {}

@@ -135,12 +135,14 @@ export const provide: {
     requirements: Layer.Layer<R, E2, never>,
   ): A;
 } = ((
-  effect: Effect.Effect<any, any, any>,
-  requirements?: Layer.Layer<any, any, never>,
+  // Never-erased impl signature — the overloads above are the public contract; `never`
+  // keeps the body free of `any`-channel effects (the trailing cast restates the overloads).
+  effect: Effect.Effect<never, never, never>,
+  requirements?: Layer.Layer<never, never, never>,
 ) => {
   const fulfilled =
-    requirements === undefined
-      ? (effect as Effect.Effect<any, any, never>)
-      : Effect.provide(effect, requirements);
+    requirements === undefined ? effect : Effect.provide(effect, requirements);
   return Effect.runSync(fulfilled);
-}) as typeof provide;
+// SAFE: never-erased impl behind the typed overloads above; the body only optionally
+// provides and runs. No runtime value to validate.
+}) as unknown as typeof provide;

@@ -97,14 +97,14 @@ export type PagePropsFromEndpoint<E> = {
   readonly href: string;
   readonly params:
     E extends { readonly "~Params": infer Params } ?
-      [SchemaType<Params>] extends [never] ? {}
+      [SchemaType<Params>] extends [never] ? Record<never, never>
       : SchemaType<Params>
-    : {};
+    : Record<never, never>;
   readonly query:
     E extends { readonly "~Query": infer Query } ?
-      [SchemaType<Query>] extends [never] ? {}
+      [SchemaType<Query>] extends [never] ? Record<never, never>
       : SchemaType<Query>
-    : {};
+    : Record<never, never>;
 };
 
 /**

@@ -29,7 +29,7 @@ import * as internal from "./internal/routerBuilder";
 /** Handler builder (`HttpApiBuilder.Handlers`). @public */
 export type Handlers<
   EndpointsByIdentifier extends
-    Record<string, import("./internal/route").Constraint> = {},
+    Record<string, import("./internal/route").Constraint> = Record<never, never>,
   HandledIdentifiers extends keyof EndpointsByIdentifier = never,
 > = internal.Handlers<EndpointsByIdentifier, HandledIdentifiers>;
 

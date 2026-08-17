@@ -59,7 +59,9 @@ const makeLayerProvider = <R, E = never>(
 ): ((props: {
   readonly children: React.ReactNode;
 }) => React.ReactElement) => {
-  const erased = layer as Layer.Layer<any, any, never>;
+  // SAFE: never-erased for the runSync boot below; the public signature constrains E=never and
+  // RIn=never, and A is only read back out of the built Context by typed getOption calls.
+  const erased = layer as unknown as Layer.Layer<never, never, never>;
   const ContextProvider =
     ctxClass !== undefined
       ? lastContext.makeContextProvider(ctxClass)
@@ -76,7 +78,7 @@ const makeLayerProvider = <R, E = never>(
       ) as Service | null;
       const cell = Option.getOrNull(Context.getOption(ctx, Document.Cell));
       const runtime = Atom.runtime(
-        Layer_.succeedContext(ctx) as Layer.Layer<any, never, never> as never,
+        Layer_.succeedContext(ctx) as Layer.Layer<never, never, never> as never,
       );
       return { runtime, router, cell, ctx };
     }, []);
@@ -107,7 +109,12 @@ const makeLayerProvider = <R, E = never>(
         { runtime: boot.runtime },
         React.createElement(
           lastContext.EffectContextProvider,
-          { context: boot.ctx, children: withDocument },
+          // SAFE: boot.ctx is the built provider context typed through the never-erased
+          // boot layer; the provider's lookups are spec-driven and dynamic.
+          {
+            context: boot.ctx as Context.Context<any>,
+            children: withDocument,
+          },
         ),
       ),
     );
@@ -137,14 +144,14 @@ export const provider: {
     ctx: lastContext.LastContextClass,
   ): (props: { readonly children: React.ReactNode }) => React.ReactElement;
 } = ((
-  first: Layer.Layer<any, any, never> | lastContext.LastContextClass,
+  first: Layer.Layer<never, never, never> | lastContext.LastContextClass,
   second?: lastContext.LastContextClass,
 ) => {
   if (lastContext.isContextClass(first)) {
     return lastContext.makeContextProvider(first);
   }
   return makeLayerProvider(
-    first as Layer.Layer<any, any, never>,
+    first as Layer.Layer<never, never, never>,
     second,
   );
 }) as typeof provider;

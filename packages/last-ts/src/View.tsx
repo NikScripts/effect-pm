@@ -22,7 +22,7 @@
  * Plain React JSX (`react/jsx-runtime`) — no custom `jsxImportSource`.
  */
 import * as React from "react";
-import { Cause, Context, Effect, Layer } from "effect";
+import { Cause, Context, Effect } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
 import { kindSym } from "./internal/kindSym";
@@ -57,12 +57,12 @@ export const annotationsSym: unique symbol = Symbol.for(
 );
 
 /**
- * Plain render function — what {@link Layer.succeed} / {@link Layer.effect}
+ * Plain render function — what `Layer.succeed` / `Layer.effect`
  * install into a Service. Edge: {@link Last.provide}`(Tag, layer)`.
  *
  * @public
  */
-export type ViewFn<Props extends object = {}> = (
+export type ViewFn<Props extends object = Record<never, never>> = (
   props: Props,
 ) => React.ReactElement | null;
 
@@ -71,7 +71,7 @@ export type ViewFn<Props extends object = {}> = (
  *
  * @public
  */
-export type View<Props extends object = {}> = ViewFn<Props>;
+export type View<Props extends object = Record<never, never>> = ViewFn<Props>;
 
 /**
  * Turn an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
@@ -99,15 +99,17 @@ export const effect = <E = never, R = never>(
   const Comp = (): React.ReactElement | null => {
     const runtime = AtomReact.useRuntime();
     const request = pageContext.useRequestOption();
-    const atom = React.useMemo(() => {
-      let next: Effect.Effect<React.ReactNode, unknown, unknown> = program;
-      if (request !== null) {
-        next = next.pipe(
-          Effect.provideService(pageServices.Request, request),
-        );
-      }
-      return runtime.atom(next);
-    }, [runtime, program, request?.href]);
+    const atom = React.useMemo(
+      () =>
+        request === null
+          ? runtime.atom(program)
+          : runtime.atom(
+              program.pipe(
+                Effect.provideService(pageServices.Request, request),
+              ),
+            ),
+      [runtime, program, request?.href],
+    );
     const result = AtomReact.useAtomValue(atom);
     if (AsyncResult.isSuccess(result)) {
       const node = result.value;
@@ -139,7 +141,7 @@ type AnyAnnotations = Record<string, unknown>;
 type NextRequirement<
   Requirement extends AnyAnnotations,
   Annotations extends AnyAnnotations,
-> = Annotations extends Requirement ? {} : Requirement;
+> = Annotations extends Requirement ? Record<never, never> : Requirement;
 
 /**
  * Merge open Requirement with Requirement declared on this chain step.
@@ -235,9 +237,9 @@ export type IsFulfilled<P> = [keyof RequirementOf<P>] extends [never] ? true : f
  * @public
  */
 export type OpenPrototype<
-  Props extends object = {},
-  Requirement extends AnyAnnotations = {},
-> = Prototype<Props, Requirement, {}>;
+  Props extends object = Record<never, never>,
+  Requirement extends AnyAnnotations = Record<never, never>,
+> = Prototype<Props, Requirement, Record<never, never>>;
 
 /**
  * Prototype whose Requirement is discharged (`{}`).
@@ -245,33 +247,40 @@ export type OpenPrototype<
  * @public
  */
 export type FulfilledPrototype<
-  Props extends object = {},
-  Annotations extends AnyAnnotations = {},
-> = Prototype<Props, {}, Annotations>;
+  Props extends object = Record<never, never>,
+  Annotations extends AnyAnnotations = Record<never, never>,
+> = Prototype<Props, Record<never, never>, Annotations>;
 
 /** Stamps on every minted View handle. @internal */
-type ViewStamps<
+/**
+ * Symbol-keyed stamps on a minted View handle — the annotations bag, the factory kind
+ * brand, and the props phantom. Exported so consumer declaration emit can reference the
+ * stamped base type by NAME instead of inlining unique-symbol keys (TS4020).
+ *
+ * @public
+ */
+export interface ViewStamps<
   Props extends object,
   Annotations extends AnyAnnotations,
-> = {
+> {
   readonly [annotationsSym]: Annotations;
   readonly [kindSym]: typeof kind;
   /** Phantom — component props. */
   readonly Type: Props;
-};
+}
 
-/** Required View handle — {@link Context.Service}. @internal */
-type ViewHandle<
+/** Required View handle — {@link Context.Service}. @public */
+export type ViewHandle<
   Self,
   K extends string,
   Props extends object,
-  Annotations extends AnyAnnotations = {},
+  Annotations extends AnyAnnotations = Record<never, never>,
 > = Context.ServiceClass<Self, K, ViewFn<Props>> & ViewStamps<Props, Annotations>;
 
-/** Optional View slot — {@link Context.Reference}. @internal */
-type ViewHandleDefault<
+/** Optional View slot — {@link Context.Reference}. @public */
+export type ViewHandleDefault<
   Props extends object,
-  Annotations extends AnyAnnotations = {},
+  Annotations extends AnyAnnotations = Record<never, never>,
 > = Context.Reference<ViewFn<Props>> & ViewStamps<Props, Annotations>;
 
 /**
@@ -295,8 +304,8 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
  */
 export interface Prototype<
   in out Props extends object,
-  in out Requirement extends AnyAnnotations = {},
-  out Annotations extends AnyAnnotations = {},
+  in out Requirement extends AnyAnnotations = Record<never, never>,
+  out Annotations extends AnyAnnotations = Record<never, never>,
 > {
   /** Accumulator while chaining — not present on minted services. */
   readonly annotations: Annotations;
@@ -314,9 +323,9 @@ export interface Prototype<
    * ```
    */
   readonly Prototype: <
-    NewProps extends object = {},
-    NewRequirement extends AnyAnnotations = {},
-  >() => <const NewAnnotations extends AnyAnnotations = {}>(
+    NewProps extends object = Record<never, never>,
+    NewRequirement extends AnyAnnotations = Record<never, never>,
+  >() => <const NewAnnotations extends AnyAnnotations = Record<never, never>>(
     annotations?: NewAnnotations,
   ) => Prototype<
     Flat<Props & NewProps>,
@@ -339,8 +348,8 @@ export interface Prototype<
    * Leaf HTML / optional slots: pass a default as the 2nd arg. Required Services:
    * install with a const `Layer.succeed` / `Layer.effect` (never `static layer`).
    */
-  readonly Service: <Self, NewProps extends object = {}>() => {
-    <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
+  readonly Service: <Self, NewProps extends object = Record<never, never>>() => {
+    <const K extends string, const NewAnnotations extends AnyAnnotations = Record<never, never>>(
       key: K,
       defaultView: ViewFn<Flat<Props & NewProps>>,
       annotations?: NewAnnotations,
@@ -348,7 +357,7 @@ export interface Prototype<
       Flat<Props & NewProps>,
       Flat<Annotations & NewAnnotations>
     >;
-    <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
+    <const K extends string, const NewAnnotations extends AnyAnnotations = Record<never, never>>(
       key: K,
       annotations?: NewAnnotations,
     ): ViewHandle<
@@ -369,8 +378,8 @@ const makePrototype = <
 ): Prototype<Props, Requirement, Annotations> => ({
   annotations: bag,
   Prototype:
-    <NewProps extends object = {}, NewRequirement extends AnyAnnotations = {}>() =>
-    <const NewAnnotations extends AnyAnnotations = {},>(next?: NewAnnotations) => {
+    <NewProps extends object = Record<never, never>, NewRequirement extends AnyAnnotations = Record<never, never>>() =>
+    <const NewAnnotations extends AnyAnnotations = Record<never, never>,>(next?: NewAnnotations) => {
       type NextProps = Flat<Props & NewProps>;
       type NextAnnotations = Flat<Annotations & NewAnnotations>;
       type NextReq = NextRequirement<
@@ -382,7 +391,7 @@ const makePrototype = <
         ...(next ?? ({} as NewAnnotations)),
       });
     },
-  Service: ((<Self, NewProps extends object = {}>() =>
+  Service: ((<Self, NewProps extends object = Record<never, never>>() =>
     (key: string, second?: unknown, third?: unknown) => {
       type NextProps = Flat<Props & NewProps>;
       let defaultView: ViewFn<NextProps> | undefined;
@@ -423,8 +432,8 @@ const makePrototype = <
  * @public
  */
 export const Prototype =
-  <Props extends object = {}, Requirement extends AnyAnnotations = {}>() =>
-  <const Annotations extends AnyAnnotations = {}>(
+  <Props extends object = Record<never, never>, Requirement extends AnyAnnotations = Record<never, never>>() =>
+  <const Annotations extends AnyAnnotations = Record<never, never>>(
     annotations?: Annotations,
   ): Prototype<
     Props,
