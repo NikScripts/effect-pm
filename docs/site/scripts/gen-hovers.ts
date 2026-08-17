@@ -91,7 +91,7 @@ const readFile = (path: string): Effect.Effect<string | undefined, never, FileSy
   );
 
 // --- HAST helpers (serializer shared with the live render: src/lib/hast-html.ts) ---
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+ 
 type Hast = any;
 // The text a reader actually SEES on a line — the twoslash popovers are hidden until hover, so exclude
 // them; used to content-anchor the declaration's first line against the real source (robust to any

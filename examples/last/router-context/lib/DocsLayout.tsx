@@ -3,7 +3,6 @@
  *
  * Docs layout — places docs composition only (no HTML).
  */
-import * as React from "react";
 import { Effect } from "effect";
 import * as Layout from "last-ts/Layout";
 import * as DocsTree from "./DocsTree";

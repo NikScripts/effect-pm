@@ -1,7 +1,7 @@
 /**
- * Host server entry (CLI filename). Registers routes with Waku `createPages`
- * (host wiring — not a last-ts product API). Bake mode + prop adapt via
- * {@link ./lib/hostFromPage}; paths come from the files.
+ * Host server entry (CLI filename). Routes register through `last-ts/server`
+ * (host wiring — not a last-ts product API; apps never import `waku/*`). Bake
+ * mode + prop adapt via {@link ./lib/hostFromPage}; paths come from the files.
  *
  * `(book)` stays a literal path segment here (not stripped) so Waku's own
  * layout matching attaches `(book)/_layout` to every book route — see
@@ -9,8 +9,7 @@
  * The last-ts file router / `paths.gen.ts` strip `(book)` for the app-level
  * typed catalog (`lib/siteRoutes.ts`) since it never appears in served URLs.
  */
-import { createPages } from "waku/router/server";
-import adapter from "waku/adapters/default";
+import * as Server from "last-ts/server";
 import { fromPage } from "./lib/hostFromPage.js";
 import { runServer } from "./lib/runtime.js";
 import { packages, symbolPaths } from "./lib/api-data.js";
@@ -35,8 +34,8 @@ import BookLayout from "./pages/(book)/_layout";
 
 const DEV = import.meta.env.DEV;
 
-export default adapter(
-  createPages(async ({ createPage, createLayout, createRoot }) => {
+export default Server.adapter(
+  Server.createPages(async ({ createPage, createLayout, createRoot }) => {
     createRoot({
       render: "static",
       component: Root,

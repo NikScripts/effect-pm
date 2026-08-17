@@ -2,7 +2,7 @@
 // build-time hover precompute writes sidecar files with it, and the live render serializes inert
 // popup-template content with it (delivered via dangerouslySetInnerHTML so React hydration leaves
 // the template's parsed content alone).
-/* eslint-disable @typescript-eslint/no-explicit-any -- HAST plumbing */
+ 
 
 type Hast = any;
 

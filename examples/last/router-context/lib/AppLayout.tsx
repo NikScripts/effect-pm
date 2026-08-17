@@ -3,7 +3,6 @@
  *
  * Layout places composition only — zero HTML.
  */
-import * as React from "react";
 import { Effect } from "effect";
 import * as Layout from "last-ts/Layout";
 import * as AppTree from "./AppTree";

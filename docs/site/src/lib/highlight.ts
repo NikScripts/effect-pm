@@ -470,7 +470,7 @@ const twoslasher = Object.assign(
 
 // HAST helpers to splice the expanded box into the popup, and a renderer that inserts it BETWEEN the
 // compact type box and the JSDoc-comments box.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+ 
 const classListOf = (n: any): string[] => {
   const c = n?.properties?.class;
   return Array.isArray(c) ? c : typeof c === "string" ? c.split(/\s+/) : [];
@@ -655,7 +655,7 @@ function renderJsdocInline(text: string): any[] {
   if (hast.length === 1 && hast[0]?.tagName === "p") return hast[0].children;
   return hast;
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST renderer plumbing
+ 
 const baseRenderer: any = rendererRich({
   renderMarkdown: renderJsdocMarkdown as never,
   renderMarkdownInline: renderJsdocInline as never,
@@ -664,7 +664,7 @@ const baseRenderer: any = rendererRich({
 // markup parse into inert document fragments instead of live DOM (style/layout cost collapses on
 // hover-dense pages). The TwoslashHover island materializes a popup on first open — content is
 // already local, so hover latency stays zero.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+ 
 const inertPopup = (el: any): void => {
   if (!el || typeof el !== "object") return;
   const kids: any[] = el.children ?? [];
@@ -683,7 +683,7 @@ const inertPopup = (el: any): void => {
 
 // Apply the hover's realigned compiler links onto the popup's compact type box (the first
 // twoslash-popup-code — the expand box comes after it and stays unlinked for now).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+ 
 const applyPopupLinks = (info: any, el: any): void => {
   const links = hoverPopupLinks.get(info);
   if (links !== undefined) {
@@ -822,7 +822,7 @@ const hastToReact = (node: any): React.ReactNode => {
  *  Returns undefined for an unknown language / before the highlighter loads. Used by the live React
  *  render (below) and by the build-time hover precompute (scripts/gen-hovers.ts), so both share ONE
  *  rendering. `loadHighlighter()` must have run first. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+ 
 export const highlightToHast = (
   code: string,
   lang?: string,

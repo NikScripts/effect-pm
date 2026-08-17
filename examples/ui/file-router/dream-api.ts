@@ -48,9 +48,9 @@ import * as View from "../../../src/ui/View";
  * Not Waku’s `"static" | "dynamic"` strings in app code — we lowercase only at the wire.
  */
 export type PageRender = Data.TaggedEnum<{
-  Static: {};
-  Dynamic: {};
-  Build: {};
+  Static: Record<never, never>;
+  Dynamic: Record<never, never>;
+  Build: Record<never, never>;
 }>;
 
 export const PageRender = Data.taggedEnum<PageRender>();
@@ -80,7 +80,7 @@ export type PageStamp = {
   readonly paths?: Effect.Effect<ReadonlyArray<string>>;
 };
 
-type PageComponent<P extends object = {}> = (
+type PageComponent<P extends object = Record<never, never>> = (
   props: P,
 ) => React.ReactElement | null;
 
@@ -189,14 +189,14 @@ export const listChapterSlugs: Effect.Effect<ReadonlyArray<string>> =
  */
 export const About = Page.static(
   "/about",
-  (_props: {}) => React.createElement("main", null, "About"),
+  (_props: Record<never, never>) => React.createElement("main", null, "About"),
   { title: "About", description: "Who we are" },
 );
 
 /** Search hits the index every request — Dynamic. */
 export const Search = Page.dynamic(
   "/search",
-  (_props: {}) => React.createElement("main", null, "Search"),
+  (_props: Record<never, never>) => React.createElement("main", null, "Search"),
   { title: "Search" },
 );
 

@@ -7,7 +7,7 @@ import * as Annotate from "@nikscripts/docgen/Annotate";
 const holderUrl = "/api/test/Holder";
 const targetUrl = "/api/test/Target";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing (test-only walk)
+ 
 const anchorsOf = (node: any): Array<[string, string]> => {
   const out: Array<[string, string]> = [];
   const visit = (n: any): void => {
@@ -162,7 +162,7 @@ describe("Annotate", () => {
       // FIRST child is the popup — the anchor must wrap only the visible text.
       const fakeTwoslash = {
         name: "test:fake-twoslash",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing (test-only)
+         
         span: (hast: any, _line: number, _col: number, _lineEl: any, token: any) => {
           if (String(token.content).trim() !== "Holder") return;
           hast.children = [
@@ -200,10 +200,10 @@ describe("Annotate", () => {
         transformers: [fakeTwoslash, Annotate.transformer({ links })],
       });
       expect(anchorsOf(hast)).toStrictEqual([[" Holder", holderUrl]]);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing (test-only)
+       
       const deepText = (n: any): string =>
         n?.type === "text" ? String(n.value) : (n?.children ?? []).map(deepText).join("");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing (test-only)
+       
       const anchorHoldsPopup = (n: any): boolean =>
         n?.type === "element" && n.tagName === "a"
           ? deepText(n).includes("POPUP CONTENT")

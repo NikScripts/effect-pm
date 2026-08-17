@@ -45,10 +45,10 @@ const raw = (tag: string, props: Record<string, unknown>, html: string): React.R
  * pass strings), safety-checked, delivered so hydration leaves it alone and the parser lands it in
  * `template.content`.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+ 
 export const inertTemplate = (
   props: Record<string, unknown>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+   
   hastChildren: ReadonlyArray<any>
 ): React.ReactElement =>
   raw("template", props, assertSafe(hastChildren.map(hastToHtml).join(""), "inertTemplate"));

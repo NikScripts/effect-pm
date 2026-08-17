@@ -10,8 +10,6 @@ import { Dashboard } from "../../../src/web";
 import { ServicesHub, runtime } from "./hub";
 import { layer as workerPoolViews } from "./worker-pool-card";
 
-import * as View from "../../../src/ui/View";
-import * as Views from "../../../src/ui/Views";
 export const App = (): React.ReactElement => (
   // No header — Dashboard owns the group breadcrumb (⬢ ServicesHub …).
   // `min-h-[100dvh]` (dynamic viewport), not `min-h-screen` (=100vh): on mobile Safari `100vh` is the

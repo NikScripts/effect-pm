@@ -19,9 +19,9 @@ import { Context, Data, Layer } from "effect";
 // ── minimal chrome (mirror Views.ViewProps / ViewKind) ───────────────────────
 
 export type ViewKind = Data.TaggedEnum<{
-  Card: {};
-  Detail: {};
-  Page: {};
+  Card: Record<never, never>;
+  Detail: Record<never, never>;
+  Page: Record<never, never>;
 }>;
 
 export const ViewKind = Data.taggedEnum<ViewKind>();
