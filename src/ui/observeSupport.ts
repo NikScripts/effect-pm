@@ -4,13 +4,13 @@
  */
 import { Effect, Stream } from "effect";
 import type { Atom } from "effect/unstable/reactivity";
-import { connect } from "../Node";
-import type { AddressedNode, NodeKey } from "../Node";
+import { connectForRef } from "../internal/nodeConnect";
+import type { NodeKey } from "../Node";
 import * as LogEntry from "../LogEntry";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import { now } from "./now";
 
-/** A captured log line for the log pane. */
+/** A captured log line for the log pane. @internal */
 export interface LogLine {
   readonly id: number;
   readonly t: number;
@@ -18,11 +18,12 @@ export interface LogLine {
   readonly message: string;
 }
 
-/** Any reactive runtime that provides dashboard tags. */
+/** Any reactive runtime that provides dashboard tags. @internal */
 export type ObserveRuntime<R = never, ER = never> = Atom.AtomRuntime<R, ER>;
 
 let logId = 0;
 
+/** @internal */
 export const toLogLine = (l: {
   readonly level: string;
   readonly message: string;
@@ -33,6 +34,7 @@ export const toLogLine = (l: {
   message: l.message,
 });
 
+/** @internal */
 export const bumpLogIdFrom = (key: string): void => {
   const entry = readCache<LogLine>(key);
   if (entry !== undefined) {
@@ -43,6 +45,7 @@ export const bumpLogIdFrom = (key: string): void => {
 /**
  * Generic cached accumulator: seed from localStorage (instant paint + skip fresh query),
  * accumulate the live stream, persist.
+ * @internal
  */
 export const cachedAccumulator = <A, R>(opts: {
   readonly key: string;
@@ -63,11 +66,14 @@ export const cachedAccumulator = <A, R>(opts: {
   );
 };
 
-export const nodeConn = (node: NodeKey<unknown>) =>
-  connect(node as AddressedNode<unknown>);
+/** The one transport for a UI node ref — the runtime's registered dial (F5) or the stamped
+ * @internal
+ *  address; an unaddressed node with no override fails the Layer build loud. */
+export const nodeConn = connectForRef;
 
 /**
  * Node-scoped service log atom (filter by Hyperlink key).
+ * @internal
  */
 export const serviceLogsAtom = <R, ER>(
   runtime: ObserveRuntime<R, ER>,
@@ -90,6 +96,9 @@ export const serviceLogsAtom = <R, ER>(
         ),
         Effect.orDie,
       ),
-    }).pipe(Stream.provide(nodeConn(node))),
+    }).pipe(
+      Stream.provide(nodeConn(node)),
+      Stream.orDie,
+    ),
   );
 };

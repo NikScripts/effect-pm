@@ -11,6 +11,7 @@ import type {
   AddressedNode,
   AnyNode,
   Endpoints,
+  LooseNode,
   NodeKey,
   NodeStatusAccessors,
   ProtocolKind,
@@ -18,6 +19,7 @@ import type {
 import {
   InvalidHttpTarget,
   invalidHttpTargetOf,
+  isAddressedNode,
   portOf,
   UnaddressedNode,
 } from "./nodeCore"
@@ -71,18 +73,40 @@ const lazyStatusAccessors = (
   }
 }
 
-/** Provide a node handle for `node` over `protocol` — its `{ protocol }` plus lazy status accessors. @internal */
+/**
+ * Canonical derived-connect Layer per Node class — WeakMap so
+ * `client(A, W)` + `client(B, W)` + `Node.connect(W)` share one MemoMap entry
+ * (and one socket / HTTP client), not one per call site.
+ *
+ * **F5:** explicit dials (`Hyperlink.ws` / `connectSocket(url)` / …) register here too, so a
+ * later `connectAddressed` / baked `Hyperlink.client` reuses the override instead of silently
+ * re-dialing the tag's stamped url (HealthBoard vs resource-card split-brain).
+ *
+ * @internal
+ */
+const addressedConnectMemo = new WeakMap<object, Layer.Layer<never>>()
+
+/** Provide a node handle for `node` over `protocol` — its `{ protocol }` plus lazy status accessors.
+ *  Registers as the canonical Layer for this Node class (see {@link addressedConnectMemo}). @internal */
 export const connectLayer = <Self, E, RIn>(
   node: NodeKey<Self>,
   protocol: Layer.Layer<RpcClient.Protocol, E, RIn>,
-): Layer.Layer<Self, E, RIn> =>
-  Layer.effect(
+): Layer.Layer<Self, E, RIn> => {
+  const layer = Layer.effect(
     node,
     Effect.map(RpcClient.Protocol, (protocol) => ({
       protocol,
       ...lazyStatusAccessors(protocol),
     })),
   ).pipe(Layer.provide(protocol))
+  // Last explicit dial wins at module-init / construction time. Apps must construct overrides
+  // (`Hyperlink.ws`, `connectSocket(url)`) *before* `Hyperlink.client(tag)` so the client bake
+  // picks up the override (hub.ts does this).
+  // SAFE: the memo is a heterogeneous per-Node registry; Self/E/RIn are erased on insert and the
+  // one reader (connectAddressed) restates the node's own Self. No runtime value to validate.
+  addressedConnectMemo.set(node, layer as unknown as Layer.Layer<never>)
+  return layer
+}
 
 /** Fail a Layer build with {@link UnaddressedNode}. @internal */
 export const unaddressedLayer = <A = never>(
@@ -193,26 +217,41 @@ export const protocolForDialable = (
     : protocolHttp(portOf(node) ?? node.url)
 }
 
-/**
- * Canonical derived-connect Layer per Node class — WeakMap so
- * `client(A, W)` + `client(B, W)` + `Node.connect(W)` share one MemoMap entry
- * (and one socket / HTTP client), not one per call site.
- *
- * @internal
- */
-const addressedConnectMemo = new WeakMap<object, Layer.Layer<never>>()
-
-/** Derive (and memoize) the connect Layer for an {@link AddressedNode}. @internal */
+/** Derive (and memoize) the connect Layer for an {@link AddressedNode}.
+ *  Reuses an explicit dial already registered via {@link connectLayer} (F5). @internal */
 export const connectAddressed = <Self>(
   node: AddressedNode<Self>,
 ): Layer.Layer<Self> => {
   const cached = addressedConnectMemo.get(node)
   if (cached !== undefined) {
+    // SAFE: entries are erased on insert; each provides exactly its own node's service, and
+    // `node` is that key — this restates the erased Self. No runtime value to validate.
     return cached as unknown as Layer.Layer<Self>
   }
   const layer = connectLayer(node, protocolForDialable(node))
   addressedConnectMemo.set(node, layer as Layer.Layer<never>)
   return layer
+}
+
+/**
+ * Canonical connect Layer for an **erased** UI node ref ({@link LooseNode}) — an explicit dial
+ * registered in the memo wins (F5: the runtime's override, never a second dial), else the node's
+ * stamped address derives the dial, else the Layer build fails loud with {@link UnaddressedNode}.
+ *
+ * @internal
+ */
+export const connectForRef = (
+  node: LooseNode,
+): Layer.Layer<unknown, UnaddressedNode> => {
+  const override = addressedConnectMemo.get(node)
+  if (override !== undefined) {
+    // SAFE: entries are erased on insert; each provides exactly its own node's service, and
+    // `node` is that key — this restates the erased identity. No runtime value to validate.
+    return override as unknown as Layer.Layer<unknown>
+  }
+  return isAddressedNode(node)
+    ? connectAddressed(node)
+    : unaddressedLayer<unknown>(node.key)
 }
 
 /** @internal */

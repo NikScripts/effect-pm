@@ -139,6 +139,16 @@ export type AnyNode = NodeKey<unknown> & {
   readonly [portSym]?: number;
 };
 
+/** A {@link NodeKey} whose address stamps may be absent — the erased node an UI ref carries
+ *  (`NodeRef.node`). {@link AnyNode} is assignable to it, so structural guards written against
+ *  this type serve both the stamped and the erased worlds. @internal */
+export type LooseNode = NodeKey<unknown> & {
+  readonly url?: string | undefined;
+  readonly path?: string | undefined;
+  readonly kind?: ProtocolKind | undefined;
+  readonly endpoints?: Endpoints;
+};
+
 /** An {@link AnyNode} that can derive {@link connect} with no protocol argument —
  *  `kind` set, and either a `url` (Http/WebSocket) or a Unix `path` (IpcSocket). @public
  *
@@ -518,7 +528,7 @@ export type WsNodeTagClass<Self, ROut = never> = NodeTagClass<
  * @public
  */
 export const isAddressedNode = (
-  node: AnyNode,
+  node: LooseNode,
 ): node is AddressedNode<unknown> => {
   if (node.kind === "IpcSocket") return typeof node.path === "string";
   if (node.kind === "Http" || node.kind === "WebSocket") {

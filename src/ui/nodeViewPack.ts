@@ -62,7 +62,10 @@ export const bind =
             Effect.map((entries) => entries.map(toLogLine)),
             Effect.orDie,
           ),
-        }).pipe(Stream.provide(nodeConn(ref.node))),
+        }).pipe(
+          Stream.provide(nodeConn(ref.node)),
+          Stream.orDie,
+        ),
       ),
       // Ready-count over time from the status stream — readiness sparkline.
       health: runtime.atom(
@@ -73,7 +76,10 @@ export const bind =
             Stream.map((st) => st.services.filter((x) => x.ready).length),
             Stream.orDie,
           ),
-        }).pipe(Stream.provide(nodeConn(ref.node))),
+        }).pipe(
+          Stream.provide(nodeConn(ref.node)),
+          Stream.orDie,
+        ),
       ),
     };
     cache.set(ref.id, bundle);
