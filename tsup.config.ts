@@ -11,6 +11,10 @@ const shared = {
     "waku",
     "waku/router/client",
     "vite",
+    // Workspace dependency (declared in package.json): consumers' d.ts reference it by
+    // module specifier; bundling its .tsx source breaks the dts parser.
+    "last-ts",
+    /^last-ts\//,
   ],
 };
 
@@ -91,7 +95,10 @@ export default defineConfig([
       "vite/fileRouter": "src/vite/fileRouter.ts",
     },
     tsconfig: "src/ui/tsconfig.json",
-    dts: true,
+    // dts intentionally off: these entries type against workspace `last-ts` (source-shipped);
+    // the dts bundler cannot parse its .tsx sources. Types flow via tsconfig paths in-repo;
+    // published typings for UI subpaths await the last-ts publish decision.
+    dts: false,
     clean: false,
     esbuildOptions(options) {
       options.jsx = "automatic";
@@ -106,7 +113,7 @@ export default defineConfig([
       "web/NodeStatus": "src/web/NodeStatus.tsx",
     },
     tsconfig: "src/web/tsconfig.json",
-    dts: true,
+    dts: false,
     clean: false,
     esbuildOptions(options) {
       options.jsx = "automatic";
@@ -120,7 +127,7 @@ export default defineConfig([
       "tui/Dashboard": "src/tui/Dashboard.tsx",
     },
     tsconfig: "src/tui/tsconfig.json",
-    dts: true,
+    dts: false,
     clean: false,
     esbuildOptions(options) {
       options.jsx = "automatic";
