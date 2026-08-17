@@ -49,6 +49,7 @@ export type Page = Schema.Top & {
  */
 export const Page: Page = Schema.String.annotate({
   "~lastTsPage": true,
+// SAFE: the annotation IS the Page brand; asText only re-skins the string schema.
 }).pipe(HttpApiSchema.asText({ contentType: "text/html" })) as unknown as Page;
 
 /** @internal */

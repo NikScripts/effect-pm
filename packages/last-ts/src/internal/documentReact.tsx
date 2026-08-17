@@ -104,6 +104,7 @@ export const cellFromProvide = (
       "Document.provide: missing required title (and titleTransform after fold)",
     );
   }
+  // SAFE: completeFields filled every base field just above.
   return makeCell(complete as BaseFields, head);
 };
 
@@ -120,6 +121,7 @@ export const makeHeadComponent = (render: HeadRender): React.FC => {
     const node = React.useMemo(
       () =>
         Effect.runSync(
+          // SAFE: Fields provided here discharges the render effect's only requirement.
           render.pipe(Effect.provideService(Fields, fields)) as Effect.Effect<
             React.ReactNode,
             never,

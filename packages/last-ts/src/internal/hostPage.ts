@@ -194,12 +194,15 @@ const toComponent = (
           : node,
       );
     EffectPage.displayName = "Page.default(effect)";
+    // SAFE: an RSC page is a zero-prop Promise component — HostComponent widens props.
     return EffectPage as HostComponent;
   }
+  // SAFE: non-element, non-effect body is a component per pageMint.Default.
   const Comp = body as React.ComponentType<Route.HandleArgs>;
   const Wrapped: React.FC<Record<string, unknown>> = (props) =>
     React.createElement(Comp, hostPropsToHandleArgs(props, filePath));
   Wrapped.displayName = "Page.default(component)";
+  // SAFE: the wrapper takes the flat host prop record HostComponent declares.
   return Wrapped as HostComponent;
 };
 
@@ -238,6 +241,7 @@ export const fromPage: {
   const filePath = typeof pathOrPage === "string" ? pathOrPage : undefined;
   const page = (
     typeof pathOrPage === "string" ? maybePage! : pathOrPage
+  // SAFE: two-arg overload — args[1] is the page/component per the contract above.
   ) as pageMint.AnyPage | React.ComponentType;
 
   if (pageMint.isPage(page)) {
@@ -254,12 +258,15 @@ export const fromPage: {
       component: toComponent(page.default, filePath),
     };
   }
+  // SAFE: non-mint, non-element, non-effect default is a component per pageMint.Default.
   const Comp = page as React.ComponentType<Route.HandleArgs>;
   const Wrapped: React.FC<Record<string, unknown>> = (props) =>
     React.createElement(Comp, hostPropsToHandleArgs(props, filePath));
   return {
     ...(filePath !== undefined ? { path: filePath } : {}),
     render: "dynamic" as const,
+    // SAFE: the wrapper takes the flat host prop record HostComponent declares.
     component: Wrapped as HostComponent,
   };
+// SAFE: never-erased impl behind the typed fromPage overloads above.
 }) as typeof fromPage;

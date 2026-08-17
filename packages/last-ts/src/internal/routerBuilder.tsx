@@ -242,6 +242,7 @@ const registerHandler = (
   if (!asPage) {
     self.handlers.set(identifier, {
       _tag: "Api",
+      // SAFE: non-page endpoints take the HttpApi-style effect handler per HandlerForEndpoint.
       handler: handler as (
         request: unknown,
       ) => Effect.Effect<unknown, unknown, unknown>,
@@ -278,6 +279,7 @@ const registerHandler = (
 
   self.handlers.set(identifier, {
     _tag: "Page",
+    // SAFE: remaining case — HandlerForEndpoint types page handlers as components.
     page: handler as React.ComponentType<Route.HandleArgs>,
   });
   return self;
@@ -310,6 +312,7 @@ const HandlersProto = {
         typeof entry === "object" &&
         "page" in entry
       ) {
+        // SAFE: structural probe of the handleAll entry bag; each shape is re-checked below.
         const e = entry as {
           readonly page: unknown;
         };
@@ -322,6 +325,7 @@ const HandlersProto = {
         registerHandler(
           this,
           identifier,
+          // SAFE: handleAll entries may wrap the handler under a `handler` key — probed above.
           (entry as { readonly handler: unknown }).handler,
         );
       }
@@ -399,6 +403,7 @@ const adoptAnnotatedHandlers = (
     if (Option.isSome(annotated)) {
       handlers.set(id, {
         _tag: "Page",
+        // SAFE: a Page-success Handler annotation is a component per HandlerForEndpoint.
         page: annotated.value as React.ComponentType<Route.HandleArgs>,
       });
     }
@@ -447,18 +452,22 @@ export const group = <
 > =>
   Layer.effectContext(
     Effect.gen(function* () {
+      // SAFE: string-indexed group lookup on the erased catalog record.
       const g = api.groups[groupIdentifier] as GroupTop | undefined;
       if (g === undefined) {
         return yield* Effect.die(
           `RouterBuilder.group: group "${String(groupIdentifier)}" not on catalog "${api.identifier}"`,
         );
       }
+      // SAFE: never-erased handlers builder — the group() overloads typed the real callback.
       const result = build(makeHandlers(g) as never);
       if (typeof result === "string") {
         return yield* Effect.die(`RouterBuilder.group: ${result}`);
       }
       const handlers: Handlers<any, any> = Effect.isEffect(result)
+        // SAFE: effect branch — the builder returned an Effect of handlers.
         ? yield* (result as Effect.Effect<Handlers<any, any>>)
+        // SAFE: non-effect branch — the builder returned handlers directly.
         : (result as Handlers<any, any>);
       const needsLayout = groupNeedsLayoutRuntime(g);
       const layout = needsLayout
@@ -470,6 +479,8 @@ export const group = <
       };
       return Context.makeUnsafe(new Map([[g.key, impl]]));
     }),
+    // SAFE: the effectContext above registers exactly this group service under g.key; the
+    // typed Layer row restates the group() contract (error/context from the builder Return).
   ) as unknown as Layer.Layer<
     catalog.Group.Service<ApiIdOf<A>, Identifier>,
     Handlers.Error<Return>,
@@ -498,6 +509,7 @@ export const layer = <
   Layer.effectContext(
     Effect.gen(function* () {
       const resolved = yield* catalog.resolveApi(
+        // SAFE: the typed catalog view of the erased api value for resolveApi's R accounting.
         api as Api<Id, Groups, R, DeferredGroups>,
       );
       const services = yield* Effect.context<never>();
@@ -505,7 +517,9 @@ export const layer = <
         (key) => key.startsWith(GROUP_KEY_PREFIX),
       );
       const groups = new Map<string, GroupImpl>();
+      // SAFE: a resolved catalog's group map values are groups by construction.
       for (const g of Object.values(resolved.groups) as Array<GroupTop>) {
+        // SAFE: group impls are registered under g.key by the group() Layer above.
         let impl = services.mapUnsafe.get(g.key) as GroupImpl | undefined;
         if (impl === undefined) {
           impl = synthesizeGroupFromAnnotations(g);
@@ -534,6 +548,7 @@ export const layer = <
         Context.add(Registry, { api: resolved, groups }),
       );
     }),
+  // SAFE: restates the typed Layer the layer() contract above declares for catalog A.
   ) as Layer.Layer<
     Catalog | Registry,
     never,

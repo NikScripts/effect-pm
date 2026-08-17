@@ -167,6 +167,7 @@ export const params: {
   // the success set is carried over verbatim.
   return next.annotateMerge(
     self.annotations,
+    // SAFE: see the rebuild note above — same endpoint, one schema swapped, brand carried.
   ) as unknown as Constraint & pageSuccess.PageEndpointBrand;
 });
 
@@ -178,6 +179,7 @@ export const joinPath = (prefix: Path | "/", path: Path | "/"): Path => {
   if (prefix === "/") return path as Path;
   const left = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
   const right = path.startsWith("/") ? path : `/${path}`;
+  // SAFE: `right` starts with "/" on both branches, so the concatenation is absolute.
   return `${left}${right}` as Path;
 };
 

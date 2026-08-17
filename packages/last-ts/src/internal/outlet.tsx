@@ -35,6 +35,7 @@ const toNode = (
   }
   if (typeof value === "function") {
     return React.createElement(
+      // SAFE: legacy zero-prop components ignore extra args; HandleArgs is the render contract.
       value as unknown as React.ComponentType<Route.HandleArgs>,
       args,
     );
@@ -63,6 +64,7 @@ const PageEffectView = (props: {
               props.onOverride();
             },
           }),
+        // SAFE: Request + Override provided above discharge the page effect's requirements;
         ) as Effect.Effect<
           React.ReactNode | React.ComponentType<Record<string, never>>
         >,
@@ -127,6 +129,7 @@ const MatchedBody = (props: {
           args,
           groupLayout,
         });
+        // SAFE: guarded by isValidElement just above.
         return body as React.ReactElement;
       }
     }
@@ -182,6 +185,7 @@ const PageEffectWithLayout = (props: {
 export const Outlet = (props: {
   readonly router: Service;
 }): React.ReactElement | null => {
+  // SAFE: the router's match is this catalog's Match; Service erases the generics.
   const match = props.router.match as Match | undefined;
   if (match === undefined) return null;
 

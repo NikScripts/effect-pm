@@ -82,6 +82,7 @@ export const isPatch = (u: unknown): u is Patch<any, any> =>
   typeof u === "object" &&
   u !== null &&
   PatchTypeId in u &&
+  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
   (u as Patch)[PatchTypeId] === PatchTypeId;
 
 export const makePatch = <F extends object, C extends object = Record<never, never>>(
@@ -170,12 +171,15 @@ export const mergePartial = <F extends BaseFieldsPartial>(
   next: Partial<F>,
 ): F => {
   const out: Record<string, unknown> = { ...prev };
+  // SAFE: Object.keys replays next's own keys.
   for (const key of Object.keys(next) as Array<keyof F>) {
     const value = next[key];
     if (value !== undefined) {
+      // SAFE: writing a known key of F into the accumulating record.
       out[key as string] = value;
     }
   }
+  // SAFE: out replays next's own keys — same shape, undefined entries dropped.
   return out as F;
 };
 
@@ -188,8 +192,10 @@ export const foldArgs = <F extends BaseFieldsPartial>(
   let acc = initial;
   for (const arg of args) {
     if (isPatch(arg)) {
+      // SAFE: a transform patch maps the accumulated fields bag; F is threaded through.
       acc = arg.transform(acc as never) as F;
     } else {
+      // SAFE: non-fn provide arg is a fields partial per ProvideArg.
       acc = mergePartial(acc, arg as Partial<F>);
     }
   }
@@ -219,6 +225,7 @@ export const finalizeFields = <F extends BaseFieldsPartial>(
     links: folded.links ?? [],
     scripts: folded.scripts ?? [],
     styles: folded.styles ?? [],
+  // SAFE: assembled field-by-field just above from Base + Extras defaults.
   } as CompleteFields<F>;
 };
 

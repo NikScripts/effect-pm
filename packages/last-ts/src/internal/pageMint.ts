@@ -46,6 +46,7 @@ export const isPage = (u: unknown): u is AnyPage =>
   typeof u === "function" &&
   u !== null &&
   TypeId in u &&
+  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
   (u as AnyPage)[TypeId] === TypeId;
 
 const isOptionsBag = (u: unknown): u is RequestOptions => {
@@ -78,6 +79,7 @@ const makeProto = <
     options: options.options,
     mode: options.mode,
     default: options.default,
+  // SAFE: mint assembled field-by-field above; AnyPage restates it with the mode literal.
   }) as unknown as AnyPage<Options, M>;
 };
 
@@ -120,10 +122,12 @@ const parseArgs = (
   args: ReadonlyArray<unknown>,
 ): { readonly options: RequestOptions; readonly default: Default } => {
   if (args.length === 1) {
+    // SAFE: one-arg form — the sole arg is the page default per the overload contract.
     return { options: {}, default: args[0] as Default };
   }
   const [first, second] = args;
   if (isOptionsBag(first)) {
+    // SAFE: two-arg form — second is the page default per the overload contract.
     return { options: first, default: second as Default };
   }
   throw new Error(
@@ -139,6 +143,7 @@ export const make = ((...args: ReadonlyArray<unknown>) => {
     mode: "dynamic",
     default: parsed.default,
   });
+// SAFE: never-erased impl behind the typed make overloads above.
 }) as MakeOverload;
 
 /** @internal */
@@ -149,6 +154,7 @@ export const static_ = ((...args: ReadonlyArray<unknown>) => {
     mode: "static",
     default: parsed.default,
   });
+// SAFE: never-erased impl behind the typed static overloads above.
 }) as StaticOverload;
 
 /** @internal */

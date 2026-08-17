@@ -65,12 +65,14 @@ export const makeBodyComponent = (key: string, render: BodyRender): React.FC => 
     const node =
       cell === null
         ? Effect.runSync(
+            // SAFE: a no-requirement body effect per the Layout.make contract.
             render as Effect.Effect<React.ReactNode, never, never>,
           )
         : Effect.runSync(
             render.pipe(
               Effect.provideService(Document.Cell, cell),
               Effect.provideService(Document.Fields, cell.get()),
+            // SAFE: Override provided just above discharges the body effect's only requirement.
             ) as Effect.Effect<React.ReactNode, never, never>,
           );
     return React.createElement(React.Fragment, null, node);
@@ -99,6 +101,7 @@ export const makeRootComponent = (
             render.pipe(
               Effect.provideService(Document.Fields, stubFields()),
               Effect.provideService(Document.Head, Head),
+            // SAFE: Fields provided just above discharges the render effect's only requirement.
             ) as Effect.Effect<React.ReactNode, never, never>,
           )
         : Effect.runSync(
@@ -106,6 +109,7 @@ export const makeRootComponent = (
               Effect.provideService(Document.Cell, cell),
               Effect.provideService(Document.Fields, cell.get()),
               Effect.provideService(Document.Head, Head),
+            // SAFE: Fields provided just above discharges the render effect's only requirement.
             ) as Effect.Effect<React.ReactNode, never, never>,
           );
     return React.createElement(OutletProvider, {

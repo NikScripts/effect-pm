@@ -124,7 +124,9 @@ export const useRenderLink = <A extends ApiConstraint>(
   const fromProvider = React.useContext(lastContext.EffectReactContext);
   const parent: Context.Context<unknown> =
     fromProvider !== null
+      // SAFE: provider contexts hold arbitrary services; unknown is their honest view.
       ? (fromProvider as Context.Context<unknown>)
+      // SAFE: the empty context is the vacuous unknown-services bag.
       : (Context.empty() as Context.Context<unknown>);
   const effectCtx =
     layer === undefined ? parent : mergeLinkLayer(parent, layer);

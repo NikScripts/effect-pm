@@ -524,10 +524,12 @@ export const fromHttpApiEndpoint = (
   endpoint: HttpApiEndpoint.Constraint,
 ): uiRoute.Constraint | undefined => {
   if (!HttpApiEndpoint.isHttpApiEndpoint(endpoint)) return undefined;
+  // SAFE: every HttpApiEndpoint carries path; Top is effect's own erased endpoint type.
   const path = (endpoint as HttpApiEndpoint.Top).path;
   if (typeof path !== "string" || !path.startsWith("/") || path === "*") {
     return undefined;
   }
+  // SAFE: guarded by isHttpApiEndpoint just above; Constraint mirrors the endpoint shape.
   return endpoint as uiRoute.Constraint;
 };
 
@@ -549,6 +551,7 @@ export const fromHttpApiGroup = (
     topLevel: httpGroup.topLevel,
     routes: Object.fromEntries(routes.map((r) => [r.identifier, r])),
     groups: {},
+    // SAFE: annotation-bag erasure — adopted HttpApi group annotations, read via typed keys.
     annotations: httpGroup.annotations as Context.Context<never>,
   });
 };
@@ -560,7 +563,9 @@ const groupProto = {
     return pipeArguments(this, arguments);
   },
   add(this: GroupTop, ...items: ReadonlyArray<GroupAddLike>): GroupTop {
+    // SAFE: widening the identifier-keyed route map to a string-keyed record for merging.
     let routes = { ...this.routes } as Record<string, uiRoute.Constraint>;
+    // SAFE: widening the identifier-keyed group map to a string-keyed record for merging.
     let groups = { ...this.groups } as Record<string, GroupTop>;
     for (const item of items) {
       if (HttpApiEndpoint.isHttpApiEndpoint(item)) {
@@ -625,6 +630,7 @@ const groupProto = {
   ): GroupTop {
     const routes: Record<string, uiRoute.Constraint> = {};
     for (const [id, route] of Object.entries(this.routes)) {
+      // SAFE: annotation-bag erasure — entries are read back via their typed keys.
       routes[id] = route.annotateMerge(annotations as Context.Context<never>);
     }
     return makeGroupProto({
@@ -662,6 +668,7 @@ const groupProto = {
   context(this: GroupTop, ctx: unknown): GroupTop {
     return this.annotate(
       ContextScope,
+      // SAFE: `.context()` accepts only Last.context classes at the typed surface; erased here.
       ctx as lastContextModule.LastContextClass,
     );
   },
@@ -676,6 +683,7 @@ const makeGroupProto = (options: {
 }): GroupTop => {
   function RouterGroup() {}
   Object.setPrototypeOf(RouterGroup, groupProto);
+  // SAFE: expando `key` stamp on the group value (Context key convention); typed via GroupTop.
   ;(RouterGroup as { key?: string }).key =
     `last-ts/Router/Group/${options.identifier}`;
   return Object.assign(RouterGroup, {
@@ -685,6 +693,7 @@ const makeGroupProto = (options: {
     routes: options.routes,
     groups: options.groups,
     annotations: options.annotations,
+  // SAFE: erased prototype behind the typed GroupTop interface — the methods above are the contract.
   }) as unknown as GroupTop;
 };
 
@@ -704,6 +713,7 @@ export const group = <
     routes: {},
     groups: {},
     annotations: Context.empty(),
+  // SAFE: erased group prototype restated as the typed empty Group the group() contract mints.
   }) as Group<Id, never, never, [TopLevel] extends [true] ? true : false>;
 
 const optionsFromApi = (api: ApiConstraint) => ({
@@ -719,6 +729,7 @@ const appProto = {
     return pipeArguments(this, arguments);
   },
   add(this: ApiConstraint, ...items: ReadonlyArray<ApiAddLike>): ApiConstraint {
+    // SAFE: widening the identifier-keyed group map to a string-keyed record for merging.
     let groups = { ...this.groups } as Record<string, GroupTop>;
     for (const item of items) {
       if (HttpApiGroup.isHttpApiGroup(item)) {
@@ -749,6 +760,7 @@ const appProto = {
   ): ApiConstraint {
     // Whole HttpApi → mix each HttpApiGroup into this catalog.
     return this.add(
+      // SAFE: HttpApi groups record erases to Top per effect's own HttpApi.Api typing.
       ...(Object.values(api.groups) as Array<HttpApiGroup.Top>),
     );
   },
@@ -790,6 +802,7 @@ const appProto = {
   context(this: ApiConstraint, ctx: unknown): ApiConstraint {
     return this.annotate(
       ContextScope,
+      // SAFE: `.context()` accepts only Last.context classes at the typed surface; erased here.
       ctx as lastContextModule.LastContextClass,
     );
   },
@@ -808,6 +821,7 @@ const makeAppProto = (options: {
     identifier: options.identifier,
     groups: options.groups,
     annotations: options.annotations,
+  // SAFE: erased prototype behind the typed ApiConstraint interface — the methods above are the contract.
   }) as unknown as ApiConstraint;
 };
 
@@ -817,6 +831,7 @@ export const make = <const Id extends string>(identifier: Id): Api<Id, never> =>
     identifier,
     groups: {},
     annotations: Context.empty(),
+  // SAFE: erased Api prototype restated as the typed empty catalog the make() contract mints.
   }) as unknown as Api<Id, never>;
 
 /**
@@ -833,6 +848,7 @@ export const addHttpApi = <
   api: HttpApi.HttpApi<Id, Groups>,
 ): GroupTop => {
   let bag: GroupTop = group(api.identifier, { topLevel: true });
+  // SAFE: HttpApi groups record erases to Top per effect's own HttpApi.Api typing.
   for (const httpGroup of Object.values(api.groups) as Array<HttpApiGroup.Top>) {
     const converted = fromHttpApiGroup(httpGroup);
     if (converted.topLevel) {
@@ -871,6 +887,7 @@ export const flatten = (self: ApiConstraint): ReadonlyArray<FlatEntry> => {
     for (const route of Object.values(g.routes)) {
       out.push({
         identifiers: [...ids, route.identifier],
+        // SAFE: HttpApi endpoint paths are absolute by construction; stored as string.
         path: route.path as Path,
         route,
         group: g,
@@ -1159,7 +1176,9 @@ export const materializeSync = <A extends ApiConstraint>(
   api: A,
 ): A =>
   Effect.runSync(
+    // SAFE: R=never restatement — install() is documented for R=never catalogs only;
     resolveApi(api) as Effect.Effect<A, never, never>,
+  // a deferred catalog with real R fails loudly at runSync.
   );
 
 /** Nested URL builder — positional path args + optional `{ query }`. */
@@ -1183,10 +1202,12 @@ export const urlBuilder = <A extends ApiConstraint>(
     const existing = target[id];
     if (existing === undefined) {
       const nest: UrlBuilderLoose = {};
+      // SAFE: widening the branded builder node to its writable loose record for assembly.
       ;(target as Record<string, UrlBuilderLoose | UrlMethodLoose>)[id] = nest;
       return nest;
     }
     if (typeof existing === "function") {
+      // SAFE: an existing slot is a nested loose builder (ensured on first write).
       return existing as unknown as UrlBuilderLoose;
     }
     return existing;
@@ -1198,8 +1219,10 @@ export const urlBuilder = <A extends ApiConstraint>(
     method: UrlMethodLoose,
   ): void => {
     const existing = target[id];
+    // SAFE: widening the branded builder node to its writable loose record for assembly.
     const record = target as Record<string, UrlBuilderLoose | UrlMethodLoose>;
     if (existing === undefined) {
+      // SAFE: builder-record slot accepts loose methods and nests; a method fills the slot.
       record[id] = method as unknown as UrlBuilderLoose;
       return;
     }
@@ -1208,9 +1231,11 @@ export const urlBuilder = <A extends ApiConstraint>(
     }
     const fn = Object.assign(
       ((...args: ReadonlyArray<string | UrlQueryOptions>) =>
+        // SAFE: loose fallback method — same runtime fn, loose view.
         method(...args)) as UrlMethodLoose,
       existing,
     );
+    // SAFE: builder-record slot accepts loose methods and nests; a method fills the slot.
     record[id] = fn as unknown as UrlBuilderLoose;
   };
 
@@ -1247,6 +1272,7 @@ export const urlBuilder = <A extends ApiConstraint>(
           params[key] = value;
         }
         return withBase(appendQuery(compiled.build(params), optionsArg?.query));
+      // SAFE: loose fallback method for erased/runtime catalogs — the loose shape is the contract.
       }) as UrlMethodLoose,
       { "~last-ts/pathKeys": compiled.keys },
     );
@@ -1257,7 +1283,9 @@ export const urlBuilder = <A extends ApiConstraint>(
     place(entry.identifiers, entry.path);
   }
 
+  // SAFE: the loose record was assembled per catalog group/endpoint above; UrlBuilder<A>
   return root as UrlBuilder<A>;
+// is its typed view. Methods are checked at construction (urlMethod).
 };
 
 export const reflect = (
@@ -1319,6 +1347,7 @@ const stripResolveAnnotations = (
     FromRoutes,
     FromEffect,
     GroupPrefix,
+  // SAFE: annotation-bag erasure — entries are read back via their typed keys.
   )(annotations) as Context.Context<never>;
 
 const applyPrefix = (
@@ -1344,6 +1373,7 @@ export const resolveGroup = (
       children[id] = yield* resolveGroup(child);
     }
 
+    // SAFE: widening the identifier-keyed route map to a string-keyed record for merging.
     let routes = { ...g.routes } as Record<string, uiRoute.Constraint>;
     let groups = children;
     const prefix = Context.getOption(g.annotations, GroupPrefix);
@@ -1359,6 +1389,7 @@ export const resolveGroup = (
         never
       >);
       for (const route of destinations) {
+        // SAFE: applyPrefix preserves the destination kind; this branch received a route.
         const next = applyPrefix(route, prefix) as uiRoute.Constraint;
         routes = { ...routes, [next.identifier]: next };
       }
@@ -1419,8 +1450,11 @@ export const resolveApi = <
       groups,
       annotations: Context.omit(FromGroups)(
         api.annotations,
+      // SAFE: annotation-bag erasure — resolve annotations are read back via typed keys.
       ) as Context.Context<never>,
+    // SAFE: same Api value with deferred groups materialized — A restated, not invented.
     }) as unknown as A;
+  // SAFE: never-erased resolve pipeline behind the typed resolveApi signature above.
   }) as Effect.Effect<A, never, R>;
 
 /** True when a group still has deferred destinations to resolve. @internal */

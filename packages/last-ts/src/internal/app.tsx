@@ -75,9 +75,11 @@ const makeLayerProvider = <R, E = never>(
       );
       const router = Option.getOrNull(
         Context.getOption(ctx, Router.Router),
+      // SAFE: Router.Router's service IS the router Service; Option.getOrNull erased it.
       ) as Service | null;
       const cell = Option.getOrNull(Context.getOption(ctx, Document.Cell));
       const runtime = Atom.runtime(
+        // SAFE: succeedContext of the built context re-provides exactly what boot built.
         Layer_.succeedContext(ctx) as Layer.Layer<never, never, never> as never,
       );
       return { runtime, router, cell, ctx };
@@ -105,7 +107,9 @@ const makeLayerProvider = <R, E = never>(
       AtomReact.RegistryProvider,
       null,
       React.createElement(
+        // SAFE: RuntimeProvider's generic props don't fit createElement's overloads; the
         AtomReact.RuntimeProvider as never,
+        // runtime value matches the provider's runtime prop contract.
         { runtime: boot.runtime },
         React.createElement(
           lastContext.EffectContextProvider,
@@ -151,7 +155,9 @@ export const provider: {
     return lastContext.makeContextProvider(first);
   }
   return makeLayerProvider(
+    // SAFE: non-context first arg is the fulfilled Layer per the overload contract.
     first as Layer.Layer<never, never, never>,
     second,
   );
+// SAFE: never-erased impl behind the typed provider overloads above.
 }) as typeof provider;

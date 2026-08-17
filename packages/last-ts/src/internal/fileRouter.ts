@@ -62,7 +62,9 @@ export const destinationsOf = <const Entries extends ReadonlyArray<PathEntry>>(
 ): ReadonlyArray<RoutesOf<Entries>> =>
   entries.map(
     (entry) =>
+      // SAFE (both): routePath rows are authored absolute; the union restates the table's rows.
       endpoint.get(entry.id, entry.routePath as endpoint.Path) as RoutesOf<
+        // SAFE (both): routePath rows are authored absolute; the union restates the table's row types.
         Entries
       >,
   );
@@ -78,6 +80,7 @@ export const fileSystem = <const Entries extends ReadonlyArray<PathEntry>>(
   const effect = Effect.sync(() => destinationsOf(entries));
   return Object.assign(effect, {
     [AsRoutesTypeId]: { root: { key: "fileSystem", members: {} } },
+  // SAFE: erased effect restated as the typed AsRoutesEffect the table's row types declare.
   }) as unknown as AsRoutesEffect<RoutesOf<Entries>>;
 };
 

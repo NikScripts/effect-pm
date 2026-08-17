@@ -34,6 +34,7 @@ const isLastContext = (u: unknown): u is LastContextClass =>
   typeof u === "function" &&
   u !== null &&
   LastContextTypeId in u &&
+  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
   (u as unknown as LastContextClass)[LastContextTypeId] === LastContextTypeId;
 
 const isKey = (u: unknown): u is Context.Key<any, any> =>
@@ -41,6 +42,7 @@ const isKey = (u: unknown): u is Context.Key<any, any> =>
   (typeof u === "function" &&
     u !== null &&
     "key" in u &&
+    // SAFE: inside the guard — typeof probe on a key-shaped object.
     typeof (u as { readonly key: unknown }).key === "string");
 
 type ServiceValue<T> = [T] extends [LastContextClass<infer Nested>]
@@ -145,6 +147,7 @@ export const context = <const S extends Spec>(
     static readonly [LastContextTypeId] = LastContextTypeId;
     static readonly spec = spec;
   }
+  // SAFE: class-factory erasure — the statics assembled above ARE the LastContextClass shape.
   return Ctx as unknown as (abstract new () => Record<never, never>) & LastContextClass<S>;
 };
 
@@ -178,6 +181,7 @@ const readBag = <C extends LastContextClass<any>>(
       "Last.use: context was not registered — mount it via Last.provider(ctx) or a router .context scope on the active path",
     );
   }
+  // SAFE: bags are registered per spec (resolveBag) — the typed view restates that shape.
   return bag as TypeOfSpec<C["spec"]>;
 };
 
@@ -185,6 +189,7 @@ const scopeOf = (
   annotations: Context.Context<never>,
 ): LastContextClass | undefined => {
   const opt = Context.getOption(
+    // SAFE: annotation-bag read — getOption returns None when the scope key is absent.
     annotations as Context.Context<ContextScope>,
     ContextScope,
   );
@@ -211,6 +216,7 @@ const isScopeSel = (u: unknown): u is ScopeSel =>
   typeof u === "object" &&
   u !== null &&
   ScopeSelTypeId in u &&
+  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
   (u as ScopeSel)[ScopeSelTypeId] === ScopeSelTypeId;
 
 type ScopeTree = {
@@ -219,6 +225,7 @@ type ScopeTree = {
 
 const scopeTree = (api: ApiConstraint): ScopeTree => {
   const root: Record<string, ScopeTree | ScopeSel> = {};
+  // SAFE: an erased catalog's group map values are groups by construction.
   for (const g of Object.values(api.groups) as Array<GroupTop>) {
     const groupSel: ScopeSel = {
       [ScopeSelTypeId]: ScopeSelTypeId,
@@ -226,6 +233,7 @@ const scopeTree = (api: ApiConstraint): ScopeTree => {
       group: g,
     };
     const nest: Record<string, ScopeTree | ScopeSel> = {};
+    // SAFE: an erased catalog's route map values are route constraints by construction.
     for (const route of Object.values(g.routes) as Array<RouteConstraint>) {
       nest[route.identifier] = {
         [ScopeSelTypeId]: ScopeSelTypeId,
@@ -318,6 +326,7 @@ export function use(
   const api = first;
   if (second === undefined) {
     if (active.length > 0) {
+      // SAFE: the merged bags are exactly the catalog's mounted scopes — the typed view restates them.
       return mergeActiveBags(store, active) as RouterContextBag<typeof api>;
     }
     const root = scopeOf(api.annotations);
@@ -330,6 +339,7 @@ export function use(
   }
 
   if (typeof second === "string") {
+    // SAFE: string-indexed group lookup on the erased catalog record.
     const group = api.groups[second] as GroupTop | undefined;
     if (group === undefined) {
       throw new Error(
@@ -396,6 +406,7 @@ export const provideContext: {
   first: Layer.Layer<never> | LastContextClass<any>,
   second?: Layer.Layer<never>,
 ) => {
+  // SAFE: one-arg overload — first is the kit Layer per the contract above.
   const kit = second !== undefined ? second : (first as Layer.Layer<never>);
   // Type-level discharge of ServicesOf<Ctx> lives in the overloads above;
   // runtime is provideMerge only, for both the kit-only and ctx+kit forms.
@@ -403,6 +414,7 @@ export const provideContext: {
     Layer.provideMerge(self, kit);
   // SAFE: never-erased impl behind the typed overloads — the overloads restate the
   // real channel algebra; the body only merges layers. No runtime value to validate.
+// (see SAFE note above the impl)
 }) as unknown as typeof provideContext;
 
 const providerCache = new WeakMap<

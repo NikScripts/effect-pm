@@ -64,6 +64,7 @@ const buildHrefFromParams = (
     }
     return value;
   });
+  // SAFE: loose prop-record read pinned back to the UrlQueryOptions contract.
   const query = props.query as UrlQuery | undefined;
   if (query !== undefined) {
     return method(...pathArgs, { query });
@@ -90,6 +91,7 @@ const LinkedAnchor = (props: {
   const router = Router.useRouter();
   return linkRender.useRenderLink(
     props.linkProps,
+    // SAFE: loose view of the installed router's typed builder — same runtime record.
     router.urls as UrlBuilderLoose,
     router,
     props.layer,
@@ -208,9 +210,11 @@ const renderLinked = (
   layer?: Layer.Layer<unknown, never, never>,
 ): React.ReactElement => {
   const common = {
+    // SAFE (this block): loose prop-record reads pinned back to the LinkOpts contract.
     className: props.className as string | undefined,
     title: props.title as string | undefined,
     replace: props.replace as boolean | undefined,
+    // SAFE (these four): loose prop-record reads pinned back to the LinkOpts contract.
     "data-kind": props["data-kind"] as string | undefined,
     onClick: props.onClick as
       | React.MouseEventHandler<HTMLAnchorElement>
@@ -236,6 +240,7 @@ const renderLinked = (
           body,
           {
             ...common,
+            // SAFE: loose view of the typed `to` — literal hrefs widen to string.
             to: to as string | ((urls: UrlBuilderLoose) => string),
           },
           layer,
@@ -250,6 +255,7 @@ const renderLinked = (
           "Last.link: group-narrowed link expects to={(group) => …}",
         );
       }
+      // SAFE: mode 'group' is only built from a function `to` (see Mode construction above).
       const href = (to as (g: UrlBuilderLoose) => string)(mode.group);
       return wrapWithLink(body, { ...common, to: href }, layer);
     }
@@ -264,6 +270,7 @@ const isComponent = (u: unknown): u is AnyComponent =>
   typeof u === "function" ||
   (typeof u === "object" &&
     u !== null &&
+    // SAFE: inside the guard — `in` probe on a non-null object.
     "$$typeof" in (u as object));
 
 const isContextKey = (u: unknown): u is Context.Key<any, any> =>
@@ -271,6 +278,7 @@ const isContextKey = (u: unknown): u is Context.Key<any, any> =>
   (typeof u === "function" &&
     u !== null &&
     "key" in u &&
+    // SAFE: inside the guard that proves the shape — the typeof check IS the validation.
     typeof (u as { readonly key: unknown }).key === "string");
 
 /** Props for a wrapped component or View/Service render fn. */
@@ -358,17 +366,23 @@ export const link: {
   if (Component !== undefined) {
     if (thirdIsLayer) {
       opts = undefined;
+      // SAFE: guarded by thirdIsLayer above; stored erased (see note).
       layer = third as Layer.Layer<unknown, never, never>;
     } else {
+      // SAFE: overload contract — non-layer third is the options bag.
       opts = third as LinkOpts<any> | undefined;
       layer = fourthIsLayer
+        // SAFE: guarded by fourthIsLayer above; stored erased (see note).
         ? (fourth as Layer.Layer<unknown, never, never>)
         : undefined;
     }
   } else if (thirdIsLayer) {
+    // SAFE: overload contract — with a layer third, second is the options bag.
     opts = second as LinkOpts<any>;
+    // SAFE: guarded by thirdIsLayer above; stored erased (see note).
     layer = third as Layer.Layer<unknown, never, never>;
   } else {
+    // SAFE: overload contract — remaining arg shape is the options bag.
     opts = second as LinkOpts<any> | undefined;
   }
   const resolvedOpts: LinkOpts<any> = opts ?? { to: true };
@@ -376,6 +390,7 @@ export const link: {
   const Linked = (props: Record<string, unknown>): React.ReactElement => {
     const router = Router.useRouter();
     const mode = resolveMode(
+      // SAFE: loose view of the installed router's typed builder — same runtime record.
       router.urls as UrlBuilderLoose,
       resolvedOpts,
     );
@@ -384,6 +399,7 @@ export const link: {
 
     let body: React.ReactNode = hasComponent
       ? undefined
+      // SAFE: non-component branch — children flow through as plain ReactNode.
       : (props.children as React.ReactNode);
 
     if (Component !== undefined) {
@@ -391,6 +407,7 @@ export const link: {
         ? Context.get(lastContext.useEffectContext(), Component)
         : Component;
       body = React.createElement(
+        // SAFE: isComponent guarded this value; the loose prop record is the render contract.
         resolved as React.ComponentType<Record<string, unknown>>,
         componentProps,
       );
@@ -405,4 +422,5 @@ export const link: {
   };
   Linked.displayName = "Last.link";
   return Linked;
+// SAFE: never-erased impl behind the typed link overloads above — they are the contract.
 }) as typeof link;

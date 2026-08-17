@@ -19,6 +19,7 @@ const isDocumentClass = (u: unknown): u is AnyDocument =>
   typeof u === "function" &&
   u !== null &&
   DocumentTypeId in u &&
+  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
   (u as unknown as AnyDocument)[DocumentTypeId] === DocumentTypeId;
 
 type ProvideArg = core.ProvideArg<
@@ -42,6 +43,7 @@ export const applyDocumentArgs = (
       if (core.isPatch(arg)) {
         patches.push(arg);
       } else if (typeof arg === "object" && arg !== null) {
+        // SAFE: non-Document args are patches/partials per the ProvideArg union.
         patches.push(arg as ProvideArg);
       }
     }
@@ -50,6 +52,7 @@ export const applyDocumentArgs = (
       const asPartial: core.BaseFieldsPartial = { ...prev };
       const folded = core.foldArgs(asPartial, patches);
       const next = core.finalizeFields(folded);
+      // SAFE: a Head override returns fields (or keeps prev) — BaseFields by the Doc contract.
       return (next ?? prev) as core.BaseFields;
     });
   });

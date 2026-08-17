@@ -38,6 +38,7 @@ export function isWakuBinding(u: unknown): u is WakuBinding {
     typeof u === "object" &&
     u !== null &&
     "_tag" in u &&
+    // SAFE: inside the guard that proves the shape — the tag equality IS the validation.
     (u as { _tag: unknown })._tag === "WakuBinding"
   );
 }
@@ -49,6 +50,7 @@ export const waku = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
 ): WakuBinding<A, U> => ({
   _tag: "WakuBinding",
   api,
+  // SAFE: U defaults to the typed builder minted right here; an explicit urls override is U.
   urls: (urls ?? Route.urlBuilder(api)) as U,
 });
 
@@ -90,12 +92,14 @@ export const liveService = <A extends ApiConstraint>(
     typeof window === "undefined" ? "" : window.location.search;
   const href = search.length === 0 ? pathname : `${pathname}${search}`;
   const match = Option.getOrUndefined(Route.match(binding.api, pathname));
+  // SAFE: the binding was built from this catalog (waku(api)); typed view restated.
   const urls = binding.urls as Route.UrlBuilder<A>;
 
   const go = (
     next: string,
     options?: { readonly replace?: boolean },
   ): void => {
+    // SAFE: pathOnly output is an in-app absolute path — Waku's route template widens it.
     const target = pathOnly(next) as Parameters<typeof wakuNav.push>[0];
     if (options?.replace === true) void wakuNav.replace(target);
     else void wakuNav.push(target);
@@ -119,6 +123,7 @@ export const liveService = <A extends ApiConstraint>(
     },
     prefetch: (next: string) => {
       wakuNav.prefetch(
+        // SAFE: pathOnly output is an in-app absolute path — Waku's route template widens it.
         pathOnly(next) as Parameters<typeof wakuNav.prefetch>[0],
       );
     },
@@ -181,7 +186,9 @@ export const Provider = (props: {
 export const useRouter = <A extends ApiConstraint = ApiConstraint>(): Service<A> => {
   const fromCtx = Router.useRouterOption();
   const wakuNav = useWakuRouter();
+  // SAFE: the provider mounted the binding for this catalog; Service erases A.
   if (fromCtx !== null) return fromCtx as Service<A>;
+  // SAFE: the module-level default binding is set by waku() for this catalog.
   const binding = defaultBinding as WakuBinding<A> | null;
   if (binding === null) {
     throw new Error(
