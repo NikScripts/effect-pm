@@ -9,7 +9,7 @@
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
 | **K** | *(fired)* `cursor/agent-k-page-route-6d0e` | [**final**](./agent-k-final.md) · [context/view lock](./last-context-view-lock.md) | **DONE / FIRED** — last-site kits + `/docs/rsc-router` SSOT; no further assign | `281998aa3` | site `:5220` + docs `:5190/docs/rsc-router` | Do not assign | 2026-08-16 |
 | **G / TUI** | *(fired)* | was page/route + last-ts site | **handed to K** | — | — | Do not assign | 2026-08-08 |
-| **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **K** | 2026-07-26 |
+| **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5** (K fired) | 2026-08-16 |
 | **5** | `cursor/lifecycle-defer-start-929b` | [launcher brief](./launcher-and-handoff-brief.md) · [Update](../guides/update.md) · [addresses dock](./node-addresses-and-update-api.md) · [Versioned](./versioned-schema-decisions.md) | **tip-synced** — Address + Node.make + Lookup/NodePolicy | same tip as `integration` | address/node-make/policy suites green | listen/advertise from address list; label-constrained as | 2026-08-11 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./archive/2026-07/agents/agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
@@ -60,7 +60,7 @@
 - Agent C standards audit (plan-first)
 
 ### Branch hygiene (2026-07-26)
-Owner: only **Agent 4**, **Agent 5**, and **Agent K** remain active.
+Owner: only **Agent 4** and **Agent 5** remain active. **Agent K fired** ([`agent-k-final.md`](./agent-k-final.md)).
 
 **Deleted (superseded / contained):** Agent 1 `cursor/docs-corpus-phase3-ce05` (+ closed [#68](https://github.com/nikolasstow/Hyperlink/pull/68)); Agent 3 `cursor/logs-store-followers-plan-906e` + `cursor/agent-03-byhyperlink-full-key-a009`; plus earlier contained tips (`ask-incumbent`, catalog bake stack, `feat/*` tip-contained, etc.).
 

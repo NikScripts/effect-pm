@@ -64,3 +64,7 @@ Thumbs.db
 # Not committed. `npm run test:nwsl` / `example:nwsl-http-api-resource` no-op cleanly when absent.
 examples/nwslsoccer/
 examples/resource-tui/.bundle.mjs
+
+# Agent debris — screenshots / test runner residue
+.cursor/artifacts/
+test-results/
