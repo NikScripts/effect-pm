@@ -8,7 +8,6 @@ import { isQueueTag } from "../ui/data";
 import * as GroupNav from "../ui/GroupNav";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
-import * as View from "../ui/View";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { LogsPage } from "./resourcePages";
 import { displayName, QueueCard, QueueDetailPanel } from "./widgets";
@@ -52,7 +51,7 @@ export const componentsLayer: Layer.Layer<
 );
 
 /**
- * Fully provided WorkPool View Layer for the web (`R = never`) — ready for {@link Views.react}.
+ * Fully provided WorkPool View Layer for the web (`R = never`) — ready for {@link ../ui/Views.react}.
  *
  * @public
  */

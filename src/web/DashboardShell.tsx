@@ -37,7 +37,6 @@ import { Cell, displayName } from "./widgets";
 import { LogBox, LogsPage, SchedulePage } from "./resourcePages";
 import { isLeafTag, type LeafTag } from "../ui/widgetRegistry";
 import * as GroupNav from "../ui/GroupNav";
-import * as View from "../ui/View";
 import { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
 import { HealthBoard, NodeBar, NodeDetail } from "./NodeStatus";
 
@@ -345,7 +344,7 @@ const NodeHyperlinkView = (props: {
 
 /**
  * Batteries shell: Router `/health` pages + group drill-down. Requires compose
- * {@link View} Provider + {@link ./runtime.RuntimeProvider} above.
+ * {@link ../ui/View} Provider + {@link ./runtime.RuntimeProvider} above.
  *
  * @public
  */

@@ -67,14 +67,11 @@ export const LogBox = (props: {
   );
 };
 
-/** Fullscreen logs page — route `/…/<member>/logs`. @public */
-export const LogsPage = (props: {
-  readonly tag: QueueTag | DaemonTag;
+const DaemonLogsPage = (props: {
+  readonly tag: DaemonTag;
   readonly onClose: () => void;
 }): React.ReactElement => {
-  const bundle = isDaemonTag(props.tag)
-    ? Observe.use(props.tag, DaemonView.pack)
-    : Observe.use(props.tag, WorkPoolView.pack);
+  const bundle = Observe.use(props.tag, DaemonView.pack);
   return (
     <LogBox
       bundle={bundle}
@@ -84,6 +81,32 @@ export const LogsPage = (props: {
     />
   );
 };
+
+const QueueLogsPage = (props: {
+  readonly tag: QueueTag;
+  readonly onClose: () => void;
+}): React.ReactElement => {
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
+  return (
+    <LogBox
+      bundle={bundle}
+      full
+      onToggle={props.onClose}
+      meta={<> · {displayName(props.tag.key)}</>}
+    />
+  );
+};
+
+/** Fullscreen logs page — route `/…/<member>/logs`. @public */
+export const LogsPage = (props: {
+  readonly tag: QueueTag | DaemonTag;
+  readonly onClose: () => void;
+}): React.ReactElement =>
+  isDaemonTag(props.tag) ? (
+    <DaemonLogsPage tag={props.tag} onClose={props.onClose} />
+  ) : (
+    <QueueLogsPage tag={props.tag} onClose={props.onClose} />
+  );
 
 const DAY_MS = 86_400_000;
 

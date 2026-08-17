@@ -17,7 +17,6 @@ import {
   type GroupNode,
 } from "../ui/data";
 import * as Group from "../Group";
-import * as View from "../ui/View";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
 import * as DashboardViews from "../ui/DashboardViews";
@@ -77,12 +76,12 @@ import { LogsPage, SchedulePage } from "../web/resourcePages";
 import * as Views from "../ui/Views";
 // ── cards (presentational — Cell wraps with button) ─────────────────────────
 
-const GroupCardView: View.View = (props) => {
+const GroupCardView: Views.Component = (props) => {
   if (!Group.isGroup(props.tag)) return null;
   return <GroupCard node={props.tag} name={props.name ?? displayName(props.tag.key)} />;
 };
 
-const PoolCardView: View.View = (props) => {
+const PoolCardView: Views.Component = (props) => {
   if (!isQueueTag(props.tag)) return null;
   return (
     <QueueCard
@@ -92,7 +91,7 @@ const PoolCardView: View.View = (props) => {
   );
 };
 
-const PriorityCardView: View.View = (props) => {
+const PriorityCardView: Views.Component = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   return (
     <PriorityCard
@@ -102,7 +101,7 @@ const PriorityCardView: View.View = (props) => {
   );
 };
 
-const DaemonCardView: View.View = (props) => {
+const DaemonCardView: Views.Component = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   return (
     <DaemonCard
@@ -112,7 +111,7 @@ const DaemonCardView: View.View = (props) => {
   );
 };
 
-const ApiCardView: View.View = (props) => {
+const ApiCardView: Views.Component = (props) => {
   if (!isApiTag(props.tag)) return null;
   return (
     <ApiCard
@@ -122,7 +121,7 @@ const ApiCardView: View.View = (props) => {
   );
 };
 
-const FleetCardView: View.View = (props) => {
+const FleetCardView: Views.Component = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   return (
     <FleetHealthCard
@@ -132,7 +131,7 @@ const FleetCardView: View.View = (props) => {
   );
 };
 
-const TelemetryCardView: View.View = (props) => {
+const TelemetryCardView: Views.Component = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   return (
     <TelemetryCard
@@ -142,7 +141,7 @@ const TelemetryCardView: View.View = (props) => {
   );
 };
 
-const ShardMapCardView: View.View = (props) => {
+const ShardMapCardView: Views.Component = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   return (
     <ShardMapCard
@@ -152,7 +151,7 @@ const ShardMapCardView: View.View = (props) => {
   );
 };
 
-const GateCardView: View.View = (props) => {
+const GateCardView: Views.Component = (props) => {
   if (!isGateTag(props.tag)) return null;
   return (
     <GateCard
@@ -162,7 +161,7 @@ const GateCardView: View.View = (props) => {
   );
 };
 
-const HyperlinkCardView: View.View = (props) => (
+const HyperlinkCardView: Views.Component = (props) => (
   <HyperlinkCard
     tag={props.tag}
     name={props.name ?? displayName(props.tag.key)}
@@ -183,12 +182,12 @@ const closeView = (router: Router.Service): void => {
   router.go(GroupNav.toHref(target.keys.slice(0, -1)), { replace: true });
 };
 
-const PoolDetailView: View.View = (props) => {
+const PoolDetailView: Views.Component = (props) => {
   if (!isQueueTag(props.tag)) return null;
   return <QueueDetailPanel tag={props.tag} />;
 };
 
-const PriorityDetailView: View.View = (props) => {
+const PriorityDetailView: Views.Component = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   // Shell owns back/title; body-only when Router is present (lock J).
   const nav = Router.useRouterOption();
@@ -201,7 +200,7 @@ const PriorityDetailView: View.View = (props) => {
   );
 };
 
-const DaemonDetailView: View.View = (props) => {
+const DaemonDetailView: Views.Component = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Router.useRouterOption();
   const bundle = Observe.use(props.tag, DaemonView.pack);
@@ -232,7 +231,7 @@ const DaemonDetailView: View.View = (props) => {
   );
 };
 
-const ApiDetailView: View.View = (props) => {
+const ApiDetailView: Views.Component = (props) => {
   if (!isApiTag(props.tag)) return null;
   const bundle = Observe.use(props.tag, ApiMetricsView.pack);
   const statusR = useAtomValue(bundle.status);
@@ -252,7 +251,7 @@ const ApiDetailView: View.View = (props) => {
   );
 };
 
-const FleetDetailView: View.View = (props) => {
+const FleetDetailView: Views.Component = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const nav = Router.useRouterOption();
   return (
@@ -264,7 +263,7 @@ const FleetDetailView: View.View = (props) => {
   );
 };
 
-const TelemetryDetailView: View.View = (props) => {
+const TelemetryDetailView: Views.Component = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const nav = Router.useRouterOption();
   return (
@@ -276,7 +275,7 @@ const TelemetryDetailView: View.View = (props) => {
   );
 };
 
-const ShardMapDetailView: View.View = (props) => {
+const ShardMapDetailView: Views.Component = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const nav = Router.useRouterOption();
   return (
@@ -288,7 +287,7 @@ const ShardMapDetailView: View.View = (props) => {
   );
 };
 
-const GateDetailView: View.View = (props) => {
+const GateDetailView: Views.Component = (props) => {
   if (!isGateTag(props.tag)) return null;
   const nav = Router.useRouterOption();
   return (
@@ -301,7 +300,7 @@ const GateDetailView: View.View = (props) => {
 };
 
 /** WorkPool page — `/…/logs`. */
-const PoolPageView: View.View = (props) => {
+const PoolPageView: Views.Component = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const nav = Router.useRouter();
   if (Route.viewOf(Route.targetOf(nav.match)) !== "logs") return null;
@@ -309,7 +308,7 @@ const PoolPageView: View.View = (props) => {
 };
 
 /** Daemon page — `/…/logs` or `/…/schedule`. */
-const DaemonPageView: View.View = (props) => {
+const DaemonPageView: Views.Component = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Router.useRouter();
   const view = Route.viewOf(Route.targetOf(nav.match));

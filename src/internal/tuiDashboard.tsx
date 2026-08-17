@@ -92,7 +92,7 @@ const lifecycleTagOf = (
 
 // ── cards ───────────────────────────────────────────────────────────────────
 
-const GroupCardView: View.View = (props) => {
+const GroupCardView: Views.Component = (props) => {
   if (!Group.isGroup(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -105,7 +105,7 @@ const GroupCardView: View.View = (props) => {
   );
 };
 
-const PoolCardView: View.View = (props) => {
+const PoolCardView: Views.Component = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -118,7 +118,7 @@ const PoolCardView: View.View = (props) => {
   );
 };
 
-const PriorityCardView: View.View = (props) => {
+const PriorityCardView: Views.Component = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -131,7 +131,7 @@ const PriorityCardView: View.View = (props) => {
   );
 };
 
-const DaemonCardView: View.View = (props) => {
+const DaemonCardView: Views.Component = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -144,7 +144,7 @@ const DaemonCardView: View.View = (props) => {
   );
 };
 
-const ApiCardView: View.View = (props) => {
+const ApiCardView: Views.Component = (props) => {
   if (!isApiTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -157,7 +157,7 @@ const ApiCardView: View.View = (props) => {
   );
 };
 
-const FleetCardView: View.View = (props) => {
+const FleetCardView: Views.Component = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -170,7 +170,7 @@ const FleetCardView: View.View = (props) => {
   );
 };
 
-const TelemetryCardView: View.View = (props) => {
+const TelemetryCardView: Views.Component = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -183,7 +183,7 @@ const TelemetryCardView: View.View = (props) => {
   );
 };
 
-const ShardMapCardView: View.View = (props) => {
+const ShardMapCardView: Views.Component = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -196,7 +196,7 @@ const ShardMapCardView: View.View = (props) => {
   );
 };
 
-const GateCardView: View.View = (props) => {
+const GateCardView: Views.Component = (props) => {
   if (!isGateTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -209,7 +209,7 @@ const GateCardView: View.View = (props) => {
   );
 };
 
-const HyperlinkCardView: View.View = (props) => {
+const HyperlinkCardView: Views.Component = (props) => {
   const chrome = View.useChrome();
   return (
     <FallbackCell
@@ -264,7 +264,7 @@ const QueueDetailPanel = (props: {
   );
 };
 
-const PoolDetailView: View.View = (props) => {
+const PoolDetailView: Views.Component = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -276,7 +276,7 @@ const PoolDetailView: View.View = (props) => {
   );
 };
 
-const PriorityDetailView: View.View = (props) => {
+const PriorityDetailView: Views.Component = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -290,7 +290,7 @@ const PriorityDetailView: View.View = (props) => {
   );
 };
 
-const DaemonDetailView: View.View = (props) => {
+const DaemonDetailView: Views.Component = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -304,7 +304,7 @@ const DaemonDetailView: View.View = (props) => {
   );
 };
 
-const PoolPageView: View.View = (props) => {
+const PoolPageView: Views.Component = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
@@ -319,7 +319,7 @@ const PoolPageView: View.View = (props) => {
   );
 };
 
-const DaemonPageView: View.View = (props) => {
+const DaemonPageView: Views.Component = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, DaemonView.pack);
@@ -347,7 +347,7 @@ const DaemonPageView: View.View = (props) => {
   return null;
 };
 
-const ApiDetailView: View.View = (props) => {
+const ApiDetailView: Views.Component = (props) => {
   if (!isApiTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -360,7 +360,7 @@ const ApiDetailView: View.View = (props) => {
   );
 };
 
-const FleetDetailView: View.View = (props) => {
+const FleetDetailView: Views.Component = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -373,7 +373,7 @@ const FleetDetailView: View.View = (props) => {
   );
 };
 
-const TelemetryDetailView: View.View = (props) => {
+const TelemetryDetailView: Views.Component = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -386,7 +386,7 @@ const TelemetryDetailView: View.View = (props) => {
   );
 };
 
-const ShardMapDetailView: View.View = (props) => {
+const ShardMapDetailView: Views.Component = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -399,7 +399,7 @@ const ShardMapDetailView: View.View = (props) => {
   );
 };
 
-const GateDetailView: View.View = (props) => {
+const GateDetailView: Views.Component = (props) => {
   if (!isGateTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (

@@ -43,8 +43,10 @@ const lifecycleTagOf = (
     ? lifecycleR.value._tag ?? "Running"
     : "Running";
 
-const PoolCardView: View.View = (props) => {
-  if (!isQueueTag(props.tag)) return null;
+const PoolCard = (props: {
+  readonly tag: QueueTag;
+  readonly name?: string;
+}): React.ReactElement => {
   const chrome = View.useChrome();
   return (
     <QueueCell
@@ -55,6 +57,9 @@ const PoolCardView: View.View = (props) => {
     />
   );
 };
+
+const PoolCardView: Views.Component = (props) =>
+  isQueueTag(props.tag) ? <PoolCard tag={props.tag} name={props.name} /> : null;
 
 /** Read-only WorkPool detail body (PageXL) — Dashboard keeps edit/logs chrome. */
 const QueueDetailPanel = (props: {
@@ -97,8 +102,10 @@ const QueueDetailPanel = (props: {
   );
 };
 
-const PoolDetailView: View.View = (props) => {
-  if (!isQueueTag(props.tag)) return null;
+const PoolDetail = (props: {
+  readonly tag: QueueTag;
+  readonly name?: string;
+}): React.ReactElement => {
   const chrome = View.useChrome();
   return (
     <QueueDetailPanel
@@ -109,8 +116,15 @@ const PoolDetailView: View.View = (props) => {
   );
 };
 
-const PoolPageView: View.View = (props) => {
-  if (!isQueueTag(props.tag)) return null;
+const PoolDetailView: Views.Component = (props) =>
+  isQueueTag(props.tag) ? (
+    <PoolDetail tag={props.tag} name={props.name} />
+  ) : null;
+
+const PoolPage = (props: {
+  readonly tag: QueueTag;
+  readonly name?: string;
+}): React.ReactElement | null => {
   const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const logsR = useAtomValue(bundle.logs);
@@ -125,6 +139,9 @@ const PoolPageView: View.View = (props) => {
     </Box>
   );
 };
+
+const PoolPageView: Views.Component = (props) =>
+  isQueueTag(props.tag) ? <PoolPage tag={props.tag} name={props.name} /> : null;
 
 /**
  * TUI TSX implementations for {@link WorkPoolView} card / detail / page.

@@ -48,7 +48,6 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import type { NodeReport } from "../FleetHealth";
 import type { MetricDatum } from "../Telemetry";
