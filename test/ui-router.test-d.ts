@@ -37,9 +37,9 @@ RouterWaku.Outlet;
 RouterWaku.Router;
 // @ts-expect-error nested Provider / setDefault removed — use Last.provider
 RouterWaku.Provider;
-// @ts-expect-error
+// @ts-expect-error setDefault removed — use Last.provider
 RouterWaku.setDefault;
-// @ts-expect-error object layer.waku removed — use waku() / Waku.fromApi
+// `layer` is the Waku location Layer re-exported from last-ts/Waku (Last.provider(Waku.layer)).
 RouterWaku.layer;
 
 type Target = Route.TargetValue;

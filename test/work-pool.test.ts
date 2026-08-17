@@ -37,6 +37,7 @@ const WorkPool = {
   define: engineQueueService,
 };
 import * as Hyperlink from "../src/Hyperlink";
+import * as Versioned from "../src/Versioned";
 import { testLogsEnv } from "./fixtures/logsEnv";
 
 const deferStart = Effect.provideService(Hyperlink.DeferStart, true);
@@ -1175,7 +1176,9 @@ describe("WorkPool.make — itemSchema", () => {
       expect(released).toHaveLength(1);
       expect(released[0]?.payload).toEqual({ id: "email-1", subject: "hello" });
       expect(released[0]?.releaseId).toBe("encoded-release-1");
-      expect(released[0]?.item.id).toBe("test-release-encoded/item@v1");
+      expect(released[0]?.item.id).toBe(
+        `test-release-encoded/item@${Versioned.schemaVersion(EmailItem)}`,
+      );
       expect(yield* queue.size.get).toBe(0);
     }).pipe(Effect.scoped),
   );

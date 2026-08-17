@@ -14,9 +14,7 @@ import * as WorkPool from "../src/WorkPool";
 import * as DaemonView from "../src/ui/DaemonView";
 import * as Route from "../src/ui/Route";
 import * as Memory from "last-ts/Memory";
-import * as Router from "../src/ui/Router";
 import { RuntimeProvider } from "../src/ui/runtime";
-import * as View from "../src/ui/View";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 
 import * as Views from "../src/ui/Views";

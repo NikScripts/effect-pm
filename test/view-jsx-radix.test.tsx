@@ -26,7 +26,7 @@ class Page extends View.make<Page>()("test/jsx-rt/Page") {
     Page,
     Effect.gen(function* () {
       const name = yield* Greeter;
-      return (_props: {}) => (
+      return (_props: Record<never, never>) => (
         <Dialog open>
           <DialogTrigger>Open</DialogTrigger>
           <div data-slot="dialog-body">
@@ -78,7 +78,7 @@ describe("View.jsx + Radix", () => {
         Wrap,
         Effect.gen(function* () {
           const O = yield* Outside;
-          return (_props: {}) => (
+          return (_props: Record<never, never>) => (
             <div>
               <O label="radix-free" />
             </div>

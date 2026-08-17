@@ -126,7 +126,8 @@ describe("Route", () => {
     const site = Route.make("site")
       .addHttpApi(Wire)
       .add(Route.group("pages", { topLevel: true }).add(Route.get("home", "/")));
-    const urls = Route.urlBuilder(site) as Route.UrlBuilderLoose & {
+    // `.addHttpApi` endpoints are runtime-only on the builder (no catalog types) — assert loose.
+    const urls = Route.urlBuilder(site) as unknown as Route.UrlBuilderLoose & {
       home: () => string;
       getUser: (id: string) => string;
       admin: { stats: () => string };

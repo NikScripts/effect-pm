@@ -13,12 +13,12 @@ const table = [
 const site = Route.make("fr").add(Route.fileRoot(table));
 const urls = Route.urlBuilder(site);
 
-expectTypeOf(urls.index()).toEqualTypeOf<string>();
-expectTypeOf(urls.docs_chapter("routing")).toEqualTypeOf<string>();
+expectTypeOf(urls.index()).toEqualTypeOf<Route.PathHref<"/" | "/docs/:chapter">>();
+expectTypeOf(urls.docs_chapter("routing")).toEqualTypeOf<Route.PathHref<"/" | "/docs/:chapter">>();
 
 const viaRouter = Route.make("fr2").add(
   Route.group("root", { topLevel: true }).effect(Router.fileSystem(table)),
 );
 expectTypeOf(Route.urlBuilder(viaRouter).docs_chapter("x")).toEqualTypeOf<
-  string
+  Route.PathHref<"/" | "/docs/:chapter">
 >();

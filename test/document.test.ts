@@ -7,7 +7,7 @@ import * as Document from "last-ts/Document";
 import * as Page from "last-ts/Page";
 
 describe("Document fields", () => {
-  it("Document.provide builds Cell; Page.document merges title", async () => {
+  it.effect("Document.provide builds Cell; Page.document merges title", () => {
     const layer = Document.provide(
       Document.Default,
       Document.title("last.ts"),
@@ -18,7 +18,7 @@ describe("Document fields", () => {
       Document.styleSheet("/a.css"),
       Document.styleSheet("/b.css"),
     );
-    const program = Effect.gen(function* () {
+    return Effect.gen(function* () {
       const cell = yield* Document.Cell;
       expect(cell.get().title).toBe("last.ts");
       expect(cell.get().links.length).toBe(2);
@@ -32,7 +32,6 @@ describe("Document fields", () => {
         { rel: "stylesheet", href: "/only.css" },
       ]);
     }).pipe(Effect.provide(layer));
-    await Effect.runPromise(program);
   });
 
   it("makeCell throws without title", () => {
@@ -44,7 +43,7 @@ describe("Document fields", () => {
     ).toThrow(/missing required title/);
   });
 
-  it("Page.document(Doc, partial) swaps Head", async () => {
+  it.effect("Page.document(Doc, partial) swaps Head", () => {
     class Site extends Document.make<{ readonly ogImage?: string }>()(
       "test/document/site",
       Effect.gen(function* () {
@@ -66,6 +65,6 @@ describe("Document fields", () => {
       expect(cell.getHead()).not.toBe(before);
       expect(cell.getHead()).toBe(Site.Head);
     }).pipe(Effect.provide(layer));
-    await Effect.runPromise(program);
+    return program;
   });
 });

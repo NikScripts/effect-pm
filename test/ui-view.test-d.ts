@@ -44,8 +44,10 @@ Layer.succeed(PoolCard)((props) => {
   return null;
 });
 
-expectTypeOf(View.getAnnotations(PoolCard).size).toEqualTypeOf<Views.CardKind>();
-expectTypeOf(View.annotations(PoolCard)).toEqualTypeOf<
+const poolCardSize = View.getAnnotations(PoolCard).size;
+expectTypeOf(poolCardSize).toEqualTypeOf<Views.CardKind>();
+const poolCardAnnotations = View.annotations(PoolCard);
+expectTypeOf(poolCardAnnotations).toEqualTypeOf<
   Effect.Effect<{ readonly size: Views.CardKind }>
 >();
 

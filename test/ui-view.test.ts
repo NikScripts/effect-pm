@@ -174,7 +174,7 @@ describe("View.make / Prototype", () => {
     const Base = View.Prototype<{ readonly label: string }>()({
       base: true as const,
     });
-    const Open = Base.Prototype<{}, Views.WithSize>()();
+    const Open = Base.Prototype<Record<never, never>, Views.WithSize>()();
     const Done = Open.Prototype()({ size: Views.ViewKind.Card() });
     class MidCard extends Done.Service<MidCard>()("test/mid-card") {}
     expect(View.getAnnotations(MidCard).base).toBe(true);

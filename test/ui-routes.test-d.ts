@@ -5,7 +5,6 @@ import { expectTypeOf } from "vitest";
 import { Schema } from "effect";
 import * as Route from "../src/ui/Route";
 import * as Memory from "last-ts/Memory";
-import * as Router from "../src/ui/Router";
 
 const site = Route.make("site").add(
   Route.get("home", "/home"),
@@ -17,15 +16,15 @@ const site = Route.make("site").add(
 
 const urls = Route.urlBuilder(site);
 
-expectTypeOf(urls.home()).toEqualTypeOf<string>();
-expectTypeOf(urls.app.dashboard()).toEqualTypeOf<string>();
-expectTypeOf(urls.node("x")).toEqualTypeOf<string>();
+expectTypeOf(urls.home()).toEqualTypeOf<Route.PathHref<"/home">>();
+expectTypeOf(urls.app.dashboard()).toEqualTypeOf<Route.PathHref<"/app">>();
+expectTypeOf(urls.node("x")).toEqualTypeOf<Route.PathHref<"/health/:nodeId">>();
 expectTypeOf(
   urls.node("x", { query: { tab: "1" } }),
-).toEqualTypeOf<string>();
+).toEqualTypeOf<Route.PathHref<"/health/:nodeId">>();
 expectTypeOf(
   urls.home({ query: { q: "hi" } }),
-).toEqualTypeOf<string>();
+).toEqualTypeOf<Route.PathHref<"/home">>();
 
 // @ts-expect-error path param required
 urls.node();
@@ -34,7 +33,7 @@ const router = Memory.service(site);
 router.to((u) => u.app.dashboard());
 router.to((u) => u.home());
 router.to((u) => u.node("a", { query: { focus: "1" } }));
-expectTypeOf(router.urls.home()).toEqualTypeOf<string>();
+expectTypeOf(router.urls.home()).toEqualTypeOf<Route.PathHref<"/home">>();
 expectTypeOf(router.search).toEqualTypeOf<string>();
 expectTypeOf(router.href).toEqualTypeOf<string>();
 
@@ -49,6 +48,6 @@ const flat = Route.make("site").add(
   ),
 );
 const flatUrls = Route.urlBuilder(flat);
-expectTypeOf(flatUrls.health()).toEqualTypeOf<string>();
-expectTypeOf(flatUrls.Nwsl.index()).toEqualTypeOf<string>();
-expectTypeOf(flatUrls.Nwsl.HttpApi()).toEqualTypeOf<string>();
+expectTypeOf(flatUrls.health()).toEqualTypeOf<Route.PathHref<"/health">>();
+expectTypeOf(flatUrls.Nwsl.index()).toEqualTypeOf<Route.PathHref<"/Nwsl">>();
+expectTypeOf(flatUrls.Nwsl.HttpApi()).toEqualTypeOf<Route.PathHref<"/Nwsl/HttpApi">>();

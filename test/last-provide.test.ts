@@ -41,7 +41,7 @@ describe("Last.provide", () => {
 
   it("fulfills a View Service to a render fn", () => {
     class Page extends View.make<Page>()("test/last-provide/Page") {
-      static layer = Layer.succeed(Page, (_props: {}) =>
+      static layer = Layer.succeed(Page, (_props: Record<never, never>) =>
         React.createElement("h1", null, "body"),
       );
     }

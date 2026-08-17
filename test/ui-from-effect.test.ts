@@ -3,7 +3,7 @@
  * exist after Layer provides domain services (not static `.add`).
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Effect, Layer, ManagedRuntime, pipe } from "effect";
+import { Context, Effect, Layer, pipe } from "effect";
 import * as React from "react";
 import * as Layout from "last-ts/Layout";
 import * as Memory from "last-ts/Memory";
@@ -19,12 +19,12 @@ class Plugins extends Context.Service<
       readonly path: `/${string}`;
     }>;
   }
->()("test/from-effect/Plugins") {}
+>()("hyperlink-ts/test/ui-from-effect.test/Plugins") {}
 
 class Modules extends Context.Service<
   Modules,
   { readonly admin: boolean }
->()("test/from-effect/Modules") {}
+>()("hyperlink-ts/test/ui-from-effect.test/Modules") {}
 
 const pluginsGroup = Route.group("plugins")
   .prefix("/x")
@@ -86,7 +86,7 @@ const app = (domain: Layer.Layer<Plugins | Modules>) =>
   );
 
 describe("group.effect + groupsEffect (Context)", () => {
-  it("materializes partner endpoints from the Layer-provided service", async () => {
+  it.effect("materializes partner endpoints from the Layer-provided service", () => {
     const domain = Layer.mergeAll(
       Layer.succeed(Plugins, {
         items: [
@@ -96,42 +96,28 @@ describe("group.effect + groupsEffect (Context)", () => {
       }),
       Layer.succeed(Modules, { admin: false }),
     );
-    const rt = ManagedRuntime.make(app(domain));
-    try {
-      await rt.runPromise(
-        Effect.gen(function* () {
-          const router = yield* Router.Router;
-          expect(Object.keys(router.api.groups["plugins"]!.routes).sort()).toEqual(
-            ["charts", "reports"],
-          );
-          expect(router.api.groups["admin"]).toBeUndefined();
-          router.go("/x/charts");
-          expect(router.match?.route.identifier).toBe("charts");
-        }),
+    return Effect.gen(function* () {
+      const router = yield* Router.Router;
+      expect(Object.keys(router.api.groups["plugins"]!.routes).sort()).toEqual(
+        ["charts", "reports"],
       );
-    } finally {
-      await rt.dispose();
-    }
+      expect(router.api.groups["admin"]).toBeUndefined();
+      router.go("/x/charts");
+      expect(router.match?.route.identifier).toBe("charts");
+    }).pipe(Effect.provide(app(domain)));
   });
 
-  it("groupsEffect adds a top-level group only when the flag is on", async () => {
+  it.effect("groupsEffect adds a top-level group only when the flag is on", () => {
     const domain = Layer.mergeAll(
       Layer.succeed(Plugins, { items: [{ id: "a", path: "/a" }] }),
       Layer.succeed(Modules, { admin: true }),
     );
-    const rt = ManagedRuntime.make(app(domain));
-    try {
-      await rt.runPromise(
-        Effect.gen(function* () {
-          const router = yield* Router.Router;
-          expect(router.api.groups["admin"]).toBeDefined();
-          router.go("/admin/users");
-          expect(router.match?.route.identifier).toBe("users");
-        }),
-      );
-    } finally {
-      await rt.dispose();
-    }
+    return Effect.gen(function* () {
+      const router = yield* Router.Router;
+      expect(router.api.groups["admin"]).toBeDefined();
+      router.go("/admin/users");
+      expect(router.match?.route.identifier).toBe("users");
+    }).pipe(Effect.provide(app(domain)));
   });
 
   it("materializes R=never fromEffect for sync urlBuilder / match", () => {

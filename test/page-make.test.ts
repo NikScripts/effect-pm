@@ -2,10 +2,13 @@
  * Page.make / Page.static / Route.static — mint + mode + default.
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Schema } from "effect";
+import { Effect, Layer, pipe, Schema } from "effect";
 import * as React from "react";
+import * as Layout from "last-ts/Layout";
 import * as Page from "last-ts/Page";
 import * as Route from "last-ts/Route";
+import * as Router from "last-ts/Router";
+import * as RouterBuilder from "last-ts/RouterBuilder";
 
 describe("Page.make", () => {
   it("dynamic by default with JSX body", () => {
@@ -44,12 +47,7 @@ describe("Page.make", () => {
 });
 
 describe("RouterBuilder.handle Page mint", () => {
-  it("unwraps Page.default as PageEffect", async () => {
-    const { Layer, ManagedRuntime, pipe } = await import("effect");
-    const Layout = await import("last-ts/Layout");
-    const Router = await import("last-ts/Router");
-    const RouterBuilder = await import("last-ts/RouterBuilder");
-
+  it.effect("unwraps Page.default as PageEffect", () => {
     class Home extends Page.make(
       Effect.succeed(React.createElement("span", { "data-page": "mint" }, "ok")),
     ) {}
@@ -73,18 +71,13 @@ describe("RouterBuilder.handle Page mint", () => {
       ),
     );
 
-    const rt = ManagedRuntime.make(routes);
-    try {
-      const registry = await rt.runPromise(
-        Effect.gen(function* () {
-          return yield* RouterBuilder.Registry;
-        }),
-      );
-      expect(registry.groups.get("app")?.handlers.get("home")?._tag).toBe(
-        "PageEffect",
-      );
-    } finally {
-      await rt.dispose();
-    }
+    return RouterBuilder.Registry.pipe(
+      Effect.map((registry) => {
+        expect(registry.groups.get("app")?.handlers.get("home")?._tag).toBe(
+          "PageEffect",
+        );
+      }),
+      Effect.provide(routes),
+    );
   });
 });

@@ -16,4 +16,5 @@ class Home extends Page.static(React.createElement("h1", null, "Home")) {}
 expectTypeOf(About.mode).toEqualTypeOf<"dynamic">();
 expectTypeOf(Search.mode).toEqualTypeOf<"dynamic">();
 expectTypeOf(Home.mode).toEqualTypeOf<"static">();
-expectTypeOf(Page.isPage(About)).toEqualTypeOf<boolean>();
+const aboutIsPage = Page.isPage(About);
+expectTypeOf(aboutIsPage).toEqualTypeOf<boolean>();

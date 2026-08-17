@@ -14,8 +14,6 @@ import * as Daemon from "../src/Daemon";
 import * as GroupNav from "../src/ui/GroupNav";
 import * as Route from "../src/ui/Route";
 import * as Memory from "last-ts/Memory";
-import * as Router from "../src/ui/Router";
-import * as View from "../src/ui/View";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 import * as DaemonView from "../src/ui/DaemonView";
 import { RuntimeProvider, useRuntime } from "../src/ui/runtime";

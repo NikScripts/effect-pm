@@ -47,9 +47,6 @@ const Pricing = (): React.ReactElement =>
 const DocsIndex = (): React.ReactElement =>
   React.createElement("span", null, "docs-index");
 
-const Chapter = (props: Route.HandleArgs): React.ReactElement =>
-  React.createElement("span", null, `chapter:${props.params.chapter ?? ""}`);
-
 const BareChapter = Effect.gen(function* () {
   yield* Layout.provide(Layout.Passthrough);
   const req = yield* Page.Request;

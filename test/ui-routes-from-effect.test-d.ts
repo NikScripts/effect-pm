@@ -7,7 +7,6 @@ import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
 import * as Route from "../src/ui/Route";
 import * as Memory from "last-ts/Memory";
-import * as Router from "../src/ui/Router";
 
 class HttpApi extends Daemon.Service<HttpApi>()("test/fromEffect/HttpApi") {}
 class Nwsl extends Group.Service<Nwsl>("test/fromEffect/Nwsl")({ HttpApi }) {}
@@ -20,15 +19,15 @@ const site = Route.make("site").add(
 
 const urls = Route.urlBuilder(site);
 
-expectTypeOf(urls.home()).toEqualTypeOf<string>();
-expectTypeOf(urls.health()).toEqualTypeOf<string>();
-expectTypeOf(urls.Nwsl.HttpApi()).toEqualTypeOf<string>();
-expectTypeOf(urls.Nwsl.HttpApiLogs()).toEqualTypeOf<string>();
-expectTypeOf(urls.Nwsl.index()).toEqualTypeOf<string>();
-expectTypeOf(urls.nodeHealth("app/NodeA")).toEqualTypeOf<string>();
+expectTypeOf(urls.home()).toEqualTypeOf<Route.PathHref<"/home">>();
+expectTypeOf(urls.health()).toEqualTypeOf<Route.PathHref<"/health">>();
+expectTypeOf(urls.Nwsl.HttpApi()).toEqualTypeOf<Route.PathHref<`/${string}`>>();
+expectTypeOf(urls.Nwsl.HttpApiLogs()).toEqualTypeOf<Route.PathHref<`/${string}`>>();
+expectTypeOf(urls.Nwsl.index()).toEqualTypeOf<Route.PathHref<`/${string}`>>();
+expectTypeOf(urls.nodeHealth("app/NodeA")).toEqualTypeOf<Route.PathHref<"/health/*nodeId">>();
 expectTypeOf(
   urls.nodeHealth("app/NodeA", { query: { panel: "logs" } }),
-).toEqualTypeOf<string>();
+).toEqualTypeOf<Route.PathHref<"/health/*nodeId">>();
 
 // @ts-expect-error nodeHealth path param required
 urls.nodeHealth();
@@ -36,4 +35,4 @@ urls.nodeHealth();
 const router = Memory.service(site);
 router.to((u) => u.Nwsl.HttpApi());
 router.to((u) => u.nodeHealth("x"));
-expectTypeOf(router.urls.Nwsl.HttpApi()).toEqualTypeOf<string>();
+expectTypeOf(router.urls.Nwsl.HttpApi()).toEqualTypeOf<Route.PathHref<`/${string}`>>();
