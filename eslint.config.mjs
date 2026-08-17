@@ -16,6 +16,7 @@ export default [
       "dist/**",
       "node_modules/**",
       "repos/**",
+      "archive/**",
       // Agent worktrees live here; without ignoring them (and pinning tsconfigRootDir below) their
       // nested repo checkout adds a second candidate root and typescript-eslint fails to parse anything.
       ".claude/**"
@@ -24,13 +25,14 @@ export default [
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
     files: [
-      "src/**/*.ts",
-      "test/**/*.ts",
-      "examples/**/*.ts",
-      "dev/**/*.ts",
+      "*.{ts,tsx}",
+      "src/**/*.{ts,tsx}",
+      "test/**/*.{ts,tsx}",
+      "examples/**/*.{ts,tsx}",
+      "dev/**/*.{ts,tsx}",
+      "scripts/**/*.{ts,tsx}",
       "packages/last-ts/**/*.{ts,tsx}",
-      "docs/last/**/*.{ts,tsx}",
-      "docs/site/**/*.{ts,tsx}",
+      "docs/**/*.{ts,tsx}",
     ],
     languageOptions: {
       ...config.languageOptions,
@@ -59,10 +61,21 @@ export default [
     }
   })),
   {
-    files: ["test/**/*.test-d.ts"],
+    // Type-level assertion files: bare expressions ARE the test, and scratch
+    // type names are the fixtures — the value-level hygiene rules don't apply.
+    files: ["**/*.test-d.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-unused-vars": "off",
-      "@typescript-eslint/no-empty-object-type": "off"
+      "@typescript-eslint/no-empty-object-type": "off",
+      "@typescript-eslint/no-unused-expressions": "off"
+    }
+  },
+  {
+    // Twoslash source for docs/guides/view-typed-jsx.md: the trailing bare expression
+    // carries the `// ^?` hover query that renders the type popover — it IS the doc.
+    files: ["examples/ui/view-typed-jsx/App.tsx"],
+    rules: {
+      "@typescript-eslint/no-unused-expressions": "off"
     }
   },
   // ── React / browser layer ruleset ────────────────────────────────────────────────────────────
@@ -96,7 +109,9 @@ export default [
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       // The new JSX transform makes `import React` unnecessary in scope.
-      "react/react-in-jsx-scope": "off"
+      "react/react-in-jsx-scope": "off",
+      // TypeScript props interfaces are the prop contract; runtime PropTypes are not used here.
+      "react/prop-types": "off"
     }
   },
   // F5 split-dial + no direct waku (merged — flat config replaces the whole rule).
