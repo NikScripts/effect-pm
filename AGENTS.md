@@ -28,6 +28,28 @@ not always-on essays. Do not grow alwaysApply rules; put SSOT in standards.
 
 **Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat.
 
+## Code formatting in every artifact
+
+**Break every call onto its own line** — chains, nested constructors, and multi-key
+option bags. Applies to source, tests, examples, doc comments, guides, handoffs, and
+chat replies. Full rule:
+[`docs/standards/documentation.md`](./docs/standards/documentation.md)
+(*Break every call onto its own line*) and
+[`.cursor/rules/code-formatting.mdc`](./.cursor/rules/code-formatting.mdc).
+
+``` ts
+// bad
+.add(Hyperlink.group("admin").add(reset))
+```
+
+``` ts
+// good
+.add(
+  Hyperlink.group("admin")
+    .add(reset)
+)
+```
+
 ## Branch policy
 
 **Format:** `<type>/<description>` — slash-separated, **kebab-case** description.

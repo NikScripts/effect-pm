@@ -1,0 +1,29 @@
+---
+description: Break every call onto its own line — chains, nesting, option bags
+globs: "{src,test,examples,dev,docs}/**/*.{ts,tsx,md}"
+alwaysApply: true
+---
+
+# Break every call onto its own line
+
+Full rule: [`docs/standards/documentation.md`](../../docs/standards/documentation.md)
+(*Break every call onto its own line*).
+
+- No call is packed onto one line with another.
+- Every chained step gets its own line.
+- Every nested constructor gets its own line and its own indent level.
+- Option bags with more than one key get one key per line.
+- Applies to source, tests, examples, doc comments, guides, handoffs, and chat replies.
+
+``` ts
+// bad
+.add(Hyperlink.group("admin").add(reset))
+```
+
+``` ts
+// good
+.add(
+  Hyperlink.group("admin")
+    .add(reset)
+)
+```

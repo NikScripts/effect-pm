@@ -36,6 +36,50 @@ codebase does not use `@param` / `@returns`; they duplicate the types and rot as
 export const connect = /* … */
 ```
 
+{#break-up-every-call .must appliesTo="src examples docs"}
+## Break every call onto its own line
+
+No call is packed onto one line with another. Every chained step, every nested
+constructor, every argument list that holds a call gets its own line and its own
+indent level. This applies to doc comments, examples, guides, handoffs, and chat.
+
+``` ts
+// bad — chained and nested calls packed together
+class Mover extends Hyperlink.make("app/Mover").add(take, give).add(Hyperlink.group("admin").add(reset)) {}
+```
+
+``` ts
+// bad — nested call inline inside the argument list
+.add(Hyperlink.group("admin").add(reset))
+```
+
+``` ts
+// good — every step and every nesting level on its own line
+class Mover extends Hyperlink.make("app/Mover")
+  .add(take, give)
+  .add(
+    Hyperlink.group("admin")
+      .add(reset)
+  )
+{}
+```
+
+Applies to option bags too — one key per line once the bag holds more than one key.
+
+``` ts
+// bad
+WorkPool.lane("urgent", { payload: UrgentJob, success: Receipt, error: Rejected })
+```
+
+``` ts
+// good
+WorkPool.lane("urgent", {
+  payload: UrgentJob,
+  success: Receipt,
+  error: Rejected,
+})
+```
+
 {#example-must-be-real .must appliesTo="src examples"}
 ## `@example` code is real code
 

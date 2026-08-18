@@ -4,6 +4,27 @@
 **Owner game plan, captured 2026-08-17. Nothing here is Eng'd.**
 Owner gate: **do not implement the Address requirement work without the owner.**
 
+## 0. Formatting rule — binding on everything in this doc
+
+**Break every call onto its own line.** Chains, nested constructors, and multi-key option
+bags. No exceptions, in this doc or in chat.
+
+``` ts
+// bad
+.add(Hyperlink.group("admin").add(reset))
+```
+
+``` ts
+// good
+.add(
+  Hyperlink.group("admin")
+    .add(reset)
+)
+```
+
+Standard: [`docs/standards/documentation.md`](../standards/documentation.md)
+(*Break every call onto its own line*).
+
 ## 1. Two constructors, one contract
 
 `.Service` **stays as is** — the class handle, yieldable. Its constructor may gain changes;
