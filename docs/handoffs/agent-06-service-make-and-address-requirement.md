@@ -32,51 +32,77 @@ Requirement differs by input:
 - client built from the **Service** → requires **that service**, which may be the real thing
   or just a client layer
 
-## 3. Default client — `Context.Reference` ruled out (2026-08-18)
+## 3. Default client — resolved via `Effect.serviceOption` (2026-08-18)
 
-**Outcome: the zero-provide default client is not achievable. The default *layer* still is.**
+**Mechanism: `Effect.serviceOption`. `Context.Reference` is ruled out.**
 
-### What was tried and why each failed
+### The answer
+
+```ts
+// Effect.ts:6125 — note the R channel: never
+export const serviceOption: <I, S>(key: Context.Key<I, S>) => Effect<Option<S>> = internal.serviceOption
+```
+
+Asking whether a service is present does **not** require it to be present. So the tag stays an
+ordinary `Context.Service`, and the client is the fallback:
+
+```ts
+const handle = <Self, S>(tag: HyperlinkTag<Self, S>) =>
+  Effect.flatMap(
+    Effect.serviceOption(tag),
+    Option.match({
+      onSome: Effect.succeed,          // served locally -> real impl
+      onNone: () => dialClient(tag),   // not provided  -> client
+    }),
+  )
+```
+
+```ts
+const jobs = yield* Jobs                    // one yield, no layer required
+Effect.provideService(program, Jobs, impl)  // override -> plain provide
+Layer.provide(program, Jobs.serve(impl))    // serving layer -> same
+```
+
+`R` is honest: `Effect<Wire<S>, never, Protocol>` — the service drops out of `R`, leaving only
+what dialing actually needs. No prototype surgery, no `ReferenceTypeId`, all public API.
+
+### Why the other five approaches failed
 
 | Approach | Verdict |
 |----------|---------|
-| `Context.Reference` default | **No.** `defaultValue: () => Service` is sync, unscoped, infallible — it cannot dial, cannot hold a `Scope`, cannot fail |
-| Reference holding the acquisition Effect | **No.** Forces a double yield: `yield* (yield* Ref)` |
-| Reference holding a lazy proxy | **Rejected by owner.** `R` disappears from acquisition and reappears per method |
-| Custom class overriding `Effectable` `evaluate` | **No.** Context's default path lives in the *sync* readers (`getUnsafe`, `getOrElse`), so every direct `Context.get` on the tag would throw instead of falling back |
+| `Context.Reference` default | **No.** `defaultValue: () => Service` is sync, unscoped, infallible — cannot dial, cannot hold `Scope`, cannot fail |
+| Reference holding the acquisition Effect | **No.** Double yield: `yield* (yield* Ref)` |
+| Reference holding a lazy proxy | **Rejected.** `R` vanishes from acquisition, reappears per method |
+| Default client *layer* | **Rejected.** A default that must be provided is not a default |
 | Effect-provides-dependency wrapper | **No.** Provision covers what an effect *runs*, not an Effect it *returns* — a returned Effect keeps its requirement in the success type |
 
-Source of the constraint:
+Source of the Reference constraint:
 
 ```ts
-// Context.ts:1335 — sync thunk, no Effect, no Scope, no error channel
+// Context.ts:1335 — sync thunk: no Effect, no Scope, no error channel
 export const Reference: <Service>(
   key: string,
   options: { readonly defaultValue: () => Service }
 ) => Reference<Service>
 
-// Context.ts:882 — the default is resolved on the sync read path
+// Context.ts:882 — default resolves on the *sync* read path
 if (!self.mapUnsafe.has(service.key)) {
   if (ReferenceTypeId in service) return getDefaultValue(service as any)
   throw serviceNotFoundError(service)
 }
 ```
 
-### What survives
+### Still open on this mechanism
 
-A **default client layer**, provided once where the runtime is assembled:
+1. **Scope.** If `dialClient` acquires a socket, `Scope` joins `R`. Either `Protocol` owns the
+   connection and `dialClient` returns a cheap handle, or `yield* Jobs` carries `Scope`.
+2. **Memoization.** `serviceOption` re-checks on every yield, so a loop re-dials unless `Protocol`
+   caches. Owner lean: that is the protocol's job, not the tag's.
+3. **What you yield.** `serviceOption` is a function. Either it lives in the class's `evaluate`
+   (so `yield* Jobs` does it), or `Jobs` is not the thing you yield. Undecided.
 
-```ts
-Layer.provide(app, Hyperlink.clientLayer(Jobs))   // effectful + scoped, no Reference needed
-Effect.provideService(program, Jobs, realImpl)    // override is still a plain provide
-```
-
-Cost vs. the original plan: **one provide at app assembly**. Everything else the plan wanted is
-intact — one handle everywhere, override by simple provide, protocol as the only leftover
-requirement. `.make` remains the no-client path.
-
-**Open:** owner has not decided whether to adopt the one-provide default layer or drop the
-default-client idea entirely.
+**Note:** items 1–3 are expected to be reshaped by the Node/Address work (§5). Do not lock this
+before the address model lands.
 
 ## 4. Statics
 
@@ -114,6 +140,21 @@ handled, and survey what others do for something similar.
 1. Does the default-client Reference need a no-default alternative, or is `.make` enough?
 2. How does a requirement type carry N addresses without R becoming combinatorial?
 3. What exactly does `.make` return — class or value — and does it keep `class X extends` form?
+
+## 7. Work order (owner, 2026-08-18)
+
+**Node/Address (§5) remains priority #1.** It is not the *first* task, because it will reshape
+§1–§3; we want the surrounding shape visible before diving in.
+
+| # | Step | State |
+|---|------|-------|
+| 1 | Document everything above | done |
+| 2 | Play with the APIs — push `.Service` / `.make` / helpers toward HttpApi shape | **next** |
+| 3 | Lock the desired API shape — provisional, explicitly **not final** | after 2 |
+| 4 | Node/Address as a requirement (§5) — the #1 priority | owner-gated, after 3 |
+
+Rationale: step 3 gives a full picture of everything else in motion before step 4 starts. Nothing
+in steps 2–3 is binding; the address model may invalidate any of it.
 
 ## Notes (Agent 6 — not owner decisions)
 
