@@ -48,12 +48,20 @@ Both constructors support both forms, as HttpApi does. `<Self>` appears only in 
 
 ```ts
 // ── .make — contract, no identity ──────────────────────────────
-const jobs = WorkPool.make("app/Jobs").payload(job)
-class Jobs extends WorkPool.make("app/Jobs").payload(job) {}
+const jobs = WorkPool.make("app/Jobs")
+  .payload(job)
+
+class Jobs extends WorkPool.make("app/Jobs")
+  .payload(job)
+{}
 
 // ── .Service — contract + identity, yieldable ──────────────────
-class Jobs extends WorkPool.Service<Jobs>()("app/Jobs").payload(job) {}
-const jobs = WorkPool.Service()("app/Jobs").payload(job)
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs")
+  .payload(job)
+{}
+
+const jobs = WorkPool.Service()("app/Jobs")
+  .payload(job)
 ```
 
 Precedent — `Context.Service` already carries exactly this two-overload split:
@@ -83,16 +91,20 @@ per-discovered-node pools:
 
 ```ts
 const jobsFor = (tenant: string) =>
-  WorkPool.Service()(`app/Jobs/${tenant}`).payload(job)
+  WorkPool.Service()(`app/Jobs/${tenant}`)
+    .payload(job)
 ```
 
 **What degrades:** everything branded by `Self`.
 
 ```ts
-class Jobs extends WorkPool.Service<Jobs>()("app/Jobs").payload(job) {}
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs")
+  .payload(job)
+{}
 // Local<Jobs>, PeersId<Jobs>, SelfNodeId<Jobs> — branded
 
-const jobs = WorkPool.Service()("app/Jobs").payload(job)
+const jobs = WorkPool.Service()("app/Jobs")
+  .payload(job)
 // no Self → local gating, peers, selfNode lose their brand
 ```
 
@@ -324,9 +336,16 @@ gets decode surprises. Needs a decision.
 annotations — never `.add`. Applied here:
 
 ```ts
-WorkPool.make("app/Jobs").add(lane, lane)      // lanes are members -> .add
-WorkPool.make("app/Jobs", { … })               // pool config -> make bag
-WorkPool.make("app/Jobs").payload(job)         // contract-wide modifier -> prefix-style
+// lanes are members -> .add
+WorkPool.make("app/Jobs")
+  .add(lane, lane)
+
+// pool config -> make bag
+WorkPool.make("app/Jobs", { … })
+
+// contract-wide modifier -> prefix-style
+WorkPool.make("app/Jobs")
+  .payload(job)
 ```
 
 Consistent with **D26** (`make` + `.add`, not `.pipe`).
@@ -337,8 +356,12 @@ Consistent with **D26** (`make` + `.add`, not `.pipe`).
 class Jobs extends WorkPool.make("app/Jobs")
   .payload(Job)
   .add(
-    WorkPool.lane("urgent", { payload: UrgentJob, success: Receipt, error: Rejected }),
-    WorkPool.lane("batch"),                       // inherits Job
+    WorkPool.lane("urgent", {
+      payload: UrgentJob,
+      success: Receipt,
+      error: Rejected,
+    }),
+    WorkPool.lane("batch"),   // inherits Job
   )
 {}
 
@@ -359,9 +382,26 @@ lane is constructed standalone and cannot see the pool at its own construction �
 where the parent applies `prefix` by mapping over children (`HttpApi.ts:173`).
 
 ```ts
-WorkPool.make("app/Jobs").payload(Job).add(WorkPool.lane("batch"))       // ✅ inherits
-WorkPool.make("app/Jobs").add(WorkPool.lane("batch", { payload: Job }))  // ✅ own
-WorkPool.make("app/Jobs").add(WorkPool.lane("batch"))                    // ❌ unresolved
+// ✅ inherits
+WorkPool.make("app/Jobs")
+  .payload(Job)
+  .add(
+    WorkPool.lane("batch")
+  )
+
+// ✅ own
+WorkPool.make("app/Jobs")
+  .add(
+    WorkPool.lane("batch", {
+      payload: Job,
+    })
+  )
+
+// ❌ unresolved
+WorkPool.make("app/Jobs")
+  .add(
+    WorkPool.lane("batch")
+  )
 ```
 
 **Ordering rule (Agent 6 call, owner approved): `.payload` must precede `.add`.** No backfill.
@@ -402,18 +442,30 @@ only earns its place if two pools are ever composed into one, which nothing in t
 Optional second arg to `make`, plus two transforms that fill the **same slot**:
 
 ```ts
-WorkPool.make("app/Jobs")                                  // .node ✓  .address ✓
-WorkPool.make("app/Jobs", Worker)                          // .node ✗  .address ✗
-WorkPool.make("app/Jobs").node(Worker)                     // .node ✗  .address ✗
-WorkPool.make("app/Jobs").address(Address.http(":8080"))   // .node ✗  .address ✗
+// .node ✓  .address ✓
+WorkPool.make("app/Jobs")
+
+// .node ✗  .address ✗
+WorkPool.make("app/Jobs", Worker)
+
+// .node ✗  .address ✗
+WorkPool.make("app/Jobs")
+  .node(Worker)
+
+// .node ✗  .address ✗
+WorkPool.make("app/Jobs")
+  .address(
+    Address.http(":8080")
+  )
 ```
 
 **Removed from the type once filled — never a silent overwrite.** A node is a routing change;
 last-write-wins hides it. Consistent with §8.8: a node does not union with another node.
 
 ```ts
-WorkPool.make("app/Jobs", Worker).node(Other)
-//                               ^ .node does not exist on a targeted pool
+WorkPool.make("app/Jobs", Worker)
+  .node(Other)
+//^ .node does not exist on a targeted pool
 ```
 
 Re-targeting a contract declared elsewhere, if ever needed, gets its own verb rather than a quiet
@@ -424,9 +476,22 @@ overwrite — e.g. `WorkPool.retarget(Jobs, Other)`. Not designed.
 `.address` never accumulates. Multiplicity already lives **inside** one Address value (D27/D28):
 
 ```ts
-.address(Address.http([8080, 8081]))
-.address(Address.http({ blue: 8080, green: 8081 }))
-.address(Address.http(Address.range(":8080", ":8090")))
+.address(
+  Address.http([8080, 8081])
+)
+
+.address(
+  Address.http({
+    blue: 8080,
+    green: 8081,
+  })
+)
+
+.address(
+  Address.http(
+    Address.range(":8080", ":8090")
+  )
+)
 ```
 
 The only thing accumulation would add is **across protocols** — which is what a Node is. Allowing
