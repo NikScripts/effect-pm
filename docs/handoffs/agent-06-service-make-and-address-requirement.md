@@ -225,12 +225,95 @@ handled, and survey what others do for something similar.
 | # | Step | State |
 |---|------|-------|
 | 1 | Document everything above | done |
-| 2 | Play with the APIs — push `.Service` / `.make` / helpers toward HttpApi shape | **next** |
+| 2 | **WorkPool API mock-up** (§8) — lanes as groups, two builders, topLevel, payload-as-prefix | **next** |
+| 2b | `Hyperlink.Service` / `Hyperlink.make` shape — after WorkPool, which is the foundation | after 2 |
 | 3 | Lock the desired API shape — provisional, explicitly **not final** | after 2 |
 | 4 | Node/Address as a requirement (§5) — the #1 priority | owner-gated, after 3 |
 
 Rationale: step 3 gives a full picture of everything else in motion before step 4 starts. Nothing
 in steps 2–3 is binding; the address model may invalidate any of it.
+
+## 8. WorkPool redesign — lanes as groups (owner, 2026-08-18)
+
+**WorkPool is the centerpiece of the package and the foundation the included service factories
+build on. Its API is designed first; `Hyperlink.Service` / `Hyperlink.make` follow.**
+
+### 8.1 The contract/layer discipline
+
+Borrowed from HttpApi, and the rule that makes the two-part split worth having:
+
+> Most things do **not** belong in the contract. Only what the **client** needs, what **must** be
+> in the class/const, or anything that **affects the type**. As much as reasonable goes in the
+> **layer**.
+
+Two builders per pool: one builds the handle/contract, one builds the layer.
+
+### 8.2 Lanes become groups
+
+A WorkPool lane maps to an `HttpApiGroup`. Consequences:
+
+- `add`, `defer`, `priority` stop being built-in methods on the pool
+- you declare **lanes** instead; the right configuration across the two builders reproduces the
+  current three lanes exactly
+- **custom priority merges into WorkPool** — `CustomQueueResource` stops being a separate concept,
+  because a custom priority scheme is just a different set of lanes
+
+### 8.3 `topLevel` keeps the simple case simple (Agent 6, accepted into the design)
+
+HttpApi's `topLevel` exists so a one-group api does not force `client.group.method()`:
+
+```ts
+// HttpApiGroup.ts:394
+export const make = <const Id extends string, const TopLevel extends boolean = false>(
+  identifier: Id,
+  options?: { readonly topLevel?: TopLevel | undefined }
+): HttpApiGroup<Id, never, TopLevel>
+```
+
+Lanes need the same escape, or every pool pays lane syntax for a feature most pools do not use:
+
+```ts
+jobs.add(job)          // topLevel lane — the common case survives
+jobs.urgent.add(job)   // named lane
+```
+
+### 8.4 `.payload` behaves like `.prefix`
+
+Keep `.payload`, but as a **contract-wide modifier that pushes down into members**, exactly as
+HttpApi's `prefix` maps over every group which maps over every endpoint:
+
+```ts
+// HttpApi.ts:94
+prefix<const Prefix extends PathInput>(prefix: Prefix): HttpApi<Id, HttpApiGroup.AddPrefix<Groups, Prefix>>
+
+// HttpApi.ts:173 — pushes down
+prefix(this: Top, prefix: PathInput) {
+  return … Record.map(this.groups, (group) => group.prefix(prefix))
+}
+```
+
+Lanes may **optionally narrow** the pool payload with their own schema.
+
+**Open (Agent 6):** narrowing should be constrained to a subtype of the pool payload, or enqueue
+gets decode surprises. Needs a decision.
+
+### 8.5 `.add` vs config
+
+`.add` in HttpApi adds **members**. Config that is not a member arrives at `make` or via
+annotations — never `.add`. Applied here:
+
+```ts
+WorkPool.make("app/Jobs").add(lane, lane)      // lanes are members -> .add
+WorkPool.make("app/Jobs", { … })               // pool config -> make bag
+WorkPool.make("app/Jobs").payload(job)         // contract-wide modifier -> prefix-style
+```
+
+Consistent with **D26** (`make` + `.add`, not `.pipe`).
+
+### 8.6 Status
+
+Mock-up not yet written. Next step is a full WorkPool API mock for discussion — not an
+implementation.
 
 ## Notes (Agent 6 — not owner decisions)
 
