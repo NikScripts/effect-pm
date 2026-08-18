@@ -32,17 +32,51 @@ Requirement differs by input:
 - client built from the **Service** → requires **that service**, which may be the real thing
   or just a client layer
 
-## 3. Default client via `Context.Reference`
+## 3. Default client — `Context.Reference` ruled out (2026-08-18)
 
-Switch the client to a `Context.Reference` so it can be provided as a **default layer**.
-Result is the same as `.make`, with **one less step**. Protocol requirements still apply.
+**Outcome: the zero-provide default client is not achievable. The default *layer* still is.**
 
-- **Downside:** you always carry the client with you.
-- **Owner call:** the tradeoff is worth it.
-- With the new `.make` you can still get a handle **without** the client — its tradeoff is that
-  "use anywhere, yield everywhere, same handle" is no longer true.
-- If that tradeoff proves too big, **optionally** add an alternative without the default client.
-  Not decided.
+### What was tried and why each failed
+
+| Approach | Verdict |
+|----------|---------|
+| `Context.Reference` default | **No.** `defaultValue: () => Service` is sync, unscoped, infallible — it cannot dial, cannot hold a `Scope`, cannot fail |
+| Reference holding the acquisition Effect | **No.** Forces a double yield: `yield* (yield* Ref)` |
+| Reference holding a lazy proxy | **Rejected by owner.** `R` disappears from acquisition and reappears per method |
+| Custom class overriding `Effectable` `evaluate` | **No.** Context's default path lives in the *sync* readers (`getUnsafe`, `getOrElse`), so every direct `Context.get` on the tag would throw instead of falling back |
+| Effect-provides-dependency wrapper | **No.** Provision covers what an effect *runs*, not an Effect it *returns* — a returned Effect keeps its requirement in the success type |
+
+Source of the constraint:
+
+```ts
+// Context.ts:1335 — sync thunk, no Effect, no Scope, no error channel
+export const Reference: <Service>(
+  key: string,
+  options: { readonly defaultValue: () => Service }
+) => Reference<Service>
+
+// Context.ts:882 — the default is resolved on the sync read path
+if (!self.mapUnsafe.has(service.key)) {
+  if (ReferenceTypeId in service) return getDefaultValue(service as any)
+  throw serviceNotFoundError(service)
+}
+```
+
+### What survives
+
+A **default client layer**, provided once where the runtime is assembled:
+
+```ts
+Layer.provide(app, Hyperlink.clientLayer(Jobs))   // effectful + scoped, no Reference needed
+Effect.provideService(program, Jobs, realImpl)    // override is still a plain provide
+```
+
+Cost vs. the original plan: **one provide at app assembly**. Everything else the plan wanted is
+intact — one handle everywhere, override by simple provide, protocol as the only leftover
+requirement. `.make` remains the no-client path.
+
+**Open:** owner has not decided whether to adopt the one-provide default layer or drop the
+default-client idea entirely.
 
 ## 4. Statics
 
