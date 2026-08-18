@@ -10,21 +10,97 @@ Owner gate: **do not implement the Address requirement work without the owner.**
 the class handle itself does not change.
 
 `.make` is (re)introduced, following HttpApi / HttpApiClient "kinda". It returns a class or
-value — not a service. Two different results from the same family:
+value — not a service.
 
-| Constructor | Result | Yieldable | Passable to layer builder | Passable to client helpers |
-|-------------|--------|-----------|---------------------------|----------------------------|
+| Constructor | Result | Yieldable | Layer builder | Client helpers |
+|-------------|--------|-----------|---------------|----------------|
 | `.Service`  | service (Context identity) | **yes** | yes | yes |
 | `.make`     | class / value (no identity) | no | yes | yes |
 
-**Interchangeability is the requirement.** The service and the non-service class/const are
-interchangeable for the most part: the same methods and helpers accept both. The service class
-carries the same pieces the non-service class carries, so it can go to the layer builder *and*
+**Interchangeability is the requirement.** The same methods and helpers accept both. The service
+class carries the same pieces the non-service class carries, so it goes to the layer builder *and*
 to the client helpers. The only real difference: **you can only yield one of them.**
+
+### 1.1 Four cells — const and class, for both (2026-08-18)
+
+Both constructors support both forms, as HttpApi does. `<Self>` appears only in the class form.
+
+```ts
+// ── .make — contract, no identity ──────────────────────────────
+const jobs = WorkPool.make("app/Jobs").payload(job)
+class Jobs extends WorkPool.make("app/Jobs").payload(job) {}
+
+// ── .Service — contract + identity, yieldable ──────────────────
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs").payload(job) {}
+const jobs = WorkPool.Service()("app/Jobs").payload(job)
+```
+
+Precedent — `Context.Service` already carries exactly this two-overload split:
+
+```ts
+// repos/effect/packages/effect/src/Context.ts:200
+export const Service: {
+  <Identifier, Shape = Identifier>(key: string): Service<Identifier, Shape>                // const form
+  <Self, Shape>(): <const Identifier extends string, …>(id, options?) => ServiceClass<…>   // class form
+}
+```
+
+What each cell buys:
+
+| Cell | Identity | `Self` brand | Yieldable | Name |
+|------|----------|--------------|-----------|------|
+| `const x = make(id)` | no | no | no | no |
+| `class X extends make(id)` | no | no | no | yes |
+| `const x = Service()(id)` | yes | **no** | yes | no |
+| `class X extends Service<X>()(id)` | yes | yes | yes | yes |
+
+### 1.2 `Service()` without `Self` — possible, not encouraged (owner, 2026-08-18)
+
+**Decision: keep the cell.** Same stance Effect takes on its own const overload. Allowing it
+enables **dynamic generation of services**, which is a real need here — per-tenant, per-shard,
+per-discovered-node pools:
+
+```ts
+const jobsFor = (tenant: string) =>
+  WorkPool.Service()(`app/Jobs/${tenant}`).payload(job)
+```
+
+**What degrades:** everything branded by `Self`.
+
+```ts
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs").payload(job) {}
+// Local<Jobs>, PeersId<Jobs>, SelfNodeId<Jobs> — branded
+
+const jobs = WorkPool.Service()("app/Jobs").payload(job)
+// no Self → local gating, peers, selfNode lose their brand
+```
+
+Two dynamically minted services also share a type, so TS cannot tell them apart. Usually fine —
+you are keying by runtime value anyway — but the compiler stops helping.
+
+**Hazard to document,** in Effect's own words about the same overload:
+
+> The string key is the runtime identity of the service. Reusing the same key string for unrelated
+> services makes them occupy the same slot in a `Context`.
+
+With a computed key that is easy to hit by accident.
+
+### 1.3 Open on this shape
+
+1. Does `class X extends WorkPool.make(id)` earn its keep? It gives a name but no identity, so
+   `yield* X` is a type error — and at the declaration site it looks identical to a `.Service`
+   class while behaving differently at the use site. HttpApi has the same cell and it is fine
+   there because nobody expects to yield an `HttpApi`.
+2. Chain (`.payload(job)`) vs bag (`{ payload: job }`) — current sketch assumes chain, per D26
+   (`.add` like HttpApi, not `.pipe`).
 
 ## 2. Helpers
 
 Helpers are `Hyperlink.something` — not a separate module.
+
+**Ruled out:** `Hyperlink.handle` (owner, 2026-08-18). `Hyperlink.layer` is undecided.
+Naming slot for the client pair likely follows `HttpApiClient`'s `make` / `makeWith` split
+(ambient transport vs. passed in) — e.g. `Hyperlink.client` / `Hyperlink.clientWith`. Open.
 
 Requirement differs by input:
 
