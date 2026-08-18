@@ -310,10 +310,131 @@ WorkPool.make("app/Jobs").payload(job)         // contract-wide modifier -> pref
 
 Consistent with **D26** (`make` + `.add`, not `.pipe`).
 
-### 8.6 Status
+### 8.6 Approved shape (owner, 2026-08-18)
 
-Mock-up not yet written. Next step is a full WorkPool API mock for discussion — not an
-implementation.
+```ts
+class Jobs extends WorkPool.make("app/Jobs")
+  .payload(Job)
+  .add(
+    WorkPool.lane("urgent", { payload: UrgentJob, success: Receipt, error: Rejected }),
+    WorkPool.lane("batch"),                       // inherits Job
+  )
+{}
+
+const jobs = yield* Jobs
+
+yield* jobs.urgent({ id: "a", deadline: 1000 })
+yield* jobs.batch({ id: "b" })
+```
+
+Lane options are a **bag**, matching v4 — `addSuccess` / `addError` are **v3 only**
+(`packages/platform/src/HttpApiEndpoint.ts:84` on the `v3` branch; zero matches in v4's
+`HttpApiEndpoint.ts` / `HttpApiGroup.ts` / `HttpApi.ts`).
+
+### 8.7 Payload inheritance and ordering
+
+`payload` is optional on a lane and inherits the pool's. Resolution happens at `.add`, because a
+lane is constructed standalone and cannot see the pool at its own construction — same as HttpApi,
+where the parent applies `prefix` by mapping over children (`HttpApi.ts:173`).
+
+```ts
+WorkPool.make("app/Jobs").payload(Job).add(WorkPool.lane("batch"))       // ✅ inherits
+WorkPool.make("app/Jobs").add(WorkPool.lane("batch", { payload: Job }))  // ✅ own
+WorkPool.make("app/Jobs").add(WorkPool.lane("batch"))                    // ❌ unresolved
+```
+
+**Ordering rule (Agent 6 call, owner approved): `.payload` must precede `.add`.** No backfill.
+Backfill would force `.add` to accept unresolved lanes in case `.payload` arrived later, making
+the unresolved state representable and moving the error off the offending line.
+
+### 8.8 Transforms vs requirements
+
+The general rule this produced:
+
+> **Transforms compose, so they may follow `.add`. Requirements resolve, so they must precede it.**
+
+| | Behaviour | Position |
+|---|---|---|
+| `payload` | replaces — leaves a hole if absent | **before** `.add` |
+| `success` | replaces | **before** `.add` |
+| `middleware` | unions into `E` and `R` | after `.add` ok |
+| `error` | unions into `E` | after `.add` ok |
+| `annotateLanes` | Context merge (HttpApiGroup.annotateEndpoints) | after `.add` ok |
+| `prefix` | string concat on lane keys | after `.add` ok |
+
+```ts
+class Jobs extends WorkPool.make("app/Jobs")
+  .payload(Job)
+  .add(urgent, batch)
+  .middleware(RateLimit)
+  .error(QueueFull, Backpressured, PoolShuttingDown)
+  .annotateLanes(Description, "…")
+{}
+```
+
+Pool-level `.error` is the strongest of these — infra failures are uniform across lanes and
+declaring them per-lane is pure repetition. `prefix` is the weakest: lane keys are flat, so it
+only earns its place if two pools are ever composed into one, which nothing in the design does.
+
+### 8.9 Target slot — node / address (provisional, pending §5)
+
+Optional second arg to `make`, plus two transforms that fill the **same slot**:
+
+```ts
+WorkPool.make("app/Jobs")                                  // .node ✓  .address ✓
+WorkPool.make("app/Jobs", Worker)                          // .node ✗  .address ✗
+WorkPool.make("app/Jobs").node(Worker)                     // .node ✗  .address ✗
+WorkPool.make("app/Jobs").address(Address.http(":8080"))   // .node ✗  .address ✗
+```
+
+**Removed from the type once filled — never a silent overwrite.** A node is a routing change;
+last-write-wins hides it. Consistent with §8.8: a node does not union with another node.
+
+```ts
+WorkPool.make("app/Jobs", Worker).node(Other)
+//                               ^ .node does not exist on a targeted pool
+```
+
+Re-targeting a contract declared elsewhere, if ever needed, gets its own verb rather than a quiet
+overwrite — e.g. `WorkPool.retarget(Jobs, Other)`. Not designed.
+
+### 8.10 Multiple addresses — only through a Node
+
+`.address` never accumulates. Multiplicity already lives **inside** one Address value (D27/D28):
+
+```ts
+.address(Address.http([8080, 8081]))
+.address(Address.http({ blue: 8080, green: 8081 }))
+.address(Address.http(Address.range(":8080", ":8090")))
+```
+
+The only thing accumulation would add is **across protocols** — which is what a Node is. Allowing
+it directly would recreate node semantics (selection, labels, primary/backup, `.proxy()`) without
+node identity, and `NodePolicy` already owns all of that.
+
+```ts
+.address(…)     // one protocol, any number of dials — simple case
+.node(Worker)   // many protocols, policy, labels, proxy — real case
+```
+
+### 8.11 Still open
+
+1. **What `success` means on a lane** — the enqueue ack, or the handler's output? Different handle
+   signatures and different layer shapes.
+
+   ```ts
+   yield* jobs.urgent(job)   // Effect<Receipt>  — enqueue ack
+   yield* jobs.urgent(job)   // Effect<Result>   — handler output
+   ```
+2. **`topLevel`** — no counterpart survives the group/endpoint merge. Drop, or repurpose as
+   "default lane" under a name that says so.
+3. **Per-lane targets** — lanes on different nodes is a real fleet shape the lane pivot newly
+   makes expressible, but it multiplies the §5 requirement into one per lane. Deferred to §5.
+
+### 8.12 Status
+
+Contract shape settled to the extent it can be before §5. Layer-side shape (`WorkPool.layer` /
+handler registration) not yet designed.
 
 ## Notes (Agent 6 — not owner decisions)
 
