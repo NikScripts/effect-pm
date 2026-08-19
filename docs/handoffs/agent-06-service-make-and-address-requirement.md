@@ -1084,8 +1084,8 @@ export interface Receipt<out Success = unknown, out Error = never> {
   readonly key: string
   readonly lane: string
   readonly id: string
-  readonly "~success": Success
-  readonly "~error": Error
+  readonly "~Success": Success
+  readonly "~Error": Error
 }
 ```
 
@@ -1106,23 +1106,23 @@ export const receipt = Schema.Struct({
 })
 ```
 
-Phantom-member convention is Effect's:
+Phantom-member casing follows *A phantom member is named after what it mirrors*
+([`types-and-naming.md`](../standards/types-and-naming.md)) — these mirror the `Success` / `Error`
+type parameters, so they take those names:
 
 ``` ts
-// HttpApiEndpoint.ts
+// HttpApiEndpoint.ts — same slots, same casing
 readonly "~Params": Params
 readonly "~Success": Success
 readonly "~Error": Error
-
-// Rpc.ts
-readonly "~requires": Requires
+readonly "~Middleware": Middleware
 ```
 
 Constructing one needs the sanctioned boundary cast — owner confirmed this class of cast is fine,
 and *A boundary cast is a last resort* already permits it (no runtime value to validate):
 
 ``` ts
-// SAFE: `~success` / `~error` are phantom type carriers with no runtime representation;
+// SAFE: `~Success` / `~Error` are phantom type carriers with no runtime representation;
 // the wire value is exactly { key, lane, id }. Nothing to validate.
 return { key, lane, id } as Receipt<S, E>
 ```

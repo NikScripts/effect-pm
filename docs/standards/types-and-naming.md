@@ -156,6 +156,46 @@ export type PriorityConfig<T, E, R> = …  // in src/internal/workPoolPriority.t
 The public file may **re-export** the internal full type under the short name (or define the short
 alias there). Apps never import `src/internal/` directly.
 
+{#phantom-members-mirror-what-they-carry .must appliesTo=src}
+## A phantom member is named after what it mirrors
+
+A `~`-prefixed member carries something the type system cannot otherwise express. Name it after the
+thing it mirrors, and take that thing's casing.
+
+| The member carries | Name and casing |
+|--------------------|-----------------|
+| A declared **type parameter** | that parameter's name, PascalCase |
+| A derived concept or internal axis (not a parameter) | lowercase, dotted path |
+| A real **runtime value** | camelCase, per *Values are camelCase* |
+
+``` ts
+// mirrors the type parameters Success / Error — PascalCase
+export interface Receipt<out Success = unknown, out Error = never> {
+  readonly key: string
+  readonly "~Success": Success
+  readonly "~Error": Error
+}
+```
+
+``` ts
+// names an axis, not a parameter — lowercase dotted
+readonly "~type.make.in"
+readonly "~type.optionality"
+readonly "~lambda.out"
+```
+
+``` ts
+// an actual runtime field — camelCase
+readonly "~payload"?: {
+  readonly token: unknown
+  readonly value: unknown
+}
+```
+
+Effect follows this in `HttpApiEndpoint` (`~Success`, `~Error`, `~Params`, `~Middleware`),
+`Schema` (`~type.make.in`, `~type.optionality`), and `Struct` (`~lambda.out`). Its one drift is
+`Rpc`'s `~requires`, which mirrors the `Requires` parameter but is lowercase — do not copy it.
+
 {#values-are-camelcase .must appliesTo="src examples"}
 ## Values are camelCase; UPPER_SNAKE only for magic constants
 
