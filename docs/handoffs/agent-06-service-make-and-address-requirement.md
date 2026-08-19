@@ -48,10 +48,10 @@ Both constructors support both forms, as HttpApi does. `<Self>` appears only in 
 
 ```ts
 // ── .make — contract, no identity ──────────────────────────────
-const jobs = WorkPool.make("app/Jobs")
+const jobs = WorkPool.make("jobs")
   .payload(job)
 
-class Jobs extends WorkPool.make("app/Jobs")
+class Jobs extends WorkPool.make("jobs")
   .payload(job)
 {}
 
@@ -126,6 +126,49 @@ With a computed key that is easy to hit by accident.
    there because nobody expects to yield an `HttpApi`.
 2. Chain (`.payload(job)`) vs bag (`{ payload: job }`) — current sketch assumes chain, per D26
    (`.add` like HttpApi, not `.pipe`).
+
+## 1.4 Identifier strings — brief for `.make`, canonical for `.Service` (owner, 2026-08-19)
+
+**A `.make` id is a brief name, not a key path.** It mirrors `HttpApiGroup.make("users")`.
+A `.Service` id stays the canonical slash-scoped form, because it is a real Context service and
+*Canonical ids are slash-scoped* applies.
+
+``` ts
+// .Service — canonical, slash-scoped
+Hyperlink.Service<Mover>()("app/Mover")
+WorkPool.Service<Jobs>()("app/Jobs")
+```
+
+``` ts
+// .make — brief
+Hyperlink.make("mover")
+WorkPool.make("jobs")
+```
+
+Precedent:
+
+``` ts
+// HttpApiGroup.ts:394 — a group id is a bare name
+HttpApiGroup.make("users")
+```
+
+**Applies to every derived key.** When a builder mints a Context key from a contract id, the id it
+embeds is the brief one; the package scope comes from the key prefix, not from the author:
+
+``` ts
+// runtime key minted by the layer builder
+"hyperlink-ts/Impl/mover"
+```
+
+``` ts
+// compare — HttpApiBuilder.ts:89
+key.startsWith("effect/httpapi/HttpApiGroup/")
+```
+
+**Standards note:** *Canonical ids are slash-scoped* in
+[`types-and-naming.md`](../standards/types-and-naming.md) currently reads as covering every
+contract id. It needs a carve-out for non-service `.make` ids, or a sentence scoping it to
+service and Context keys.
 
 ## 2. Helpers
 
@@ -337,14 +380,14 @@ annotations — never `.add`. Applied here:
 
 ```ts
 // lanes are members -> .add
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
   .add(lane, lane)
 
 // pool config -> make bag
-WorkPool.make("app/Jobs", { … })
+WorkPool.make("jobs", { … })
 
 // contract-wide modifier -> prefix-style
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
   .payload(job)
 ```
 
@@ -353,7 +396,7 @@ Consistent with **D26** (`make` + `.add`, not `.pipe`).
 ### 8.6 Approved shape (owner, 2026-08-18)
 
 ```ts
-class Jobs extends WorkPool.make("app/Jobs")
+class Jobs extends WorkPool.make("jobs")
   .payload(Job)
   .add(
     WorkPool.lane("urgent", {
@@ -383,14 +426,14 @@ where the parent applies `prefix` by mapping over children (`HttpApi.ts:173`).
 
 ```ts
 // ✅ inherits
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
   .payload(Job)
   .add(
     WorkPool.lane("batch")
   )
 
 // ✅ own
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
   .add(
     WorkPool.lane("batch", {
       payload: Job,
@@ -398,7 +441,7 @@ WorkPool.make("app/Jobs")
   )
 
 // ❌ unresolved
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
   .add(
     WorkPool.lane("batch")
   )
@@ -424,7 +467,7 @@ The general rule this produced:
 | `prefix` | string concat on lane keys | after `.add` ok |
 
 ```ts
-class Jobs extends WorkPool.make("app/Jobs")
+class Jobs extends WorkPool.make("jobs")
   .payload(Job)
   .add(urgent, batch)
   .middleware(RateLimit)
@@ -443,17 +486,17 @@ Optional second arg to `make`, plus two transforms that fill the **same slot**:
 
 ```ts
 // .node ✓  .address ✓
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
 
 // .node ✗  .address ✗
-WorkPool.make("app/Jobs", Worker)
+WorkPool.make("jobs", Worker)
 
 // .node ✗  .address ✗
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
   .node(Worker)
 
 // .node ✗  .address ✗
-WorkPool.make("app/Jobs")
+WorkPool.make("jobs")
   .address(
     Address.http(":8080")
   )
@@ -463,7 +506,7 @@ WorkPool.make("app/Jobs")
 last-write-wins hides it. Consistent with §8.8: a node does not union with another node.
 
 ```ts
-WorkPool.make("app/Jobs", Worker)
+WorkPool.make("jobs", Worker)
   .node(Other)
 //^ .node does not exist on a targeted pool
 ```
@@ -516,6 +559,78 @@ node identity, and `NodePolicy` already owns all of that.
    "default lane" under a name that says so.
 3. **Per-lane targets** — lanes on different nodes is a real fleet shape the lane pivot newly
    makes expressible, but it multiplies the §5 requirement into one per lane. Deferred to §5.
+
+### 8.11b Derived keys and the `Impl<Id>` entry (owner, 2026-08-19)
+
+A `.make` contract is not a Context key, so the **layer builder mints one** from the contract id —
+the same mechanism HttpApi uses for groups:
+
+``` ts
+// HttpApiBuilder.ts:119
+export const group = <ApiId, Groups, const Name extends HttpApiGroup.Name<Groups>, Return>(
+  api: HttpApi.HttpApi<ApiId, Groups>,
+  groupName: Name,
+  build: (handlers: Handlers.FromGroup<…>) => Handlers.ValidateReturn<Return>
+): Layer.Layer<
+  HttpApiGroup.ApiGroup<ApiId, Name>,
+  …
+>
+```
+
+``` ts
+// the runtime key is a plain string
+Context.makeUnsafe(
+  new Map([[group.key, { routes, handlers: handlers.handlers }]])
+)
+```
+
+Applied:
+
+``` ts
+Hyperlink.layer(mover, impl)
+// Layer<Hyperlink.Impl<"mover">, E, R>
+```
+
+``` ts
+Hyperlink.layer(Mover, impl)
+// Layer<Hyperlink.Impl<"mover"> | Mover, E, R>
+```
+
+`.Service` provides one extra thing — itself. That is the entire difference at the helper boundary.
+
+**The local handle** is the same key read back:
+
+``` ts
+const m = yield* Hyperlink.get(mover)
+// Effect<ServiceOf<S>, never, Impl<"mover">>
+```
+
+``` ts
+const m = yield* Hyperlink.get(Mover)
+const m = yield* Mover
+```
+
+**DI is closed by this.** `Impl<Id>` is a real Context entry, so a `.make` implementation both
+receives and provides dependencies:
+
+``` ts
+const moverLocal = Hyperlink.layer(
+  mover,
+  Effect.gen(function* () {
+    const limiter = yield* RateLimiter
+    const sem = yield* Effect.makeSemaphore(4)
+
+    return {
+      take: sem.withPermits(1)(Ref.get(store)),
+      give: (items) => limiter(Ref.update(store, (a) => [...a, ...items])),
+    }
+  })
+)
+// Layer<Impl<"mover">, never, RateLimiter>
+```
+
+Remaining gap, not a requirement: a dependency needed at **contract construction** rather than
+inside the impl. A `.make` value is module scope, so that case stays out of reach.
 
 ### 8.12 Status
 
