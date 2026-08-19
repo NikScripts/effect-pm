@@ -184,6 +184,154 @@ Requirement differs by input:
 - client built from the **Service** → requires **that service**, which may be the real thing
   or just a client layer
 
+## 2.5 Member modifiers (owner, 2026-08-19)
+
+Constructors take **identity and schemas**. Modifiers are **methods with a real parameter**. No
+member appears on both sides — v4's `Rpc` offers `setPayload` / `setSuccess` / `setError` *and* the
+construction bag; we take one way per thing, except where deferral is the point (below).
+
+``` ts
+// constructors
+Hyperlink.effect("tip", Schema.String)
+Hyperlink.effectFn("send", Payload, Schema.Void)
+Hyperlink.ref("status", StatusSchema)
+Hyperlink.local<() => void>("drain")
+Hyperlink.default("retries", 3)
+```
+
+``` ts
+// modifiers
+.fleet(options?)
+.deprecated(options?)
+.middleware(Auth)
+.annotate(Description, "…")
+```
+
+### 2.5.1 Optional-parameter shape, boolean shorthand plus object
+
+Effect drives boolean flags with `const B extends boolean = default` and a conditional return:
+
+``` ts
+// HttpApiGroup.ts:394
+export const make = <const Id extends string, const TopLevel extends boolean = false>(
+  identifier: Id,
+  options?: {
+    readonly topLevel?: TopLevel | undefined
+  }
+): HttpApiGroup<Id, never, TopLevel>
+```
+
+Applied, with an object form so options can be added later — `boolean` is the shorthand, the same
+union-shorthand `Rpc.setPayload` uses for `Schema.Top | Schema.Struct.Fields`:
+
+``` ts
+export interface FleetOptions {
+  readonly enabled?: boolean
+}
+```
+
+``` ts
+fleet<const O extends boolean | FleetOptions = true>(
+  options?: O
+): FleetEnabled<O> extends true
+  ? FleetField<M>
+  : M
+```
+
+``` ts
+Hyperlink.effect("totalConnections", Schema.Number)
+  .fleet()
+```
+
+``` ts
+Hyperlink.effect("totalConnections", Schema.Number)
+  .fleet(false)
+```
+
+``` ts
+Hyperlink.effect("totalConnections", Schema.Number)
+  .fleet({
+    enabled: false,
+  })
+```
+
+Chained:
+
+``` ts
+Hyperlink.ref("status", StatusSchema)
+  .fleet()
+  .deprecated("use health")
+  .middleware(Auth)
+```
+
+### 2.5.2 `Pipeable` stays
+
+All three Effect builders carry `Pipeable` **and** methods. Methods for the closed modifier set the
+module owns; `pipe` for open extension:
+
+``` ts
+// src/Hyperlink.ts:530 — already Pipeable today
+> extends Pipeable.Pipeable {
+```
+
+``` ts
+Hyperlink.effect("tip", Schema.String)
+  .pipe(someUserCombinator)
+```
+
+### 2.5.3 Deferred completion is why `set*` exists
+
+`Rpc.setSuccess` has **zero call sites** in Effect's `src`, `test`, or `typetest` — it is a public
+affordance for building a procedure and refining it later, which a one-shot bag cannot express:
+
+``` ts
+const base = Rpc.make("GetUser", {
+  payload: UserId,
+})
+```
+
+``` ts
+const full = base
+  .setSuccess(User)
+  .setError(NotFound)
+```
+
+``` ts
+const summary = base
+  .setSuccess(UserSummary)
+```
+
+Open: whether Hyperlink members want the same `set*` family, or whether all members are always
+complete at construction.
+
+### 2.5.4 `fleet`'s fold is serve-side
+
+``` ts
+/**
+ * Mark a contract method as a **fleet** field — one combined across the nodes
+ * (its layer impl folds {@link peers} + its own value).
+ */
+export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
+  marked(method, { fleet: true as const })
+```
+
+The contract only carries the marker; the fold lives in the implementation. So `FleetOptions` holds
+contract-level concerns only — `timeout` / `partial` / `include` are layer-side unless a reason
+appears to hoist them.
+
+### 2.5.5 v3 vs v4 — do not reintroduce chained schema setters
+
+``` ts
+// v3 — packages/platform/src/HttpApiEndpoint.ts:84
+addSuccess<S extends Schema.Schema.Any>(…)
+```
+
+``` ts
+// v4 — zero matches in HttpApiEndpoint.ts / HttpApiGroup.ts / HttpApi.ts
+```
+
+v4 moved them into the construction bag. We follow v4.
+
 ## 3. Default client — resolved via `Effect.serviceOption` (2026-08-18)
 
 **Mechanism: `Effect.serviceOption`. `Context.Reference` is ruled out.**
@@ -259,6 +407,172 @@ before the address model lands.
 ## 4. Statics
 
 **Eliminate all statics.** Leave the static namespace free for devs to add their own.
+
+## 4.5 The minted `Self`, the key, and the implementation shape (owner, 2026-08-19)
+
+### 4.5.1 What needed a name
+
+`Hyperlink.Hyperlink` already has the slot:
+
+``` ts
+// src/Hyperlink.ts:3163
+export type Hyperlink<
+  S extends Spec,
+  E = never,
+  R = never,
+  Self = unknown,
+> = Effect.Effect<ServiceOf<S, Self>, E, Self | R>
+```
+
+`.Service` puts its class in `Self`. `.make` has no class, so it needs a **minted stand-in**.
+It was never an "implementation" type — it is an identity.
+
+**Decision: `Hyperlink.Self<Id>`.**
+
+``` ts
+const moverLocal = Layer.succeed(mover, impl)
+// Layer<Hyperlink.Self<"mover">, never, never>
+```
+
+``` ts
+const m = yield* mover
+// Effect<ServiceOf<S>, never, Hyperlink.Self<"mover">>
+```
+
+Reads correctly beside the address requirement — one is who, one is where:
+
+``` ts
+Effect<Wire<S>, never, Hyperlink.Self<"mover"> | Address.Address<Mover> | Protocol>
+```
+
+`Identity` was rejected — `identitySym` / `Hyperlink.identity` / `IdentitySelfRequired` already mean
+the Lookup identity-claim feature.
+
+### 4.5.2 The key string
+
+**Decision: `hyperlink-ts/<Module>/HyperService/<id>`.**
+
+``` ts
+"hyperlink-ts/Hyperlink/HyperService/mover"
+"hyperlink-ts/WorkPool/HyperService/jobs"
+"hyperlink-ts/Daemon/HyperService/prices"
+```
+
+Effect's segments are **package / directory / module / member / id**, with the member segment
+present only when the key names a sub-thing:
+
+``` ts
+// effect/sql/SqlClient.ts:330
+`effect/sql/SqlClient/TransactionConnection/${clientId}`
+
+// effect/httpapi/HttpApiGroup.ts:378
+`effect/httpapi/HttpApiGroup/${options.identifier}`
+```
+
+The module segment is **required** — brief `.make` ids are only unique per minting module:
+
+``` ts
+Hyperlink.make("jobs")
+WorkPool.make("jobs")
+```
+
+``` ts
+"hyperlink-ts/Hyperlink/HyperService/jobs"   // ✅ distinct
+"hyperlink-ts/WorkPool/HyperService/jobs"    // ✅ distinct
+"hyperlink-ts/HyperService/jobs"             // ❌ collides
+```
+
+**`HyperService` is cemented in the key, not in the type.** It appears once per key string; a type
+named `Hyperlink.HyperService` would stutter in every hover. The term is already correct for
+`.make`, because "Service" in this codebase means shape-of-capability, not Context key:
+
+``` ts
+export type ServiceOf<S extends Spec, Self = unknown>
+export type WireServiceOf<S extends Spec>
+type PeerServiceOf<S extends Spec>
+```
+
+None of the three require Context identity.
+
+### 4.5.3 The type is parameterised by the id — a deliberate divergence
+
+SqlClient's phantom is **not** generic in its id; the runtime string separates instances:
+
+``` ts
+export interface TransactionConnection {
+  readonly _: unique symbol
+}
+```
+
+We diverge, because two Hyperlink contracts in one Context must not be interchangeable:
+
+``` ts
+Layer<Hyperlink.HyperService, …>    // mover and jobs indistinguishable — rejected
+Layer<Hyperlink.Self<"mover">, …>   // distinct — chosen
+```
+
+### 4.5.4 The implementation is a plain object
+
+There is **no handler builder**. Implementing a contract is identical to implementing any Effect
+service:
+
+``` ts
+const impl = {
+  take: Ref.get(store),
+  give: (items) => Ref.update(store, (a) => [...a, ...items]),
+}
+```
+
+``` ts
+const moverLocal = Layer.succeed(mover, impl)
+```
+
+``` ts
+const moverLocal = Layer.effect(
+  mover,
+  Effect.gen(function* () {
+    const limiter = yield* RateLimiter
+    const store = yield* Ref.make<ReadonlyArray<string>>([])
+
+    return {
+      take: Ref.get(store),
+      give: (items) => limiter(Ref.update(store, (a) => [...a, ...items])),
+    }
+  })
+)
+```
+
+**The builder is for everything else** — reachability, nodes, readiness, handoff, peers. Not for
+producing the implementation.
+
+### 4.5.5 Naming survey behind these calls
+
+Effect mints phantom Context identities constantly, and names each for its **domain concept**,
+never generically:
+
+``` ts
+Rpc.Handler<Tag>                          // rpc      — answers a call
+Tool.Handler<Name>                        // ai       — answers a call
+Workflow.Execution<Tag>                   // workflow — a run
+Event.EventHandler<Tag>                   // eventlog — answers an event
+Command.CommandContext<Name>              // cli      — ambient for a command
+HttpRouter.Request<Kind, T>               // http     — what is handled
+HttpApiGroup.Service<ApiId, Identifier>   // httpapi  — a group's implementation
+SqlClient.TransactionConnection           // sql      — the scoped connection
+```
+
+Rejected along the way, with reasons:
+
+| Candidate | Why not |
+|-----------|---------|
+| `Impl` | abbreviation |
+| `Implementation` | names the wrong thing — the slot wants an identity |
+| `Served` / `Serving` | not always served; and IPC-only is not "serving" |
+| `Instance` | generic filler |
+| `Handlers` | undersells it (refs, defaults, locals) and reuses a taken word |
+| `Origin` / `Source` | locational — confusable with `Address.Address<X>` |
+| `Identity` | taken by the Lookup identity-claim feature |
+| `HyperService` (as the type) | stutters at every use site |
 
 ## 5. Address / Node as a requirement — owner-gated
 
