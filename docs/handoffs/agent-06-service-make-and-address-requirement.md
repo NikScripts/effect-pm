@@ -494,6 +494,106 @@ type PeerServiceOf<S extends Spec>
 
 None of the three require Context identity.
 
+### 4.5.2b Alternatives weighed
+
+``` ts
+// A — module as construct
+"hyperlink-ts/WorkPool/jobs"
+```
+
+``` ts
+// B — module, then construct    ← CHOSEN
+"hyperlink-ts/WorkPool/HyperService/jobs"
+```
+
+``` ts
+// C — construct, then module
+"hyperlink-ts/HyperService/WorkPool/jobs"
+```
+
+**A rejected.** One segment does two jobs, so user ids sit directly in the module's namespace and
+leave no reserved space for anything else that module keys. `SqlClient` shows the shape A cannot
+support:
+
+``` ts
+"effect/sql/SqlClient/SafeIntegers"
+`effect/sql/SqlClient/TransactionConnection/${clientId}`
+```
+
+The Hyperlink module already keys several things beyond contracts (`peersSym`, `selfNodeSym`,
+`localCapSym`); under A a contract named `"peers"` would compete with machinery.
+`HttpApiGroup` escapes this only because its module exists for exactly one construct.
+
+**C rejected — and the argument first made for it was wrong.** The claim was that construct-first
+enables a single-prefix scan for every HyperService, citing:
+
+``` ts
+// HttpApiBuilder.ts:89
+key.startsWith("effect/httpapi/HttpApiGroup/")
+```
+
+That prefix exists because `HttpApiGroup` builds its key there for **identity**; the scan piggybacks
+on a namespace that already existed. It was not designed to enable filtering. What survives is
+minor: a cross-module scan needs a known module list under B and does not under C. Both Effect
+precedents are module-first, so B holds.
+
+### 4.5.2c Scope — every contract-minting module
+
+This is **not** a Hyperlink-only change. Each of these mints contracts and needs the same brief id,
+minted `Self`, module-scoped key, and plain-object implementation:
+
+``` ts
+// src/WorkPool.ts:2370
+export { queueTag as Service }
+
+// src/Gate.ts:1238
+export { runTag as Service }
+
+// src/Gate.ts:730
+const tag = Hyperlink.Service<Self>()(key, spec, { … })
+
+// src/Daemon.ts:2273
+export const Service = <Self>() => {
+```
+
+Plus modules exporting their own `Service`:
+
+```
+src/Group.ts   src/FleetHealth.ts   src/ShardMap.ts   src/Store.ts   src/Telemetry.ts
+```
+
+So the full surface is:
+
+``` ts
+Hyperlink.make("mover")
+WorkPool.make("jobs")
+Daemon.make("prices")
+Gate.make("checkout")
+Group.make(…)
+Store.make(…)
+Telemetry.make(…)
+FleetHealth.make(…)
+ShardMap.make(…)
+```
+
+**The type is shared; the key varies by minting module.**
+
+``` ts
+Hyperlink.Self<"mover">
+Hyperlink.Self<"jobs">
+Hyperlink.Self<"prices">
+```
+
+``` ts
+"hyperlink-ts/Hyperlink/HyperService/mover"
+"hyperlink-ts/WorkPool/HyperService/jobs"
+"hyperlink-ts/Daemon/HyperService/prices"
+"hyperlink-ts/Gate/HyperService/checkout"
+```
+
+The substrate lives in one place and each module re-exports it, the way `WorkPool` and `Gate`
+already re-export `Service`.
+
 ### 4.5.3 The type is parameterised by the id — a deliberate divergence
 
 SqlClient's phantom is **not** generic in its id; the runtime string separates instances:
