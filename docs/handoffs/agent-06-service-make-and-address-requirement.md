@@ -960,15 +960,261 @@ node identity, and `NodePolicy` already owns all of that.
 .node(Worker)   // many protocols, policy, labels, proxy — real case
 ```
 
+### 8.10b Layer API — flat `layer*`, never a chained builder (owner, 2026-08-19)
+
+Effect has no `.build()`. Every module exposes **free `layer*` functions taking the contract**, with
+options bags, composed via `Layer.provide`:
+
+``` ts
+// RpcServer.ts:768
+export const layer = <Rpcs extends Rpc.Any>(
+  group: RpcGroup.RpcGroup<Rpcs>,
+  options?: {
+    readonly disableTracing?: boolean | undefined
+    readonly spanPrefix?: string | undefined
+    readonly concurrency?: number | "unbounded" | undefined
+    readonly disableFatalDefects?: boolean | undefined
+  }
+): Layer.Layer<never, never, Protocol | …>
+```
+
+``` ts
+// RpcServer.ts:797 — transport variants are sibling layers, not chain steps
+export const layerHttp = <Rpcs extends Rpc.Any>(options: {
+  readonly group: RpcGroup.RpcGroup<Rpcs>
+  readonly path: HttpRouter.PathInput
+  readonly protocol?: "http" | "websocket" | undefined
+  …
+})
+```
+
+``` ts
+export const layerProtocolSocketServer: Layer.Layer<Protocol, …>
+export const layerProtocolWebsocket = (options: { … })
+export const layerProtocolHttp = (options: { … })
+```
+
+Applied — and consistent with *Layers read as layers* in the naming standard:
+
+``` ts
+WorkPool.layer(jobs, {
+  concurrency: 4,
+})
+```
+
+``` ts
+WorkPool.layerListen(jobs, options?)
+```
+
+``` ts
+const jobsLayer = WorkPool.layer(jobs).pipe(
+  Layer.provide(jobsLocal),
+  Layer.provide(protocolLayer),
+)
+```
+
+**Rejected:** `WorkPool.build(jobs).listen()` and `Hyperlink.build(…)` — both invented, no precedent.
+
+### 8.10c The implementation is a plain object keyed by lane
+
+Lanes are members, so implementing a pool is implementing an object — no builder, no callback:
+
+``` ts
+const jobsLocal = Layer.succeed(jobs, {
+  urgent: (job) => process(job),
+  batch: (job) => crunch(job),
+})
+```
+
+``` ts
+const jobsLocal = Layer.effect(
+  jobs,
+  Effect.gen(function* () {
+    const limiter = yield* RateLimiter
+
+    return {
+      urgent: (job) => process(job),
+      batch: (job) => limiter(crunch(job)),
+    }
+  })
+)
+```
+
+### 8.10d `success` means the handler's output
+
+**Decision: `success` keeps its library-wide meaning.**
+
+``` ts
+Rpc.make("GetUser", { success: User })                        // handler's output
+HttpApiEndpoint.get("getUser", "/u/:id", { success: User })   // handler's output
+WorkPool.lane("urgent", { success: Result })                  // handler's output
+```
+
+Enqueue therefore does **not** return `success` — it returns a receipt:
+
+``` ts
+const urgent = WorkPool.lane("urgent", {
+  payload: UrgentJob,
+  success: Result,
+  error: Rejected,
+})
+```
+
+``` ts
+{
+  readonly urgent: (job: UrgentJob) => Effect<Receipt<Result, Rejected>, SchemaError, Protocol>
+}
+```
+
+**Rejected:** making the call itself wait. A pool exists to decouple; blocking enqueue has no answer
+for batches or deferred lanes:
+
+``` ts
+yield* jobs.urgent([jobA, jobB, jobC])   // one Result? an array? when?
+WorkPool.lane("batch", { defer: Duration.hours(6) })   // a six-hour call is not a call
+```
+
+### 8.10e Receipt — self-routing, phantom-typed
+
+The receipt carries the canonical key, so combinators need no pool argument, and carries the result
+types phantomly, so nothing is lost:
+
+``` ts
+export interface Receipt<out Success = unknown, out Error = never> {
+  readonly key: string
+  readonly lane: string
+  readonly id: string
+  readonly "~success": Success
+  readonly "~error": Error
+}
+```
+
+``` ts
+// runtime — three strings; key is the one minted in §4.5.2
+{
+  key: "hyperlink-ts/WorkPool/HyperService/jobs",
+  lane: "urgent",
+  id: "01JD8…",
+}
+```
+
+``` ts
+export const receipt = Schema.Struct({
+  key: Schema.String,
+  lane: Schema.String,
+  id: Schema.String,
+})
+```
+
+Phantom-member convention is Effect's:
+
+``` ts
+// HttpApiEndpoint.ts
+readonly "~Params": Params
+readonly "~Success": Success
+readonly "~Error": Error
+
+// Rpc.ts
+readonly "~requires": Requires
+```
+
+Constructing one needs the sanctioned boundary cast — owner confirmed this class of cast is fine,
+and *A boundary cast is a last resort* already permits it (no runtime value to validate):
+
+``` ts
+// SAFE: `~success` / `~error` are phantom type carriers with no runtime representation;
+// the wire value is exactly { key, lane, id }. Nothing to validate.
+return { key, lane, id } as Receipt<S, E>
+```
+
+### 8.10f Reaching the result — dual pipe combinators
+
+**Decision: pipe, not a callback and not a second calling convention.**
+
+``` ts
+export const result: {
+  <S, E, EX, R>(self: Effect<Receipt<S, E>, EX, R>): Effect<S, E | EX | Rejected, R | Protocol>
+  <S, E>(receipt: Receipt<S, E>): Effect<S, E | Rejected, Protocol>
+}
+```
+
+``` ts
+jobs.urgent(job).pipe(
+  WorkPool.result
+)
+```
+
+``` ts
+jobs.urgent(job).pipe(
+  WorkPool.resultWithin(Duration.seconds(30))
+)
+```
+
+``` ts
+jobs.urgent(job).pipe(
+  WorkPool.peek
+)
+// Effect<Option<Result>, SchemaError, Protocol>
+```
+
+``` ts
+jobs.urgent([jobA, jobB, jobC]).pipe(
+  WorkPool.resultAll
+)
+```
+
+Composes with plain Effect, which a callback could not:
+
+``` ts
+jobs.urgent(job).pipe(
+  WorkPool.result,
+  Effect.timeout(Duration.seconds(30)),
+  Effect.retry(Schedule.exponential(Duration.millis(100))),
+  Effect.tap((r) => Effect.logInfo(`done ${r.id}`)),
+)
+```
+
+Precedent — `Workflow` solves submit-now / redeem-later with a flag plus a poll, and returns
+`Option` for "still running":
+
+``` ts
+// Workflow.ts:80
+readonly execute: <const Discard extends boolean = false>(
+  payload: Payload["~type.make.in"],
+  options?: { readonly discard?: Discard }
+) => Effect.Effect<
+  Discard extends true ? string : Success["Type"],
+  Discard extends true ? never  : Error["Type"],
+  WorkflowEngine | …
+>
+```
+
+``` ts
+// Workflow.ts:97
+readonly poll: (
+  executionId: string
+) => Effect.Effect<Option.Option<Result<Success["Type"], Error["Type"]>>, never, WorkflowEngine | …>
+```
+
+We invert the default — Workflow waits because a workflow *is* the call; a pool does not.
+
+**Rejected:** `jobs.urgent.await(job)` (callable namespace) and `{ onComplete }` (no Effect
+precedent, and no fiber to run the callback on once the enqueuer is gone).
+
+### 8.10g Untyped receipts
+
+A receipt arriving as untrusted JSON has no types until a lane is named — the one place the
+contract reappears, correctly:
+
+``` ts
+const r = yield* Schema.decodeUnknown(WorkPool.receiptFor(Jobs, "urgent"))(raw)
+// Receipt<Result, Rejected>
+```
+
 ### 8.11 Still open
 
-1. **What `success` means on a lane** — the enqueue ack, or the handler's output? Different handle
-   signatures and different layer shapes.
-
-   ```ts
-   yield* jobs.urgent(job)   // Effect<Receipt>  — enqueue ack
-   yield* jobs.urgent(job)   // Effect<Result>   — handler output
-   ```
+1. ~~What `success` means on a lane~~ — **settled in §8.10d**: the handler's output. Enqueue returns
+   a `Receipt`; the result is reached with `WorkPool.result`.
 2. **`topLevel`** — no counterpart survives the group/endpoint merge. Drop, or repurpose as
    "default lane" under a name that says so.
 3. **Per-lane targets** — lanes on different nodes is a real fleet shape the lane pivot newly
