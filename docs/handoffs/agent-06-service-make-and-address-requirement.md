@@ -849,6 +849,8 @@ Address.layer(
 )
 ```
 
+`.private()` here is superseded — see 5.5.6. The rest of this subsection stands.
+
 What the two-class form was costing: two answers to "which node is this service on", two requirement
 types for one node, and D24 overlap needing to know they are the same node.
 
@@ -857,7 +859,199 @@ What is lost: a consumer importing `Worker` could not *name* a private dial. Nam
 
 `Private.pipe` retires as one complete change per the no-shims rule.
 
-### 5.5.6 Open threads for the deep pass
+### 5.5.6 Reach — a tier in the address type, defaulted per protocol (owner agreed 2026-08-20)
+
+Supersedes the `.private()` boolean shown in 5.5.5. A boolean hid a scale: public HTTP and a
+machine-local Unix socket are not two ends of one flag, and there is a middle (LAN / fleet).
+
+Reach is never absent from the type. Precedent is `Rpc.make`, where `success` defaults to
+`Schema.Void` rather than being missing, and a combinator overrides it.
+
+``` ts
+Rpc.make("GetUser")
+// ~success = Schema.Void
+
+Rpc.make("GetUser").pipe(
+  Rpc.setSuccess(User)
+)
+// ~success = User
+```
+
+Same shape:
+
+``` ts
+Address.unix("/var/run/w.sock")
+// Address<"unix", Host>
+
+Address.http(":8080")
+// Address<"http", Network>
+```
+
+``` ts
+Address.http(":8080").pipe(
+  Address.host
+)
+// Address<"http", Host>
+```
+
+Tier names `host` / `network` / `public` are placeholders. Not picked.
+
+#### Ceiling and default
+
+Two numbers per protocol, not one. The **ceiling** is what the protocol can physically express; the
+**default** sits at the safest tier inside it. Tightening is free, widening is written down.
+
+```
+protocol   ceiling    default
+unix       Host       Host
+ipc        Host       Host
+tcp        Public     Network
+http       Public     Network
+ws         Public     Network
+```
+
+A ceiling makes over-widening a type error rather than a policy argument:
+
+``` ts
+Address.unix("/var/run/w.sock").pipe(
+  Address.network
+)
+// type error: "unix" cannot exceed Host
+```
+
+#### The literal narrows the ceiling
+
+For `http` / `ws` the address string carries real information, and three of these rows are physics,
+not preference — loopback, RFC1918, and link-local are the OS refusing traffic.
+
+```
+literal                       ceiling   default
+"127.0.0.1:8080"              Host      Host
+"localhost:8080"              Host      Host
+"[::1]:8080"                  Host      Host
+"10.0.0.4:8080"               Network   Network
+"192.168.1.9:8080"            Network   Network
+"172.16.0.4:8080"             Network   Network
+":8080"                       Public    Network
+"0.0.0.0:8080"                Public    Network
+"[::]:8080"                   Public    Network
+"http://svc.internal:8080"    Public    Network
+"https://api.acme.com"        Public    Public
+```
+
+Typing `"127.0.0.1:8080"` as `Network` would not be conservative, it would be wrong — the type would
+claim off-machine dialability that the socket refuses.
+
+``` ts
+Address.http("127.0.0.1:8080").pipe(
+  Address.network
+)
+// type error: loopback cannot exceed Host
+```
+
+Bind-any is the policy row: it *can* reach Public, so that is the ceiling, but nothing says it should,
+so the default stays Network.
+
+``` ts
+Address.http(":8080").pipe(
+  Address.public
+)
+// Address<"http", Public>
+```
+
+#### Non-literals fall back, then are checked at runtime
+
+The parse only runs on literal and template-literal types. A widened `string` takes the protocol
+default.
+
+``` ts
+Address.http(cfg.url)
+// Address<"http", Network> — no literal to read
+```
+
+The runtime does not silently disagree with that type. Layer construction validates and fails:
+
+``` ts
+Address.http(cfg.url)
+// cfg.url = "127.0.0.1:8080"
+// AddressReachMismatch: declared Network, "127.0.0.1" is Host-only
+```
+
+Template literals still parse where the prefix is enough:
+
+``` ts
+Address.http(`https://${env.HOST}`)
+// `https://${string}` → Address<"http", Public>
+```
+
+#### What this buys
+
+The Unix-socket worry from 5.5.5 is answered with nothing typed by hand:
+
+``` ts
+Node.make("worker").add(
+  Address.unix("/var/run/w.sock")
+).add(
+  Address.http(":8080")
+)
+// Node<"worker", { host: ["unix"], network: ["http"] }>
+```
+
+#### Rejected
+
+**`Context.Reference` for the default.** Reach has to be in the type; a Reference only carries a
+runtime `Service` and resolves at yield time.
+
+``` ts
+Address.DefaultReach = Context.Reference<Reach>("…", {
+  defaultValue: () => Network
+})
+// Address<"http", ???> at compile time
+```
+
+**A constructor per tier.** Reads fine, but it is a second name for something already written as a
+string, and it does nothing for `"10.0.0.4:8080"` — you end up with a constructor per tier *and* the
+parser.
+
+``` ts
+Address.loopback(8080)
+// Address<"http", Host>
+```
+
+#### Cost
+
+A type-level parser. Bounded, but real:
+
+``` ts
+type ReachOf<Protocol extends string, S extends string> =
+  S extends `${infer Scheme}://${infer Rest}`
+    ? ReachOfAuthority<Scheme, Rest>
+    : ReachOfAuthority<Protocol, S>
+```
+
+``` ts
+type ReachOfAuthority<Scheme extends string, S extends string> =
+  S extends `127.${string}` | `localhost${string}` | `[::1]${string}`
+    ? Host
+    : S extends `10.${string}` | `192.168.${string}`
+      ? Network
+      : Scheme extends "https" | "wss"
+        ? Public
+        : Network
+```
+
+#### Still open
+
+1. Tier names. `host` / `network` / `public` are placeholders.
+2. Does reach gate dialing at the type level, or only bind/advertise? The Unix motivation implies it
+   gates dial, which makes reach part of the requirement type, not just address metadata.
+3. Bind and dial are different axes. This section treats one string as carrying both; whether a dial
+   URL's reach is an *observation* (`https://api.acme.com` simply is Public) while a bind's is a
+   *capability* needs settling before the tier names.
+4. Interaction with D24 overlap — is `Address.http(":8080")` at Host distinct from the same at
+   Network for dial-identity purposes?
+
+### 5.5.7 Open threads for the deep pass
 
 1. **The minted node's identity.** What key does `Hyperlink.make("mover", Address.unix(…))` mint?
    How does it appear in Directory rows and errors? Is it replaceable later
