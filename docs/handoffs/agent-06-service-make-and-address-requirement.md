@@ -701,6 +701,181 @@ Nodes support **multiple protocols**, and **multiple addresses per protocol**. W
 to **accumulate addresses**. Before building: think out exactly how multiple addresses should be
 handled, and survey what others do for something similar.
 
+## 5.5 Address / Node — exploration state (2026-08-19, nothing locked)
+
+### 5.5.1 The model a node actually has
+
+A node is not a list of dials. It is a **labelled space** — protocol x label — and four different
+questions are asked of that one space:
+
+```
+Worker
+├── http
+│   ├── (unlabelled)  :8080
+│   └── (unlabelled)  :8081
+├── unix
+│   ├── A             /var/run/w.a.sock
+│   └── B             /var/run/w.b.sock
+└── ws
+    └── (unlabelled)  :9000
+```
+
+```
+bind       which of these does THIS process open?
+advertise  which go in the Directory row?
+dial       which may a client use?
+active     which is the proxy forwarding to?
+```
+
+Mapping to the scenario catalogue in
+[`node-addresses-and-update-api.md`](./node-addresses-and-update-api.md) §3.0:
+
+```
+S4  advertise ⊂ bind
+S11 all three differ
+S5  dial fixed while active moves
+S14 dial has several members
+```
+
+So they are not four features — they are four selections over one set.
+
+### 5.5.2 Four candidate structures
+
+| | Where a node's shape lives | Weakness |
+|---|---|---|
+| **A** declaration-first | in the class | S7 — binding is per-process, a class cannot describe two processes |
+| **C** address-first | spread across address values | no single view of a node; D24 overlap becomes whole-program |
+| **D** layer-first | in the layers you provide | simple case pays for it |
+| **E** document-first | in a topology document | types stop helping; the requirement stops carrying information |
+
+**Direction: D, with A as sugar over it.** The declaration auto-provides the obvious layers, so the
+one-line case stays one line and S7 works by not using the sugar.
+
+``` ts
+// the model
+class Worker extends Node.make("worker") {}
+```
+
+``` ts
+Address.layer(Worker, Address.http(":8080"))
+```
+
+``` ts
+// the sugar — same arguments, provides the layer for you
+class Worker extends Node.make("worker")
+  .add(
+    Address.http(":8080")
+  )
+{}
+```
+
+Holds the §3 constraint: *whether an address was on `make` or piped on afterward, the result is the
+same.*
+
+### 5.5.3 Two requirements, not one — an address mints a node (owner)
+
+The parameterisation argument dissolves once passing an **address** mints an anonymous node:
+
+``` ts
+Node.Node<Mover>          // a service needs a node
+Address.Address<Worker>   // a node needs an address
+```
+
+``` ts
+class Mover extends Hyperlink.make("mover") {}
+// Effect<Wire<S>, never, Node.Node<Mover> | Protocol>
+```
+
+``` ts
+class Mover extends Hyperlink.make("mover", Worker) {}
+// Effect<Wire<S>, never, Address.Address<Worker> | Protocol>
+```
+
+``` ts
+class Mover extends Hyperlink.make("mover", Address.unix("/var/run/m.sock")) {}
+// Effect<Wire<S>, never, Protocol>          — address minted a node
+```
+
+Neither requirement ever changes shape, which kills the earlier
+`Address<Service>` vs `Address<Node>` problem, the synthetic-`Mover.Node` problem, and gives
+discovery layers one stable signature:
+
+``` ts
+const layerFromLookup = <N extends AnyNode>(node: N):
+  Layer<Address.Address<N>, LookupClientError, Lookup.Client>
+```
+
+### 5.5.4 `Address.layer` is variadic
+
+``` ts
+Address.layer(Worker, Address.http(":8080"))
+```
+
+``` ts
+Address.layer(
+  Worker,
+  Address.http(":8080"),
+  Address.unix("/var/run/w.sock").private(),
+)
+```
+
+``` ts
+export const layer: <
+  N extends AnyNode,
+  const As extends NonEmptyReadonlyArray<Address.Any>,
+>(
+  node: N,
+  ...addresses: As
+) => Layer.Layer<Address.Address<N, Address.LabelsOf<As>>, never, never>
+```
+
+Same argument shape as `.add`, `const` inference keeps labels, `NonEmptyReadonlyArray` makes a
+dial-less node a compile error. Matches `RpcGroup.make(...rpcs)` / `HttpApiGroup.add(...endpoints)`.
+
+### 5.5.5 Private dials move to layers; the two-class form retires (owner)
+
+``` ts
+// today — dials live on the class, so a second class hides them
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
+class WorkerPrivate extends Worker.pipe(Address.unix({ A: "…", B: "…" })) {}
+```
+
+``` ts
+// under D — the class carries no dials, so there is nothing to hide
+Address.layer(
+  Worker,
+  Address.http(":8080"),
+  Address.unix({ A: "…", B: "…" }).private(),
+)
+```
+
+What the two-class form was costing: two answers to "which node is this service on", two requirement
+types for one node, and D24 overlap needing to know they are the same node.
+
+What is lost: a consumer importing `Worker` could not *name* a private dial. Naming is not dialing —
+`dial` is the advertised subset, and reachability was always physical. Accepted.
+
+`Private.pipe` retires as one complete change per the no-shims rule.
+
+### 5.5.6 Open threads for the deep pass
+
+1. **The minted node's identity.** What key does `Hyperlink.make("mover", Address.unix(…))` mint?
+   How does it appear in Directory rows and errors? Is it replaceable later
+   (`Node.layer(Mover, Worker)`) or is minting a commitment?
+2. **Two services minting from the same dial** — one node with two services, or two nodes colliding?
+   This is exactly what D24 exists to catch.
+3. **Does the sugar preserve D24?** If `.add(…)` auto-provides layers, can overlap still be seen
+   locally? If not, A becomes the real model and D the escape hatch.
+4. **Is `advertise` a third role or a bind option?** If it never differs from bind outside S4, it
+   collapses.
+5. **Roles (S7).** `Worker.role("edge")` was floated and is unconvincing. Same identity, different
+   per-process bind may need nothing beyond not using the sugar.
+6. **Fleets.** `nodes([A, B])` — one requirement or one per node? Interacts with the existing
+   single-node rule for identity-stamped tags (S1).
+7. **`.proxy()` and `active`.** Is the proxy target a requirement or purely a runtime activation?
+   `Update`'s A→B cutover already flips it.
+8. **Per-lane targets** (§8.11) — deferred here; multiplies whatever §5 settles on.
+
 ## 6. Open questions
 
 1. Does the default-client Reference need a no-default alternative, or is `.make` enough?
