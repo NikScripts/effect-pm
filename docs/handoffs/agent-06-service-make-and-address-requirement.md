@@ -932,7 +932,7 @@ literal                       ceiling   default
 "10.0.0.4:8080"               Network   Network
 "192.168.1.9:8080"            Network   Network
 "172.16.0.4:8080"             Network   Network
-":8080"                       Public    Network
+":8080"                       Host      Host      ← see 5.5.6b, matches today
 "0.0.0.0:8080"                Public    Network
 "[::]:8080"                   Public    Network
 "http://svc.internal:8080"    Public    Network
@@ -949,11 +949,11 @@ Address.http("127.0.0.1:8080").pipe(
 // type error: loopback cannot exceed Host
 ```
 
-Bind-any is the policy row: it *can* reach Public, so that is the ceiling, but nothing says it should,
-so the default stays Network.
+Explicit bind-any is the policy row: it *can* reach Public, so that is the ceiling, but nothing says
+it should, so the default stays Network.
 
 ``` ts
-Address.http(":8080").pipe(
+Address.http("0.0.0.0:8080").pipe(
   Address.public
 )
 // Address<"http", Public>
@@ -1045,11 +1045,91 @@ type ReachOfAuthority<Scheme extends string, S extends string> =
 1. Tier names. `host` / `network` / `public` are placeholders.
 2. Does reach gate dialing at the type level, or only bind/advertise? The Unix motivation implies it
    gates dial, which makes reach part of the requirement type, not just address metadata.
-3. Bind and dial are different axes. This section treats one string as carrying both; whether a dial
-   URL's reach is an *observation* (`https://api.acme.com` simply is Public) while a bind's is a
-   *capability* needs settling before the tier names.
+3. ~~Bind and dial are different axes.~~ Closed — see 5.5.6b. One axis.
 4. Interaction with D24 overlap — is `Address.http(":8080")` at Host distinct from the same at
    Network for dial-identity purposes?
+
+### 5.5.6b Bind and dial are one axis — and reach already exists, untyped (2026-08-20)
+
+Closes open thread 3 of 5.5.6, and corrects one row of its table. Findings are from the tree, not
+from design.
+
+There is no bind value in the library. There is one dial value, and the bind is derived from it. The
+tag carries the distinction that looked like a second axis:
+
+``` ts
+// src/internal/address.ts:39
+export type AddressDial =
+  | { readonly _tag: "HttpPort"; readonly port: number }
+  | { readonly _tag: "HttpUrl"; readonly url: string }
+  | { readonly _tag: "WsUrl"; readonly url: string }
+  | { readonly _tag: "UnixPath"; readonly path: string }
+  | { readonly _tag: "UnixFromKey" }
+```
+
+`HttpPort` is bind-here; `HttpUrl` is fully qualified. Two modes of one value, already tagged.
+
+``` ts
+// src/internal/nodeMake.ts:81
+if (dial._tag === "HttpPort") {
+  const url = `http://localhost:${String(dial.port)}/rpc`
+} else if (dial._tag === "HttpUrl") {
+  endpoints.Http = { url: dial.url }
+}
+```
+
+So reach stays a single tier on a single address value. No bind/dial split in the type.
+
+#### The correction
+
+A bare port is loopback today, not LAN. The built-in server binds `127.0.0.1` unconditionally:
+
+``` ts
+// src/internal/nodeHttp.ts:449
+host: "127.0.0.1"
+```
+
+``` ts
+// src/internal/nodeHttp.ts:419
+// Local batteries are plain HTTP only (no TLS). Escape hatch: httpServer + custom bind.
+```
+
+```
+literal        as docked in 5.5.6      actual behavior today
+":8080"        Network                 Host
+```
+
+5.5.6's table is corrected in place. `"0.0.0.0:8080"` and `"[::]:8080"` keep ceiling Public /
+default Network — those are explicit bind-any and there is no batteries path for them.
+
+#### What this makes reach mean
+
+Reach is not new policy. It is behavior the library already has, never stated in the type. Stated,
+it lines up with who owns the server:
+
+```
+Host      built-in server, binds 127.0.0.1
+Network   requires httpServer + custom bind
+Public    requires httpServer + custom bind, TLS is the caller's
+```
+
+Which suggests the tier belongs in `R`, not only as a label:
+
+``` ts
+Address.http(8080)
+// Address<"http", Host> — batteries included
+```
+
+``` ts
+Address.http(8080).pipe(
+  Address.network
+)
+// Address<"http", Network> — R gains HttpServer
+```
+
+Not locked. If it holds, `Address.host` / `network` / `public` are not annotations at all — they are
+the thing that decides whether the layer is self-contained, and forgetting to provide a server
+becomes a type error instead of a bind-time surprise.
 
 ### 5.5.7 Open threads for the deep pass
 
