@@ -1046,8 +1046,8 @@ type ReachOfAuthority<Scheme extends string, S extends string> =
 2. Does reach gate dialing at the type level, or only bind/advertise? The Unix motivation implies it
    gates dial, which makes reach part of the requirement type, not just address metadata.
 3. ~~Bind and dial are different axes.~~ Closed — see 5.5.6b. One axis.
-4. Interaction with D24 overlap — is `Address.http(":8080")` at Host distinct from the same at
-   Network for dial-identity purposes?
+4. ~~Interaction with D24 overlap.~~ Closed — see 5.5.6c. Reach is not part of identity, and
+   identity has a live gap worth fixing on its own.
 
 ### 5.5.6b Bind and dial are one axis — and reach already exists, untyped (2026-08-20)
 
@@ -1130,6 +1130,79 @@ Address.http(8080).pipe(
 Not locked. If it holds, `Address.host` / `network` / `public` are not annotations at all — they are
 the thing that decides whether the layer is self-contained, and forgetting to provide a server
 becomes a type error instead of a bind-time surprise.
+
+### 5.5.6c Reach is not part of dial identity — and identity has a live gap (2026-08-20)
+
+Closes open thread 4 of 5.5.6.
+
+Reach must not enter `dialIdentity`. Two addresses on one port collide physically, whatever tier
+they declare:
+
+``` ts
+Address.http(8080).pipe(
+  Address.host
+)
+Address.http(8080).pipe(
+  Address.network
+)
+// one socket — must still raise AddressDialOverlap
+```
+
+#### The gap, which predates this design
+
+Identity is keyed on the *shape of the input*, not the socket it resolves to:
+
+``` ts
+// src/internal/address.ts:119
+case "HttpPort":
+  return `${kind}:port:${String(dial.port)}`
+case "HttpUrl":
+  return `${kind}:url:${dial.url}`
+```
+
+```
+Address.http(8080)                            → Http:port:8080
+Address.http("http://localhost:8080/rpc")     → Http:url:http://localhost:8080/rpc
+Address.http("http://127.0.0.1:8080/rpc")     → Http:url:http://127.0.0.1:8080/rpc
+```
+
+One socket, three identities, no overlap reported. The first two are the same string one step later:
+
+``` ts
+// src/internal/nodeMake.ts:82
+const url = `http://localhost:${String(dial.port)}/rpc`
+```
+
+#### The fix comes with the reach work
+
+Reach needs a loopback / RFC1918 classifier. Identity should key on that same normalizer.
+
+``` ts
+dialIdentity(Address.http(8080))
+// Http:127.0.0.1:8080
+```
+
+``` ts
+dialIdentity(Address.http("http://localhost:8080/rpc"))
+// Http:127.0.0.1:8080 — collides, correctly
+```
+
+Bind-any must not normalize *equal* to loopback; it must be seen to *cover* it:
+
+```
+"0.0.0.0:8080"    → Http:*:8080
+"127.0.0.1:8080"  → Http:127.0.0.1:8080
+```
+
+So `assertNoDialOverlap` grows from a `Set` of strings to a pairwise `covers` test. The input is one
+node's address array, so the quadratic cost is irrelevant.
+
+``` ts
+// src/internal/address.ts:136 — today
+const seen = new Set<string>()
+```
+
+Landable independently of the reach types, as a straight correctness fix.
 
 ### 5.5.7 Open threads for the deep pass
 
