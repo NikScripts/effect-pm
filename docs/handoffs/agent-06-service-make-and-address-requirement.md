@@ -282,6 +282,109 @@ That hole is why the two constructors never merged, and it is one type-level cha
 5. The rule generalises: **`.Service` belongs to modules that mint a shape.** Modules that mint
    identity over a fixed shape take `make` alone.
 
+## 1.6 Module check — where `.Service` earns its keep (2026-08-21)
+
+The 1.5 rule run across every module that exports a `Service` constructor.
+
+**Restated rule.** 1.5's binary wording ("mints a shape" vs "fixed shape") misfiles `ShardMap`. The
+rule that files all nine correctly:
+
+> **`.Service` when the constructor's arguments change the service's *type*; `make` when they only
+> change its *identity*.**
+
+```
+module        constructor site                    shape                                verdict
+Hyperlink     src/Hyperlink.ts                    user spec                            .Service
+WorkPool      src/internal/workPool.ts:3735       varies with T / E                    .Service
+Group         src/Group.ts:53                     { members: Members }, user-supplied   .Service
+Store         src/Store.ts:1450                   varies with contracts                .Service + drift fix
+ShardMap      src/ShardMap.ts:308                 names fixed, types vary              .Service
+Node          src/internal/nodeCore.ts:688        NodeProtocol, fixed                  make
+Daemon        src/Daemon.ts:2273                  DaemonSpec / ScheduleHyperlinkSpec   make
+FleetHealth   src/FleetHealth.ts:171              FleetHealthTag, fixed                make
+Telemetry     src/Telemetry.ts:295                TelemetryTag, fixed                  make
+```
+
+#### ShardMap is the third tier
+
+Node varies in nothing. Group varies in member *names*. ShardMap varies only in member *types* — and
+that still mints a shape, so it keeps `.Service`:
+
+``` ts
+// src/ShardMap.ts:308
+<Self>() =>
+<Key extends Schema.Top, Value extends Schema.Top, Error extends Schema.Top = typeof Schema.Never>(
+  key: string,
+  schemas: ShardMapSchemas<Key, Value, Error>
+): ShardMapTag<Self, Key, Value, Error> => …
+```
+
+#### Daemon selects a fixed spec, it does not mint one
+
+``` ts
+// src/Daemon.ts:1678 — a value
+export const daemonSpec = buildDaemonSpec()
+export type DaemonSpec = typeof daemonSpec
+```
+
+``` ts
+// every overload returns one of two fixed specs, and delegates the minting
+): NodeBoundTag<Self, ScheduleHyperlinkSpec, HSelf>
+Hyperlink.Service<Self>()(key, scheduleHyperlinkSpec, tagOptions)
+```
+
+#### FleetHealth and Telemetry are the same constructor twice
+
+Neither takes a key — it is derived:
+
+``` ts
+// src/FleetHealth.ts:155
+const defaultKey = "fleet-health"
+const keyFor = (node: NodeKey<unknown> | undefined): string =>
+  node === undefined ? defaultKey : `${node.key}/${defaultKey}`
+```
+
+`Self` is inert in both branches: the bare form is a singleton on a constant key, and the node-bound
+form is already branded by `HSelf` in `FleetHealthNodeTag<Self, HSelf>`.
+
+``` ts
+FleetHealth.make()
+FleetHealth.make({ node: Droplet })
+```
+
+#### Store — drift, not a naming question
+
+Store keeps `.Service`. Its shipped signature diverged from its own design doc on three axes at once:
+
+```
+                design (store-and-logs-design.md:65)   shipped (src/Store.ts:1450)
+arity           Service<Self>()(key)                   Service<Self>(key)
+registrations   .add(reg, reg, reg)                    (…contracts) as a second call
+key type        "@app/Store"                           string
+```
+
+The key-type row is a live defect — the conditional is dead:
+
+``` ts
+// src/Store.ts:1451 — string extends string ? string : never  ≡  string
+defineStoreTag<Self, typeof id extends string ? typeof id : never>(id)
+```
+
+So every store's key type is `string` and no two stores are distinguishable by key. Same class of
+hole as `NodeMakeDef` collapsing `Self` (1.5).
+
+``` ts
+class AppStore extends Store.Service<AppStore>()("@app/Store").add(
+  WorkPool.store(Mail),
+  Daemon.store(Daily),
+  LabThermometer.store
+) {}
+// StoreServiceClass<AppStore, "@app/Store", …>
+```
+
+41 call sites; the ones already in `store-and-logs-design.md` are in target form. Note the design says
+`.pipe` — that is superseded by `.add` per D26 and §6.8.
+
 ## 2. Helpers
 
 Helpers are `Hyperlink.something` — not a separate module.
@@ -1050,11 +1153,469 @@ Dialers.dial(row)
    `Update`'s A→B cutover already flips it.
 8. **Per-lane targets** (§8.11) — deferred here; multiplies whatever §5 settles on.
 
-## 6. Open questions
+## 6. Configuration — presence, References, and the listen builder (owner, 2026-08-21)
 
-1. Does the default-client Reference need a no-default alternative, or is `.make` enough?
-2. How does a requirement type carry N addresses without R becoming combinatorial?
-3. What exactly does `.make` return — class or value — and does it keep `class X extends` form?
+Supersedes the `NodePolicy` / `LookupPolicy` / `PolicyBuilder` arrangement. Reached by asking whether
+the policy modules were the right path at all; Effect has no equivalent, and the reason is
+structural.
+
+### 6.1 The inventory — five spellings for one idea
+
+```
+1  PolicyBuilder clusters      NodePolicy (5 keys), LookupPolicy (7 keys)
+2  bare Context.Reference      Hyperlink.DeferStart, Lookup.PlanForce, Lookup.PlanStatus,
+                               Launcher.AlreadyUp, DynamicConfig.SwappableRegistry
+3  constructor options bags    NodeMakeOptions, DaemonTagOptions, FleetHealthConstructOptions
+4  layer/serve options bags    HttpServerOptions, IpcServerOptions, ServeOptions, StoreLayerOptions
+5  call-site stamps            ListenOptions, LookupClientOptions, VerifyConnectionOptions
+```
+
+### 6.2 The disease — `onConflict` exists in three of them
+
+``` ts
+// src/internal/nodeCore.ts:240
+// Directory advertise conflict (call-site; wins over node stamp / LookupPolicy.Conflict)
+```
+
+```
+LookupPolicy.Conflict        a Reference          ambient
+node onConflict              a constructor stamp  per-declaration
+ListenOptions.onConflict     a call-site bag      per-call
+```
+
+One knob, three spellings, and a hand-written precedence chain (`nodeCore.ts:538`, `:849`, `:921`) to
+reconcile them.
+
+### 6.3 Effect's three mechanisms
+
+**Options bag on the layer function** — serve-time settings:
+
+``` ts
+// unstable/rpc/RpcServer.ts:768
+export const layer = (group, options?: {
+  readonly concurrency?: number | "unbounded" | undefined
+  readonly disableTracing?: boolean | undefined
+})
+```
+
+**Presence in Context** — selection:
+
+``` ts
+// unstable/httpapi/HttpApiBuilder.ts:88
+const availableGroups = Array.from(services.mapUnsafe.keys()).filter((key) =>
+  key.startsWith("effect/httpapi/HttpApiGroup/")
+)
+```
+
+An `HttpApi` declares every group; a process serves the groups whose layers were provided. There is
+no `Listen` knob because there is nothing to filter — you provide it or you do not.
+
+**`Context.Reference`** — behavior with a default, in two placements. Ambient:
+
+``` ts
+// References.ts:387 — 14 of them, plain, PascalCase, no builder
+export const MinimumLogLevel: Context.Reference<LogLevel> = references.MinimumLogLevel
+```
+
+``` ts
+// Effect.ts:8011 — an ergonomic setter only where one earns it
+export const withTracerEnabled: { … }
+```
+
+…and annotated onto a declaration:
+
+``` ts
+// unstable/cluster/ClusterSchema.ts:26
+export const Persisted = Context.Reference<boolean>("effect/cluster/ClusterSchema/Persisted", { … })
+```
+
+``` ts
+// unstable/cluster/ClusterWorkflowEngine.ts:675
+.annotate(ClusterSchema.Persisted, true)
+.annotate(ClusterSchema.Uninterruptible, true)
+```
+
+`HttpApi` carries the same pair:
+
+``` ts
+// HttpApi.ts:108
+annotate<I, S>(tag: Context.Key<I, S>, value: S): HttpApi<Id, Groups>
+annotateMerge<I>(context: Context.Context<I>): HttpApi<Id, Groups>
+```
+
+Notably absent from Effect: anything resembling `PolicyBuilder` — a generated family of PascalCase
+References plus camelCase layer helpers plus a `Config` bag plus merge semantics.
+
+### 6.4 The rule — one Reference, three placements, Context resolves precedence
+
+Precedence is not something to implement. Context resolution *is* precedence, and HttpApi says so:
+
+``` ts
+// HttpApi.ts:75
+// Annotation precedence from least to most specific is this API, the added API,
+// the group, and then the endpoint.
+```
+
+``` ts
+// ambient — the process default
+Layer.provideService(Lookup.Conflict, "replace")
+```
+
+``` ts
+// declaration — this node's default
+class Worker extends Node.make("fleet/Worker").add(
+  Address.http(8080)
+).annotate(Lookup.Conflict, "replace") {}
+```
+
+``` ts
+// call site — most specific
+Node.listen(Worker).http(
+  Hyperlink.serve(Jobs, jobsImpl)
+).pipe(
+  Layer.provideService(Lookup.Conflict, "replace")
+)
+```
+
+Same name, same value type, three scopes, zero precedence code.
+
+### 6.5 NodePolicy dissolves
+
+Every knob is mechanism 1 or 2, neither of which needs a module.
+
+```
+knob                    mechanism   becomes
+NodePolicy.Listen           2       Node.listen(Worker).unix(…) — provide it or don't
+NodePolicy.Advertise        2       presence, or an option on the listen layer
+NodePolicy.As               2       .at("A", …) — name the label
+NodePolicy.PrimaryAddress   —       dissolves; see 6.6
+NodePolicy.Proxy            1       option on the listen layer
+```
+
+Supporting evidence that the stamp was never load-bearing: `NodePolicyConfigKey` is written at
+`nodeMake.ts:237` and read only by `nodePolicyOf`, whose only callers are its own tests
+(`test/node-make.test.ts:27`, `:44`). No runtime path consumes it.
+
+### 6.6 `PrimaryAddress` dissolving forces labels
+
+`PrimaryAddress` meant *which declared address clients should use* — a concept that only exists
+because the class declares a superset. Under presence-selection the advertised set is whatever this
+process bound, so "primary" has no referent.
+
+That removes the rule which made several unlabeled same-protocol addresses meaningful:
+
+```
+NodePolicy.PrimaryAddress = "AllUnlabeled"
+// every unlabeled address (several same-protocol OK; list, not last-wins)
+```
+
+Re-deriving from why a node would declare two http addresses:
+
+``` ts
+// 1 — A/B cutover. Labeled; each process picks a side.
+Address.http({ A: "…", B: "…" })
+```
+
+``` ts
+// 2 — different service sets per port. Binding both with the same services is exactly wrong.
+Address.http("public", 8080)
+Address.http("admin", 8081)
+```
+
+Case 2 is the common one — and it is what the dropped reach exploration (5.5.6) was actually
+reaching for. Serving a different *service set* on the socket is the honest mechanism; a locality
+tier was not.
+
+**So a label becomes required as soon as a protocol appears twice**, enforced by the type rather
+than resolved by a knob:
+
+``` ts
+Node.listen(Worker).http(…)
+// type error: "public" | "admin" — name one
+```
+
+### 6.7 LookupPolicy keeps the knobs, loses the machinery
+
+None of LookupPolicy's seven keys filter a list; they are ambient dial-time behaviors with defaults,
+read deep in the call path. That is exactly `Context.Reference`, and Effect writes them by hand.
+
+``` ts
+// src/LookupPolicy.ts:272 — today
+.key("Sticky",        Schema.Boolean,   { defaultValue: () => true })
+.key("StreamGap",     streamGapSchema,  …)
+.key("ColdAmbiguous", coldAmbiguousSchema, …)
+.key("Pick",          …)
+.key("Verify",        verifySchema,     { defaultValue: () => "reject" })
+.key("Conflict",      onConflictSchema, …)
+.key("Yield",         yieldSchema,      …)
+```
+
+``` ts
+// after — seven of these, no builder
+export const Sticky = Context.Reference<boolean>("hyperlink-ts/LookupPolicy/Sticky", {
+  defaultValue: () => true
+})
+```
+
+Seven hand-written References is strictly less code than a builder that generates seven. With
+`NodePolicy` gone, `PolicyBuilder` has one consumer left, and then none.
+
+Composition becomes an options bag (mechanism 1) instead of a bundle algebra:
+
+``` ts
+// before — docs/guides/policy.md:25
+const cutover = LookupPolicy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+  LookupPolicy.layer(LookupPolicy.verifyOff),
+  LookupPolicy.layer(LookupPolicy.streamGap("buffer"))
+)
+```
+
+``` ts
+// after
+const cutover = LookupPolicy.layer({
+  Sticky: true,
+  StreamGap: "buffer",
+  Verify: false
+})
+```
+
+``` ts
+// before — docs/guides/client-verify.md:35
+Hyperlink.client(Emails, WorkerNode).pipe(
+  LookupPolicy.provide(LookupPolicy.verifyOff)
+)
+```
+
+``` ts
+// after
+Hyperlink.client(Emails, WorkerNode).pipe(
+  Layer.provideService(LookupPolicy.Verify, false)
+)
+```
+
+### 6.8 The listen builder (owner's shape)
+
+``` ts
+class Worker extends Node.make("fleet/Worker").add(
+  Address.unix("/var/run/w.sock"),
+  Address.http(8080)
+) {}
+```
+
+``` ts
+Node.listen(Worker)
+  .unix(
+    Hyperlink.serve(Admin, adminImpl),
+    Hyperlink.serve(Jobs, jobsImpl)
+  )
+  .http(
+    Hyperlink.serve(Jobs, jobsImpl)
+  )
+```
+
+Presence-selection is just not chaining — a second process binds the socket only:
+
+``` ts
+Node.listen(Worker)
+  .unix(
+    Hyperlink.serve(Admin, adminImpl),
+    Hyperlink.serve(Jobs, jobsImpl)
+  )
+```
+
+**Protocol methods, not label methods.** `.unix` / `.http` / `.ws` are the module's existing
+vocabulary (`Node.unix`, `Node.http`, `Node.ws`), a closed and discoverable set, and they do not
+require the declaration to be labeled before the builder has any surface.
+
+**`.at(label, …)` disambiguates.** This replaces `NodePolicy.as("A")`:
+
+``` ts
+Node.listen(Worker)
+  .unix(
+    Hyperlink.serve(Admin, adminImpl)
+  )
+  .at("A",
+    Hyperlink.serve(Jobs, jobsImpl)
+  )
+```
+
+**Why `.at(label)` and not `.public(…)`.** Effect splits these by side of the wire. Generated
+members are for consumers:
+
+``` ts
+// HttpApiClient.ts:52
+readonly [Group in … as HttpApiGroup.Identifier<Group>]: Client.Group<…>
+```
+
+``` ts
+client.users.getUser({ id: 1 })
+```
+
+String identifiers are for builders:
+
+``` ts
+// HttpApiBuilder.ts:124
+const Identifier extends HttpApiGroup.Identifier<Groups>
+HttpApiBuilder.group(api, "users", build)
+```
+
+The library's own approved WorkPool API already splits the same way — `WorkPool.lane("urgent", …)`
+declares with a string, `jobs.urgent(…)` consumes as a member (§8.6). `Node.listen` is a layer
+builder, so it takes the string.
+
+```
+                        .at("public", …)          .public(…)
+Effect precedent        HttpApiBuilder.group      HttpApiClient — wrong side
+typo caught             yes, Identifier<As>       yes, method absent
+discoverable            no, need the declaration  yes, autocompletes
+restricted words        none                      pipe/add/at/toString/… reserved
+method set              fixed                     varies per node
+```
+
+The reserved-word problem is decisive: label methods would force the label space to exclude every
+builder method and every `Object.prototype` key, and that restriction leaks into the declaration.
+
+``` ts
+Address.http("at", 8080)
+Address.http("pipe", 8081)
+// both collide with the builder surface
+```
+
+**Both spellings is rejected** — `.public(…)` alongside `.at("public", …)` is two ways to do one
+thing.
+
+### 6.9 No arrays — variadic, per Effect
+
+Effect is variadic wherever it accumulates declarations, and never mixes variadic with options:
+
+``` ts
+// unstable/rpc/RpcGroup.ts
+export const make = <const Rpcs extends ReadonlyArray<Rpc.Any>>(...rpcs: Rpcs)
+```
+
+``` ts
+// unstable/httpapi/HttpApiGroup.ts:73
+add<const A extends NonEmptyReadonlyArray<HttpApiEndpoint.Constraint>>(...endpoints: A)
+```
+
+```
+RpcServer.layer(group, options?)           one thing + options
+RpcServer.layerHttp({ group, path, … })    many settings → all options
+HttpApi.add(...groups)                     pure accumulation
+```
+
+Our arrays, and where they go:
+
+```
+Node.make(key, Address | Address[], options?)      → Node.make(key).add(...addresses)
+Node.unix(RouterNode, [Hyperlink.serve(…)])        → Node.listen(N).unix(...serves)
+Address.layer(Worker, [Address.http(':8080')])     → already rejected by owner
+Store.Service<A>("k")(contracts)                   → Store.Service<A>()("k").add(...regs)
+```
+
+This also retires the Aug-9 `Node.make` arity lock rather than breaking it — the second positional
+arg existed only to avoid a chained call.
+
+Where options are genuinely needed alongside, they go on `.pipe`, not in a trailing bag — which is
+the same conclusion 6.4 reaches from the other side, since options that were bags become References:
+
+``` ts
+Node.listen(Worker).http(
+  Hyperlink.serve(Jobs, jobsImpl)
+).pipe(
+  Layer.provide(myHttpServer),
+  Layer.provideService(Lookup.Conflict, "replace")
+)
+```
+
+### 6.10 Shapes considered and rejected
+
+Same scenario each: `fleet/Worker`, unix + http, `Admin` on the socket only, `Jobs` on both.
+
+``` ts
+// B — one call keyed by address. Arrays are structural and cannot go variadic inside an object.
+Node.layer(Worker, {
+  unix: [ … ],
+  http: [ … ]
+})
+```
+
+``` ts
+// C — service-first. Per-service address lists must be edited in N places to change one process.
+Hyperlink.serve(Jobs, jobsImpl).pipe(
+  Node.on(Worker, "unix", "http")
+)
+```
+
+``` ts
+// D — topology in the declaration. Recreates superset-then-filter with services included,
+//     so a second process cannot differ without a knob — NodePolicy.listen again.
+class Worker extends Node.make("fleet/Worker").add(
+  Node.endpoint("unix", Address.unix("…")).add(Admin).add(Jobs)
+) {}
+```
+
+### 6.11 What deletes, what is added
+
+```
+deletes
+  PolicyBuilder public + internal                    2 files
+  NodePolicy                                         whole module
+  LookupPolicy.make / Policy / Config / Fragment     bundle types
+  LookupPolicy.MergeConfigs / MergePolicyList
+  LookupPolicy.config / provide                      → Layer.provideService
+  per-key camelCase fragments + presets              verifyOff, verifyStatus, verifyReject,
+                                                     sticky, unsticky, …
+  onConflict three-way precedence                    nodeCore.ts:538, :849, :921
+  NodePolicyConfigKey stamp + nodePolicyOf           with its test
+  Node.Service + nine inline-target overloads        §1.5
+
+adds
+  .annotate(Reference, value) on declarations        HttpApi already has it
+  Node.listen(N).unix(…) / .http(…) / .at(label, …)  HttpApiBuilder.group shape
+  LookupPolicy.layer(options)                        RpcServer.layer shape
+```
+
+### 6.12 Accepted costs
+
+1. `LookupPolicy.verifyOff` reads better than `Layer.provideService(LookupPolicy.Verify, false)`, and
+   the presets go. Effect eats the same cost — `References.ts` ships 14 bare References and adds a
+   `with*` combinator only where one earns it.
+2. `.annotate` is unchecked by scope: nothing stops annotating a node with a Reference nothing reads.
+   `ClusterSchema` and `HttpApi` annotations are equally unchecked. **Explicitly not fixing this** —
+   a scope brand would be our own machinery on top of Effect's, which is how `PolicyBuilder`
+   happened.
+
+### 6.13 Problems still to solve
+
+1. **Per-address dependencies.** One chained expression yields one layer, so a trailing
+   `Layer.provide(myHttpServer)` reaches every branch. Tentative answer is an inner pipe, which is
+   ordinary Layer composition and keeps each method homogeneous — not confirmed:
+
+   ``` ts
+   Node.listen(Worker)
+     .http(
+       Hyperlink.serve(Jobs, jobsImpl).pipe(
+         Layer.provide(myHttpServer)
+       )
+     )
+   ```
+
+2. **`listen` vs `advertise` — one function or two.** Advertising is a side effect of listening today
+   (`nodeIpcServer.ts:59`). Two is more presence-shaped but makes the common case two layers and
+   silently produces an undiscoverable node when forgotten. Leaning: one function with an option,
+   plus a separate `Node.advertise` only for advertising an address this process does not bind.
+3. **Where LookupPolicy References attach.** Node declaration, service declaration, or ambient?
+   Effect uses all three placements, so precedent does not decide it. `Verify` and `Sticky` feel
+   per-service; `Yield` feels ambient.
+4. **The five top-level serve constructors.** `Node.unix` / `http` / `ws` / `httpServer` / `wsServer`
+   overlap `Node.listen(N).unix(…)`. Do they collapse into it, or stay as shorthand?
+5. **Migration of unlabeled multiples.** 6.6 makes a label required once a protocol repeats. Existing
+   nodes relying on `"AllUnlabeled"` need labels.
+6. **Empty listen.** Is `Node.listen(Worker)` with no branches a type error or a no-op layer?
+7. **`NodeMakeDef` must brand `Self` from `Key`** (§1.5) before `Node.Service` can be deleted.
+8. **`Store.Service` drift** (§1.6) — arity, `.add`, and the lost key literal.
+9. **`dialIdentity` keys on input shape, not socket** (5.5.6, survivor 1) — independent defect.
 
 ## 7. Work order (owner, 2026-08-18)
 
@@ -1068,6 +1629,16 @@ Dialers.dial(row)
 | 2b | `Hyperlink.Service` / `Hyperlink.make` shape — after WorkPool, which is the foundation | after 2 |
 | 3 | Lock the desired API shape — provisional, explicitly **not final** | after 2 |
 | 4 | Node/Address as a requirement (§5) — the #1 priority | owner-gated, after 3 |
+| 5 | Configuration rework (§6) — presence + References, listen builder | designed, 9 open (§6.13) |
+
+**Landable independently of everything above**, in dependency order:
+
+| # | Change | Blocks |
+|---|--------|--------|
+| a | `dialIdentity` normalises to a socket identity (5.5.6) | nothing — plain defect |
+| b | `NodeMakeDef` brands `Self` from `Key` (§1.5) | c |
+| c | Delete `Node.Service` + its nine inline-target overloads | — |
+| d | `Store.Service` arity, `.add`, key literal (§1.6) | — |
 
 Rationale: step 3 gives a full picture of everything else in motion before step 4 starts. Nothing
 in steps 2–3 is binding; the address model may invalidate any of it.
@@ -1645,6 +2216,12 @@ inside the impl. A `.make` value is module scope, so that case stays out of reac
 
 Contract shape settled to the extent it can be before §5. Layer-side shape (`WorkPool.layer` /
 handler registration) not yet designed.
+
+## 9. Open questions (older, still unresolved)
+
+1. Does the default-client Reference need a no-default alternative, or is `.make` enough?
+2. How does a requirement type carry N addresses without R becoming combinatorial?
+3. What exactly does `.make` return — class or value — and does it keep `class X extends` form?
 
 ## Notes (Agent 6 — not owner decisions)
 
