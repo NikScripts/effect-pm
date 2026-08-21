@@ -1626,14 +1626,72 @@ nodes, addresses, or protocols.
 ) => Layer<ROut2, E | E2, RIn | Exclude<RIn2, ROut>>
 ```
 
-### 6.9 Variance is what makes one mechanism do both
+### 6.9 Variance is what makes one mechanism do both — `in`, not `out` (type-tested 2026-08-21)
 
-Effect declares its services `in out`. Ours declares the kind `out`, and the two natural behaviours
-of `R` then land exactly where they are wanted — no bending, no `serviceOption`, no disjunction.
+Effect declares its services `in out`. Ours declares the kind **`in`**, and the two natural
+behaviours of `R` then land exactly where they are wanted — no bending, no `serviceOption`, no
+disjunction.
 
 ``` ts
-interface Protocol<out Kind extends ProtocolKind> { … }
+interface Protocol<in Kind extends ProtocolKind> { … }
 ```
+
+**This was first docked as `out` and that is wrong.** `Layer.provide` discharges via
+`Exclude<RIn2, ROut>`, and `Exclude<A, B>` needs `A extends B` — the *requirement* assignable to
+what is provided. Covariance gives the opposite direction, so the requirement survives:
+
+``` ts
+// covariant — does NOT discharge
+Exclude<Protocol<"IpcSocket" | "Http">, Protocol<"IpcSocket">>
+// = Protocol<"IpcSocket" | "Http">
+```
+
+``` ts
+// contravariant — discharges
+Exclude<Protocol<"IpcSocket" | "Http">, Protocol<"IpcSocket">>
+// = never
+```
+
+Verified under `tsc --strict` 5.9.3 against `Layer.provide`'s real signature:
+
+```
+serve: providing one of two leaves the other        ✓ "provide all"
+serve: providing both discharges                    ✓
+client: exact kind discharges                       ✓
+client: any one of three kinds discharges           ✓ "provide one"
+client: wrong kind does not discharge               ✓
+client: a WIDER provider does NOT discharge a       ← residual limitation
+        narrower requirement
+```
+
+**The phantom must not be `connect`.** Contravariance needs `Kind` in an input position, and the
+natural reading of that position is a claim we do not want to make — a client protocol handles
+exactly one kind, not every kind in the set.
+
+``` ts
+// wrong — reads as "handles every one of these kinds"
+interface Protocol<in Kind extends ProtocolKind> {
+  readonly connect: (endpoint: Endpoint & { kind: Kind }) => Effect<RpcClient.Protocol>
+}
+```
+
+``` ts
+// right — variance from a phantom, connect stays plain
+interface Protocol<in Kind extends ProtocolKind> {
+  readonly [PhantomKind]: (kind: Kind) => void
+  readonly connect: (endpoint: Endpoint) => Effect<RpcClient.Protocol>
+}
+```
+
+**Residual limitation.** A protocol layer covering two kinds cannot satisfy a service needing one:
+
+``` ts
+Exclude<Protocol<"IpcSocket">, Protocol<"IpcSocket" | "Http">>
+// = Protocol<"IpcSocket"> — not discharged
+```
+
+Each protocol layer is exactly one kind today, so this may never arise. It does mean the client
+requirement reads as "one of these named kinds", not "anything that can reach this node".
 
 ```
 client   R = Protocol<"IpcSocket" | "Http">          one provider satisfies it
@@ -1898,8 +1956,9 @@ adds
    into one row under `advertiseNode.kind`. The row schema already supports subsets —
    `DirectoryEntry` is keyed `(nodeKey, kind)` with its own `serves` — so the producer needs to group
    rather than flatten.
-5. **`Protocol<Kind>` variance in practice.** The covariant phantom is the load-bearing trick; it
-   needs a real type test before anything is built on it.
+5. ~~**`Protocol<Kind>` variance in practice.**~~ Closed — type-tested, see 6.9. It is `in`, not
+   `out`, the phantom must not be `connect`, and a wider provider cannot satisfy a narrower
+   requirement.
 6. **Migration of unlabeled multiples.** 6.6 makes a label required once a protocol repeats.
 7. **`NodeMakeDef` must brand `Self` from `Key`** (§1.5) before `Node.Service` can be deleted.
 8. **`Store.Service` drift** (§1.6) — arity, `.add`, and the lost key literal.
