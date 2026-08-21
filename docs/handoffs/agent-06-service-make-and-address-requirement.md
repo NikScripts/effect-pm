@@ -1270,9 +1270,7 @@ class Worker extends Node.make("fleet/Worker").add(
 
 ``` ts
 // call site — most specific
-Node.listen(Worker).http(
-  Hyperlink.serve(Jobs, jobsImpl)
-).pipe(
+Hyperlink.layer(Jobs, jobsImpl).pipe(
   Layer.provideService(Lookup.Conflict, "replace")
 )
 ```
@@ -1285,11 +1283,11 @@ Every knob is mechanism 1 or 2, neither of which needs a module.
 
 ```
 knob                    mechanism   becomes
-NodePolicy.Listen           2       Node.listen(Worker).unix(…) — provide it or don't
+NodePolicy.Listen           2       provide the protocol layer, or don't (6.8)
 NodePolicy.Advertise        2       presence, or an option on the listen layer
-NodePolicy.As               2       .at("A", …) — name the label
+NodePolicy.As               2       Worker.unix("A") — a subset (6.8)
 NodePolicy.PrimaryAddress   —       dissolves; see 6.6
-NodePolicy.Proxy            1       option on the listen layer
+NodePolicy.Proxy            —       un-replaced; see 6.15 item 1
 ```
 
 Supporting evidence that the stamp was never load-bearing: `NodePolicyConfigKey` is written at
@@ -1330,7 +1328,7 @@ tier was not.
 than resolved by a knob:
 
 ``` ts
-Node.listen(Worker).http(…)
+Worker.http()
 // type error: "public" | "admin" — name one
 ```
 
@@ -1393,7 +1391,31 @@ Hyperlink.client(Emails, WorkerNode).pipe(
 )
 ```
 
-### 6.8 The listen builder (owner's shape)
+### 6.8 The model — node, subset, layer, protocol (owner, 2026-08-21)
+
+Supersedes the chained listen builder. That builder collapsed four concerns into one chain: address
+selection, service assignment, proxying, and disposal. They separate.
+
+```
+declaration   Node.make(key).add(…)              the addresses anyone may dial
+subset        Worker.http() / Worker.unix("B")   a projection of the node, same identity
+service       Hyperlink.Service<J>()(id, spec, node?)
+layer         Hyperlink.layer(J) / (J, impl)     client or serve, node is the requirement
+protocol      NodeClient.layerProtocol* /        the choice — no address, no arguments
+              NodeServer.layerProtocol*
+```
+
+#### Address
+
+``` ts
+Address.http(8080)
+Address.http({ A: 9090, B: 9091 })
+Address.unix("/var/run/w.sock")
+Address.unix({ A: "/var/run/w.A.sock", B: "/var/run/w.B.sock" })
+Address.ws("wss://edge.acme.com/rpc")
+```
+
+#### Node declaration
 
 ``` ts
 class Worker extends Node.make("fleet/Worker").add(
@@ -1402,89 +1424,315 @@ class Worker extends Node.make("fleet/Worker").add(
 ) {}
 ```
 
+Addresses that must never be dialed by name — update sockets, cutover sides — are **not declared
+here**. They are added at the layer, so an importer cannot see them.
+
+#### Subsets
+
+A subset is the same node with a narrowed address view. No id, no `.subset()` — identity comes from
+the selection, so two subsets with the same addresses are the same subset.
+
 ``` ts
-Node.listen(Worker)
-  .unix(
-    Hyperlink.serve(Admin, adminImpl),
-    Hyperlink.serve(Jobs, jobsImpl)
+Worker.http()
+// NodeSubset<Worker, "Http">
+
+Worker.unix("B")
+// NodeSubset<Worker, "IpcSocket:B">
+
+Worker.http().unix("B")
+// NodeSubset<Worker, "Http" | "IpcSocket:B">
+```
+
+``` ts
+Worker.ws()
+// error — Worker declares no WebSocket address
+```
+
+``` ts
+Worker.unix("C")
+// error — "A" | "B"
+```
+
+```
+wire key      "fleet/Worker"      unchanged — one node, Directory rows keyed (nodeKey, kind)
+Context key   "fleet/Worker#B"    derived from the selection
+```
+
+Precedent for the clone: `withProtocol` is already the widening direction and already re-assembles
+under the same key.
+
+``` ts
+// src/internal/nodeCore.ts:908
+return assembleNode<Self, ROut, MultiAddress<K | KindsOf<T>>>(node.key, {
+  …
+  // Same-identity derived handle keeps the base node's advertise policy.
+  onConflict: node.onConflict
+})
+```
+
+**Why the subset lives on the node and not the layer.** Both client and server read the same
+declaration. If the protocol choice were made in the layer, the client could never know it, and a
+service served only on the socket would still be dialable over http in the type. Class form:
+
+``` ts
+class Cutover extends Worker.http().unix("B") {}
+```
+
+#### Service declaration
+
+``` ts
+class Jobs extends Hyperlink.Service<Jobs>()("app/Jobs", spec, Worker.unix("B")) {}
+class Mail extends Hyperlink.Service<Mail>()("app/Mail", spec) {}
+```
+
+#### `Hyperlink.layer` — one function, two modes
+
+``` ts
+Hyperlink.layer(Jobs)
+// client — Layer<Jobs, never, NodeClient.Protocol<"IpcSocket">>
+
+Hyperlink.layer(Jobs, jobsImpl)
+// serve  — Layer<Jobs | Local<Jobs>, E, R | NodeServer.Protocol<"IpcSocket">>
+
+Hyperlink.layer(Mail)
+// nodeless — Layer<Mail, never, Node.Of<Mail> | NodeClient.Protocol<ProtocolKind>>
+```
+
+The second argument flips the direction of the requirement: reach the node, or be the node.
+
+#### Protocols — const layers, no arguments
+
+``` ts
+NodeClient.layerProtocolSocket
+NodeClient.layerProtocolHttp
+NodeClient.layerProtocolWebsocket
+
+NodeServer.layerProtocolSocketServer
+NodeServer.layerProtocolHttpServer
+NodeServer.layerProtocolWebsocketServer
+```
+
+Precedent: `RpcServer.layerProtocolSocketServer` is a const `Layer`, not a call.
+
+**Why our own protocol service rather than RPC's directly.** In Effect RPC the address does not live
+in the protocol layer — it lives one level down:
+
+``` ts
+// unstable/rpc/RpcClient.ts:1176
+export const layerProtocolSocket = (options?: { … }): Layer.Layer<
+  Protocol, never, Socket.Socket | RpcSerialization.RpcSerialization
+>
+```
+
+``` ts
+// unstable/rpc/RpcServer.ts:886
+export const layerProtocolSocketServer: Layer.Layer<
+  Protocol, never, RpcSerialization.RpcSerialization | SocketServer.SocketServer
+>
+```
+
+Ours keeps that shape and takes the endpoint at connect time, so the layer needs no argument:
+
+``` ts
+interface Protocol<out Kind extends ProtocolKind> {
+  readonly kind: Kind
+  readonly connect: (endpoint: Endpoint) => Effect<RpcClient.Protocol>
+}
+```
+
+#### `Node.of` — discharging an unbound node
+
+The node is the requirement; passing an address mints one.
+
+``` ts
+Node.of(Mail, Worker)
+Node.of(Mail, Address.http(8080))
+```
+
+Minting already exists, including the derived key:
+
+``` ts
+// src/internal/nodeListenCommon.ts:419
+// hyperlink-ts/anonymous-node/Emails#k3f9q
+// a generated key is a local, ephemeral identity — a shared identity needs an explicit key
+```
+
+#### Assembly, end to end
+
+``` ts
+// bound node, one kind — nothing to provide (see 6.11)
+Hyperlink.layer(Jobs)
+```
+
+``` ts
+// bound node, several kinds — client picks one
+Hyperlink.layer(Jobs).pipe(
+  Layer.provide(
+    NodeClient.layerProtocolSocket
   )
-  .http(
-    Hyperlink.serve(Jobs, jobsImpl)
+)
+```
+
+``` ts
+// serve — every declared kind must be provided
+Hyperlink.layer(Jobs, jobsImpl).pipe(
+  Layer.provide([
+    NodeServer.layerProtocolSocketServer,
+    NodeServer.layerProtocolHttpServer
+  ])
+)
+```
+
+``` ts
+Hyperlink.layer(Jobs, jobsImpl).pipe(
+  Layer.provide(
+    NodeServer.layerProtocolSocketServer
   )
+)
+// error — NodeServer.Protocol<"Http"> unprovided
 ```
 
-Presence-selection is just not chaining — a second process binds the socket only:
+``` ts
+// several services, one node
+Layer.mergeAll(
+  Hyperlink.layer(Jobs, jobsImpl),
+  Hyperlink.layer(Admin, adminImpl)
+).pipe(
+  Layer.provide([
+    NodeServer.layerProtocolSocketServer,
+    NodeServer.layerProtocolHttpServer
+  ])
+)
+```
 
 ``` ts
-Node.listen(Worker)
-  .unix(
-    Hyperlink.serve(Admin, adminImpl),
-    Hyperlink.serve(Jobs, jobsImpl)
+// nodeless, closed by the app
+export const mail = Hyperlink.layer(Mail).pipe(
+  Layer.provide([
+    Node.of(Mail, Address.http(8080)),
+    NodeClient.layerProtocolHttp
+  ])
+)
+// Layer<Mail, never, never>
+```
+
+A requirement is discharged once, at the composition root — consumers of `mail` see nothing about
+nodes, addresses, or protocols.
+
+``` ts
+// Layer.ts — Exclude<RIn2, ROut>
+<RIn, E, ROut>(that: Layer<ROut, E, RIn>): <RIn2, E2, ROut2>(
+  self: Layer<ROut2, E2, RIn2>
+) => Layer<ROut2, E | E2, RIn | Exclude<RIn2, ROut>>
+```
+
+### 6.9 Variance is what makes one mechanism do both
+
+Effect declares its services `in out`. Ours declares the kind `out`, and the two natural behaviours
+of `R` then land exactly where they are wanted — no bending, no `serviceOption`, no disjunction.
+
+``` ts
+interface Protocol<out Kind extends ProtocolKind> { … }
+```
+
+```
+client   R = Protocol<"IpcSocket" | "Http">          one provider satisfies it
+serve    R = Protocol<"IpcSocket"> | Protocol<"Http">  each must be provided
+```
+
+``` ts
+NodeClient.layerProtocolSocket
+// Layer<NodeClient.Protocol<"IpcSocket">> — assignable to Protocol<"IpcSocket" | "Http">
+```
+
+``` ts
+Hyperlink.layer(Jobs).pipe(
+  Layer.provide(
+    NodeClient.layerProtocolWebsocket
   )
+)
+// error — Protocol<"WebSocket"> is not assignable
 ```
 
-**Protocol methods, not label methods.** `.unix` / `.http` / `.ws` are the module's existing
-vocabulary (`Node.unix`, `Node.http`, `Node.ws`), a closed and discoverable set, and they do not
-require the declaration to be labeled before the builder has any surface.
+### 6.10 Protocol defaulting and client sugar
 
-**`.at(label, …)` disambiguates.** This replaces `NodePolicy.as("A")`:
-
-``` ts
-Node.listen(Worker)
-  .unix(
-    Hyperlink.serve(Admin, adminImpl)
-  )
-  .at("A",
-    Hyperlink.serve(Jobs, jobsImpl)
-  )
-```
-
-**Why `.at(label)` and not `.public(…)`.** Effect splits these by side of the wire. Generated
-members are for consumers:
+**Default when the node has exactly one kind.** The single-address node is the common case and
+should need nothing. Same mechanism as §3 — a default keeps the requirement out of `R`, and an
+explicit provide overrides it the ordinary way.
 
 ``` ts
-// HttpApiClient.ts:52
-readonly [Group in … as HttpApiGroup.Identifier<Group>]: Client.Group<…>
+class Worker extends Node.make("fleet/Worker").add(
+  Address.unix("/var/run/w.sock")
+) {}
 ```
 
 ``` ts
-client.users.getUser({ id: 1 })
+Hyperlink.layer(Jobs)
+// no provide — one kind, nothing to choose
 ```
 
-String identifiers are for builders:
+**Transport dependencies ship inside the protocol layer**, as `protocolHttp` already does, so no one
+has to satisfy a serialization or HTTP-client requirement by hand:
 
 ``` ts
-// HttpApiBuilder.ts:124
-const Identifier extends HttpApiGroup.Identifier<Groups>
-HttpApiBuilder.group(api, "users", build)
+// src/Hyperlink.ts:5352
+RpcClient.layerProtocolHttp({ url }).pipe(
+  Layer.provide(serialization),
+  Layer.provide(FetchHttpClient.layer)
+)
 ```
 
-The library's own approved WorkPool API already splits the same way — `WorkPool.lane("urgent", …)`
-declares with a string, `jobs.urgent(…)` consumes as a member (§8.6). `Node.listen` is a layer
-builder, so it takes the string.
-
-```
-                        .at("public", …)          .public(…)
-Effect precedent        HttpApiBuilder.group      HttpApiClient — wrong side
-typo caught             yes, Identifier<As>       yes, method absent
-discoverable            no, need the declaration  yes, autocompletes
-restricted words        none                      pipe/add/at/toString/… reserved
-method set              fixed                     varies per node
-```
-
-The reserved-word problem is decisive: label methods would force the label space to exclude every
-builder method and every `Object.prototype` key, and that restriction leaks into the declaration.
+**Client sugar — protocol-named, address required.** Collapses the nodeless assembly to one call:
 
 ``` ts
-Address.http("at", 8080)
-Address.http("pipe", 8081)
-// both collide with the builder surface
+export const mail = Hyperlink.http(Mail, 8080)
 ```
 
-**Both spellings is rejected** — `.public(…)` alongside `.at("public", …)` is two ways to do one
-thing.
+``` ts
+// identical to
+export const mail = Hyperlink.layer(Mail).pipe(
+  Layer.provide([
+    Node.of(Mail, Address.http(8080)),
+    NodeClient.layerProtocolHttp
+  ])
+)
+```
 
-### 6.9 No arrays — variadic, per Effect
+The second argument is typed to that protocol's address:
+
+``` ts
+Hyperlink.http(Mail, 8080)
+Hyperlink.http(Mail, ":8080")
+Hyperlink.http(Mail, "https://api.acme.com/rpc")
+Hyperlink.ws(Mail, "wss://edge.acme.com/rpc")
+Hyperlink.unix(Mail, "/var/run/mail.sock")
+```
+
+``` ts
+Hyperlink.unix(Mail, 8080)
+// error
+```
+
+**No serve sugar.** `Hyperlink.http(Jobs, jobsImpl)` would only typecheck when Http is the node's
+sole kind, so adding one address to a node breaks serve sites that never mentioned it — a correct
+error that reads as the sugar failing rather than the coverage rule firing.
+
+``` ts
+class Worker extends Node.make("fleet/Worker").add(
+  Address.http(8080),
+  Address.unix("/var/run/w.sock")   // one line added elsewhere
+) {}
+Hyperlink.http(Jobs, jobsImpl)      // now broken
+```
+
+`Hyperlink.layer(Jobs, jobsImpl)` names the actual fix — `NodeServer.Protocol<"IpcSocket">`
+unprovided.
+
+**The address argument is required on the sugar.** Without it, `Hyperlink.http(Jobs)` and
+`Hyperlink.layer(Jobs)` are two spellings of one call, since 6.10's default already makes the bound
+single-kind case zero-provide.
+
+### 6.11 No arrays in our signatures — variadic, per Effect
 
 Effect is variadic wherever it accumulates declarations, and never mixes variadic with options:
 
@@ -1504,58 +1752,92 @@ RpcServer.layerHttp({ group, path, … })    many settings → all options
 HttpApi.add(...groups)                     pure accumulation
 ```
 
-Our arrays, and where they go:
+Ours, and where they went:
 
 ```
 Node.make(key, Address | Address[], options?)      → Node.make(key).add(...addresses)
-Node.unix(RouterNode, [Hyperlink.serve(…)])        → Node.listen(N).unix(...serves)
-Address.layer(Worker, [Address.http(':8080')])     → already rejected by owner
+Node.unix(RouterNode, [Hyperlink.serve(…)])        → gone with the listen family
 Store.Service<A>("k")(contracts)                   → Store.Service<A>()("k").add(...regs)
 ```
 
-This also retires the Aug-9 `Node.make` arity lock rather than breaking it — the second positional
-arg existed only to avoid a chained call.
+This retires the Aug-9 `Node.make` arity lock rather than breaking it — the second positional
+argument existed only to avoid a chained call.
 
-Where options are genuinely needed alongside, they go on `.pipe`, not in a trailing bag — which is
-the same conclusion 6.4 reaches from the other side, since options that were bags become References:
+`Layer.provide`'s array overload is **Effect's** signature, not ours, so it does not conflict:
 
 ``` ts
-Node.listen(Worker).http(
-  Hyperlink.serve(Jobs, jobsImpl)
-).pipe(
-  Layer.provide(myHttpServer),
-  Layer.provideService(Lookup.Conflict, "replace")
+// Layer.ts
+<const Layers extends [Any, ...Array<Any>]>(that: Layers): …
+```
+
+### 6.12 Shapes considered and rejected
+
+``` ts
+// chained listen builder — collapsed four concerns into one chain; per-transport service sets
+// turned out to be Agent 6's invention, not a requirement
+Node.listen(Worker)
+  .unix(
+    Hyperlink.serve(Admin, adminImpl)
+  )
+  .http(
+    Hyperlink.serve(Jobs, jobsImpl)
+  )
+```
+
+``` ts
+// argument-less selector methods — a selector with nothing to select for
+Node.listen(Worker).unix().http()
+```
+
+``` ts
+// an extra registry provide on top of the transports
+Layer.mergeAll(…).pipe(
+  Layer.provide(
+    Node.layer(Worker)
+  )
 )
 ```
 
-### 6.10 Shapes considered and rejected
-
-Same scenario each: `fleet/Worker`, unix + http, `Admin` on the socket only, `Jobs` on both.
-
 ``` ts
-// B — one call keyed by address. Arrays are structural and cannot go variadic inside an object.
-Node.layer(Worker, {
-  unix: [ … ],
-  http: [ … ]
-})
+// one call keyed by address — arrays are structural and cannot go variadic inside an object
+Node.layer(Worker, { unix: [ … ], http: [ … ] })
 ```
 
 ``` ts
-// C — service-first. Per-service address lists must be edited in N places to change one process.
+// service-first — per-service address lists must be edited in N places to change one process
 Hyperlink.serve(Jobs, jobsImpl).pipe(
   Node.on(Worker, "unix", "http")
 )
 ```
 
 ``` ts
-// D — topology in the declaration. Recreates superset-then-filter with services included,
-//     so a second process cannot differ without a knob — NodePolicy.listen again.
+// topology in the declaration — recreates superset-then-filter with services included, so a second
+// process cannot differ without a knob
 class Worker extends Node.make("fleet/Worker").add(
   Node.endpoint("unix", Address.unix("…")).add(Admin).add(Jobs)
 ) {}
 ```
 
-### 6.11 What deletes, what is added
+``` ts
+// label methods on the builder — forces the label space to exclude every builder method and every
+// Object.prototype key, and that restriction leaks into the declaration
+Node.listen(Worker).public(…)
+```
+
+``` ts
+// a named subset id — the selection is already the identity
+MyNode.subset("subNode").http()
+```
+
+``` ts
+// renamed protocol wrappers — the same thing with a worse name
+Hyperlink.protocolIpc(Jobs)
+```
+
+Also rejected: address→address `proxy(subject, { to })`, per-address exhaustiveness with `.off`,
+pools as a disposition, and reach tiers (5.5.6).
+
+### 6.13 What deletes, what is added
 
 ```
 deletes
@@ -1569,53 +1851,61 @@ deletes
   onConflict three-way precedence                    nodeCore.ts:538, :849, :921
   NodePolicyConfigKey stamp + nodePolicyOf           with its test
   Node.Service + nine inline-target overloads        §1.5
+  Node.listen / unix / http / ws / nPipe             the listen family, ~20 hand-synced overloads
+  Node.listenLocal
+  Node.httpServer / wsServer / ipcServer
+  Hyperlink.serve                                    → Hyperlink.layer(tag, impl)
+  ProtocolKindMismatch                               becomes unreachable — the subset decides
+  ListenUseProtocol                                  the spine/sibling split is now the type
 
 adds
-  .annotate(Reference, value) on declarations        HttpApi already has it
-  Node.listen(N).unix(…) / .http(…) / .at(label, …)  HttpApiBuilder.group shape
-  LookupPolicy.layer(options)                        RpcServer.layer shape
+  Node subsets — Worker.http() / Worker.unix("B")
+  Hyperlink.layer(tag) / (tag, impl)
+  NodeClient.layerProtocol* / NodeServer.layerProtocol*   const layers, no arguments
+  Node.of(tag, node | address)
+  Hyperlink.http|ws|unix|nPipe(tag, address)              client sugar, address required
+  .annotate(Reference, value) on declarations             HttpApi already has it
+  LookupPolicy.layer(options)                             RpcServer.layer shape
 ```
 
-### 6.12 Accepted costs
+### 6.14 Accepted costs
 
 1. `LookupPolicy.verifyOff` reads better than `Layer.provideService(LookupPolicy.Verify, false)`, and
    the presets go. Effect eats the same cost — `References.ts` ships 14 bare References and adds a
    `with*` combinator only where one earns it.
-2. `.annotate` is unchecked by scope: nothing stops annotating a node with a Reference nothing reads.
-   `ClusterSchema` and `HttpApi` annotations are equally unchecked. **Explicitly not fixing this** —
-   a scope brand would be our own machinery on top of Effect's, which is how `PolicyBuilder`
-   happened.
+2. `.annotate` is unchecked by scope. `ClusterSchema` and `HttpApi` annotations are equally
+   unchecked. **Explicitly not fixing this** — a scope brand would be our own machinery on top of
+   Effect's, which is how `PolicyBuilder` happened.
+3. A nodeless service loses the protocol check: `Protocol<Allowed>` opens to `ProtocolKind`, so
+   picking a protocol the provided address cannot serve fails at build rather than at compile time.
+4. Changing a subset's selection re-brands it, so a service bound to `Worker.unix("B")` and one bound
+   to `Worker.unix("B").http()` are unrelated types. Tolerable inline; sharper if subsets become
+   shared consts across files.
 
-### 6.13 Problems still to solve
+### 6.15 Problems still to solve
 
-1. **Per-address dependencies.** One chained expression yields one layer, so a trailing
-   `Layer.provide(myHttpServer)` reaches every branch. Tentative answer is an inner pipe, which is
-   ordinary Layer composition and keeps each method homogeneous — not confirmed:
-
-   ``` ts
-   Node.listen(Worker)
-     .http(
-       Hyperlink.serve(Jobs, jobsImpl).pipe(
-         Layer.provide(myHttpServer)
-       )
-     )
-   ```
-
-2. **`listen` vs `advertise` — one function or two.** Advertising is a side effect of listening today
-   (`nodeIpcServer.ts:59`). Two is more presence-shaped but makes the common case two layers and
-   silently produces an undiscoverable node when forgotten. Leaning: one function with an option,
-   plus a separate `Node.advertise` only for advertising an address this process does not bind.
-3. **Where LookupPolicy References attach.** Node declaration, service declaration, or ambient?
-   Effect uses all three placements, so precedent does not decide it. `Verify` and `Sticky` feel
-   per-service; `Yield` feels ambient.
-4. **The five top-level serve constructors.** `Node.unix` / `http` / `ws` / `httpServer` / `wsServer`
-   overlap `Node.listen(N).unix(…)`. Do they collapse into it, or stay as shorthand?
-5. **Migration of unlabeled multiples.** 6.6 makes a label required once a protocol repeats. Existing
-   nodes relying on `"AllUnlabeled"` need labels.
-6. **Empty listen.** Is `Node.listen(Worker)` with no branches a type error or a no-op layer?
+1. **Stable address across a process swap.** Owner: *"It has to be stable."* Claims already exist —
+   `Identity` is "exclusive HyperService key claims (first wins; dead winners replaceable)" — and
+   `Hyperlink.ts:4342` claims `{ key, nodeKey, kind, url?, path? }`. Open: whether the socket is
+   what stays fixed (needs `SO_REUSEPORT` or a bind gap) or the identity is (dialers re-resolve).
+   Proxy was the answer to the first; it is currently un-replaced.
+2. **A Lookup node on every machine.** Owner wants one per machine so an intra-machine dial never
+   leaves the box. `Address.unixFromKey` already derives a socket path from the node key with no
+   round trip — how much of this is already covered, and what the per-machine Lookup adds.
+3. **Where LookupPolicy References attach** — node declaration, service declaration, or ambient.
+   Effect uses all three placements, so precedent does not decide it.
+4. **Advertise must group by protocol.** `nodeServerCommon.ts:123` and `:158` put every served key
+   into one row under `advertiseNode.kind`. The row schema already supports subsets —
+   `DirectoryEntry` is keyed `(nodeKey, kind)` with its own `serves` — so the producer needs to group
+   rather than flatten.
+5. **`Protocol<Kind>` variance in practice.** The covariant phantom is the load-bearing trick; it
+   needs a real type test before anything is built on it.
+6. **Migration of unlabeled multiples.** 6.6 makes a label required once a protocol repeats.
 7. **`NodeMakeDef` must brand `Self` from `Key`** (§1.5) before `Node.Service` can be deleted.
 8. **`Store.Service` drift** (§1.6) — arity, `.add`, and the lost key literal.
 9. **`dialIdentity` keys on input shape, not socket** (5.5.6, survivor 1) — independent defect.
+10. **Names.** `Node.of`, `NodeClient` / `NodeServer`, `Node.Of<S>`, `NodeSubset`, and whether the
+    server protocol layers keep Effect's `…SocketServer` suffix.
 
 ## 7. Work order (owner, 2026-08-18)
 
