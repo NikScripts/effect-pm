@@ -170,6 +170,118 @@ key.startsWith("effect/httpapi/HttpApiGroup/")
 contract id. It needs a carve-out for non-service `.make` ids, or a sentence scoping it to
 service and Context keys.
 
+## 1.5 `.Service` is only for shape-minting modules — Node takes `make` alone (owner, 2026-08-21)
+
+**`.Service` was never approved for `Node`.** The two-constructor split in §1 is a HyperService
+pattern: it exists because those modules mint a *service shape*. A node does not — its shape is
+fixed:
+
+``` ts
+// src/internal/nodeCore.ts:614 — every node, from either constructor
+const node = Object.assign(Context.Service<Self, NodeProtocol>()(key), { … })
+```
+
+`Node.Service` is a `Context.Service` wearing a hardcoded `NodeProtocol`. The name claims a shape it
+does not mint.
+
+#### Provenance
+
+``` text
+2026-07-20  35dee4e7  Node module extracted from Resource/Lookup, as Node.Tag
+2026-07-20  81ba1d21  AddressedNode — this is what put dials on the class
+2026-07-20  ea66f46b  Node.Tag becomes two-stage + keyed, to mirror Context.Service
+2026-08-04  a3831b5f  Effect v4 sweep renames Tag → Service across the repo
+2026-08-11  5ef27c20  Address factories + Node.make
+```
+
+`Node.Service` is the July `Node.Tag` carried through a mechanical v4 rename. `Node.make` and the
+`Address.*` factories are the newer design and supersede it. The nine inline-target overloads on
+`Node.Service` came in with `AddressedNode` and are the thing 5.5.5 is undoing.
+
+#### Why this does not break the locked arity
+
+`node-addresses-and-update-api.md:428` locks `Node.make(key, Address | Address[], options?)`. Adding
+a `<Self>()` stage would break it. It is not needed.
+
+Effect v4 draws exactly this line itself — one stage yields a value, two stages yield an extendable
+class:
+
+``` ts
+// repos/effect/packages/effect/src/Context.ts:201
+<Identifier, Shape = Identifier>(key: string): Service<Identifier, Shape>
+```
+
+``` ts
+// :202
+<Self, Shape>(): <const Identifier extends string, …>(id, options?) =>
+  ServiceClass<Self, Identifier, Shape> & …
+```
+
+``` ts
+// :124 — the class form is a strict superset of the value form
+export interface ServiceClass<in out Self, in out Identifier extends string, in out Shape>
+  extends Service<Self, Shape>
+{
+  new(_: never): ServiceClass.Shape<Identifier, Shape>
+  readonly key: Identifier
+}
+```
+
+That superset relation is also what makes `.make` and `.Service` outputs interchangeable in helpers
+(§2) — it is Effect's own guarantee, not ours.
+
+The decisive part is what lands in `R`:
+
+``` ts
+// :102
+use<A, E, R>(f: (service: Shape) => Effect<A, E, R>): Effect<A, E, R | Identifier>
+```
+
+`Identifier` is the requirement entry, and it is not required to be the subclass. A HyperService
+needs `<Self>()` because only the subclass can name a varying shape. A node's shape is fixed and its
+identity is fully determined by its key — which `Node.make` already captures as a const:
+
+``` ts
+// src/internal/nodeMake.ts:145
+readonly key: Key
+```
+
+So `Self` is branded from `Key`, and the arity stands:
+
+``` ts
+class Worker extends Node.make("app/Worker", [
+  Address.unix("/var/run/w.sock"),
+  Address.http(8080)
+]) {}
+// R entry: NodeId<"app/Worker">
+```
+
+``` ts
+class Edge extends Node.make("app/Edge", Address.http(8080)) {}
+// R entry: NodeId<"app/Edge"> — distinct, no <Self>() stage
+```
+
+#### The gap to close
+
+`Node.make` currently throws `Self` away, so every node collapses to the same `R` entry:
+
+``` ts
+// src/internal/nodeMake.ts:144 — generics unbound, Self becomes unknown
+export type NodeMakeDef<…> = ReturnType<typeof assembleNode> & { … }
+```
+
+That hole is why the two constructors never merged, and it is one type-level change.
+
+#### Consequences
+
+1. `Node.Service` is removed, along with its nine inline-target overloads.
+2. `Node.make` is the sole node constructor; addresses are `Address.*` values only.
+3. `.pipe` (policy fragments, extra addresses) and `assertNoDialOverlap` — both already on
+   `Node.make` — become the only path, so D24 runs on every node.
+4. All 20 call sites are `class X extends Node.make(…)`; there are no anonymous uses to preserve.
+5. The rule generalises: **`.Service` belongs to modules that mint a shape.** Modules that mint
+   identity over a fixed shape take `make` alone.
+
 ## 2. Helpers
 
 Helpers are `Hyperlink.something` — not a separate module.
@@ -849,7 +961,8 @@ Address.layer(
 )
 ```
 
-`.private()` here is superseded — see 5.5.6. The rest of this subsection stands.
+`.private()` here is dropped along with the reach exploration — see 5.5.6. The rest of this
+subsection stands.
 
 What the two-class form was costing: two answers to "which node is this service on", two requirement
 types for one node, and D24 overlap needing to know they are the same node.
@@ -859,494 +972,64 @@ What is lost: a consumer importing `Worker` could not *name* a private dial. Nam
 
 `Private.pipe` retires as one complete change per the no-shims rule.
 
-### 5.5.6 Reach — a tier in the address type, defaulted per protocol (owner agreed 2026-08-20)
+### 5.5.6 Reach — explored and dropped (owner, 2026-08-21)
 
-Supersedes the `.private()` boolean shown in 5.5.5. A boolean hid a scale: public HTTP and a
-machine-local Unix socket are not two ends of one flag, and there is a middle (LAN / fleet).
+A locality tier on addresses (`machine` / `fleet` / `public`), with per-protocol ceilings, defaults
+inferred from string literals, a runtime mismatch error, a ceiling on `Advertise`, proxy direction
+rules, and an `Update.simulate` widening check. Nine mechanisms. Cut in full.
 
-Reach is never absent from the type. Precedent is `Rpc.make`, where `success` defaults to
-`Schema.Void` rather than being missing, and a combinator overrides it.
+The motivating worry was that a Unix socket could be dialed from across a network. It cannot — that
+is physics, and nothing was ever at risk. 5.5.5 had already handled the real version of it by moving
+private dials to layers.
 
-``` ts
-Rpc.make("GetUser")
-// ~success = Schema.Void
-
-Rpc.make("GetUser").pipe(
-  Rpc.setSuccess(User)
-)
-// ~success = User
-```
-
-Same shape:
+The one piece with a concrete bug behind it — "machine-tier addresses must not be published to
+Directory" — is wrong. Unix paths are advertised deliberately:
 
 ``` ts
-Address.unix("/var/run/w.sock")
-// Address<"unix", Machine>
-
-Address.http(":8080")
-// Address<"http", Fleet>
+// src/internal/nodeIpcServer.ts:59
+// Soft Lookup directory advertise after serve registration (Node.unix / protocol listen)
 ```
 
-``` ts
-Address.http(":8080").pipe(
-  Address.machine
-)
-// Address<"http", Machine>
-```
+An all-IPC fleet on one box has every peer reading a Directory full of unix paths. Whether a row is
+publishable depends on who reads the Directory, not on the address. With that gone, the rest had
+nothing under it.
 
-Tier names `machine` / `fleet` / `public` — settled in 5.5.6d.
-
-#### Ceiling and default
-
-Two numbers per protocol, not one. The **ceiling** is what the protocol can physically express; the
-**default** sits at the safest tier inside it. Tightening is free, widening is written down.
-
-```
-protocol   ceiling    default
-unix       Machine    Machine
-ipc        Machine    Machine
-tcp        Public     Fleet
-http       Public     Fleet
-ws         Public     Fleet
-```
-
-A ceiling makes over-widening a type error rather than a policy argument:
-
-``` ts
-Address.unix("/var/run/w.sock").pipe(
-  Address.fleet
-)
-// type error: "unix" cannot exceed Machine
-```
-
-#### The literal narrows the ceiling
-
-For `http` / `ws` the address string carries real information, and three of these rows are physics,
-not preference — loopback, RFC1918, and link-local are the OS refusing traffic.
-
-```
-literal                       ceiling   default
-"127.0.0.1:8080"              Machine   Machine
-"localhost:8080"              Machine   Machine
-"[::1]:8080"                  Machine   Machine
-"10.0.0.4:8080"               Fleet     Fleet
-"192.168.1.9:8080"            Fleet     Fleet
-"172.16.0.4:8080"             Fleet     Fleet
-":8080"                       Machine   Machine   ← see 5.5.6b, matches today
-"0.0.0.0:8080"                Public    Fleet
-"[::]:8080"                   Public    Fleet
-"http://svc.internal:8080"    Public    Fleet
-"https://api.acme.com"        Public    Public
-```
-
-Typing `"127.0.0.1:8080"` as `Fleet` would not be conservative, it would be wrong — the type would
-claim off-machine dialability that the socket refuses.
-
-``` ts
-Address.http("127.0.0.1:8080").pipe(
-  Address.fleet
-)
-// type error: loopback cannot exceed Machine
-```
-
-Explicit bind-any is the policy row: it *can* reach Public, so that is the ceiling, but nothing says
-it should, so the default stays Fleet.
-
-``` ts
-Address.http("0.0.0.0:8080").pipe(
-  Address.public
-)
-// Address<"http", Public>
-```
-
-#### Non-literals fall back, then are checked at runtime
-
-The parse only runs on literal and template-literal types. A widened `string` takes the protocol
-default.
-
-``` ts
-Address.http(cfg.url)
-// Address<"http", Fleet> — no literal to read
-```
-
-The runtime does not silently disagree with that type. Layer construction validates and fails:
-
-``` ts
-Address.http(cfg.url)
-// cfg.url = "127.0.0.1:8080"
-// AddressReachMismatch: declared Fleet, "127.0.0.1" is Machine-only
-```
-
-Template literals still parse where the prefix is enough:
-
-``` ts
-Address.http(`https://${env.HOST}`)
-// `https://${string}` → Address<"http", Public>
-```
-
-#### What this buys
-
-The Unix-socket worry from 5.5.5 is answered with nothing typed by hand:
-
-``` ts
-Node.make("worker").add(
-  Address.unix("/var/run/w.sock")
-).add(
-  Address.http(":8080")
-)
-// Node<"worker", { host: ["unix"], network: ["http"] }>
-```
-
-#### Rejected
-
-**`Context.Reference` for the default.** Reach has to be in the type; a Reference only carries a
-runtime `Service` and resolves at yield time.
-
-``` ts
-Address.DefaultReach = Context.Reference<Reach>("…", {
-  defaultValue: () => Fleet
-})
-// Address<"http", ???> at compile time
-```
-
-**A constructor per tier.** Reads fine, but it is a second name for something already written as a
-string, and it does nothing for `"10.0.0.4:8080"` — you end up with a constructor per tier *and* the
-parser.
-
-``` ts
-Address.loopback(8080)
-// Address<"http", Machine>
-```
-
-#### Cost
-
-A type-level parser. Bounded, but real:
-
-``` ts
-type ReachOf<Protocol extends string, S extends string> =
-  S extends `${infer Scheme}://${infer Rest}`
-    ? ReachOfAuthority<Scheme, Rest>
-    : ReachOfAuthority<Protocol, S>
-```
-
-``` ts
-type ReachOfAuthority<Scheme extends string, S extends string> =
-  S extends `127.${string}` | `localhost${string}` | `[::1]${string}`
-    ? Machine
-    : S extends `10.${string}` | `192.168.${string}`
-      ? Fleet
-      : Scheme extends "https" | "wss"
-        ? Public
-        : Fleet
-```
-
-#### Still open
-
-1. ~~Tier names.~~ Closed — see 5.5.6d. `Reach`, tiers `machine` / `fleet` / `public`.
-2. Does reach gate dialing at the type level, or only bind/advertise? The Unix motivation implies it
-   gates dial, which makes reach part of the requirement type, not just address metadata.
-3. ~~Bind and dial are different axes.~~ Closed — see 5.5.6b. One axis.
-4. ~~Interaction with D24 overlap.~~ Closed — see 5.5.6c. Reach is not part of identity, and
-   identity has a live gap worth fixing on its own.
-
-### 5.5.6b Bind and dial are one axis — and reach already exists, untyped (2026-08-20)
-
-Closes open thread 3 of 5.5.6, and corrects one row of its table. Findings are from the tree, not
-from design.
-
-There is no bind value in the library. There is one dial value, and the bind is derived from it. The
-tag carries the distinction that looked like a second axis:
-
-``` ts
-// src/internal/address.ts:39
-export type AddressDial =
-  | { readonly _tag: "HttpPort"; readonly port: number }
-  | { readonly _tag: "HttpUrl"; readonly url: string }
-  | { readonly _tag: "WsUrl"; readonly url: string }
-  | { readonly _tag: "UnixPath"; readonly path: string }
-  | { readonly _tag: "UnixFromKey" }
-```
-
-`HttpPort` is bind-here; `HttpUrl` is fully qualified. Two modes of one value, already tagged.
-
-``` ts
-// src/internal/nodeMake.ts:81
-if (dial._tag === "HttpPort") {
-  const url = `http://localhost:${String(dial.port)}/rpc`
-} else if (dial._tag === "HttpUrl") {
-  endpoints.Http = { url: dial.url }
-}
-```
-
-So reach stays a single tier on a single address value. No bind/dial split in the type.
-
-#### The correction
-
-A bare port is loopback today, not LAN. The built-in server binds `127.0.0.1` unconditionally:
-
-``` ts
-// src/internal/nodeHttp.ts:449
-host: "127.0.0.1"
-```
-
-``` ts
-// src/internal/nodeHttp.ts:419
-// Local batteries are plain HTTP only (no TLS). Escape hatch: httpServer + custom bind.
-```
-
-```
-literal        as docked in 5.5.6      actual behavior today
-":8080"        Fleet                   Machine
-```
-
-5.5.6's table is corrected in place. `"0.0.0.0:8080"` and `"[::]:8080"` keep ceiling Public /
-default Fleet — those are explicit bind-any and there is no batteries path for them.
-
-#### What this makes reach mean
-
-Reach is not new policy. It is behavior the library already has, never stated in the type. Stated,
-it lines up with who owns the server:
-
-```
-Machine   built-in server, binds 127.0.0.1
-Fleet     requires httpServer + custom bind
-Public    requires httpServer + custom bind, TLS is the caller's
-```
-
-Which suggests the tier belongs in `R`, not only as a label:
+The facts the tier kept restating are already enforced by the API:
 
 ``` ts
 Address.http(8080)
-// Address<"http", Machine> — batteries included
+// binds 127.0.0.1 — nodeHttp.ts:449
 ```
 
 ``` ts
-Address.http(8080).pipe(
-  Address.fleet
-)
-// Address<"http", Fleet> — R gains HttpServer
+Node.httpServer(…)
+// anything wider — you bring the server
 ```
 
-Not locked. If it holds, `Address.machine` / `fleet` / `public` are not annotations at all — they are
-the thing that decides whether the layer is self-contained, and forgetting to provide a server
-becomes a type error instead of a bind-time surprise.
+#### Two survivors
 
-### 5.5.6c Reach is not part of dial identity — and identity has a live gap (2026-08-20)
-
-Closes open thread 4 of 5.5.6.
-
-Reach must not enter `dialIdentity`. Two addresses on one port collide physically, whatever tier
-they declare:
-
-``` ts
-Address.http(8080).pipe(
-  Address.machine
-)
-Address.http(8080).pipe(
-  Address.fleet
-)
-// one socket — must still raise AddressDialOverlap
-```
-
-#### The gap, which predates this design
-
-Identity is keyed on the *shape of the input*, not the socket it resolves to:
+**1. `dialIdentity` keys on the shape of the input, not the socket.** A plain defect, unrelated to
+reach:
 
 ``` ts
 // src/internal/address.ts:119
-case "HttpPort":
-  return `${kind}:port:${String(dial.port)}`
-case "HttpUrl":
-  return `${kind}:url:${dial.url}`
+Address.http(8080)                          → Http:port:8080
+Address.http("http://localhost:8080/rpc")   → Http:url:http://localhost:8080/rpc
 ```
 
-```
-Address.http(8080)                            → Http:port:8080
-Address.http("http://localhost:8080/rpc")     → Http:url:http://localhost:8080/rpc
-Address.http("http://127.0.0.1:8080/rpc")     → Http:url:http://127.0.0.1:8080/rpc
-```
+One socket, two identities, no `AddressDialOverlap`. `nodeMake.ts:82` derives the second from the
+first, so they are the same string one step later. Fixing it means normalising to a socket identity
+and replacing the `Set` in `assertNoDialOverlap` with a pairwise `covers` test, so bind-any is seen
+to cover loopback rather than compare equal to it.
 
-One socket, three identities, no overlap reported. The first two are the same string one step later:
+**2. Unreachable rows should fail at dial, not in the type.** The honest home for the original
+worry, and it catches the cross-machine case a type never could — the type does not know where the
+reader runs:
 
 ``` ts
-// src/internal/nodeMake.ts:82
-const url = `http://localhost:${String(dial.port)}/rpc`
+Dialers.dial(row)
+// AddressUnreachable: "unix:/var/run/w.sock" is not reachable from this host
 ```
-
-#### The fix comes with the reach work
-
-Reach needs a loopback / RFC1918 classifier. Identity should key on that same normalizer.
-
-``` ts
-dialIdentity(Address.http(8080))
-// Http:127.0.0.1:8080
-```
-
-``` ts
-dialIdentity(Address.http("http://localhost:8080/rpc"))
-// Http:127.0.0.1:8080 — collides, correctly
-```
-
-Bind-any must not normalize *equal* to loopback; it must be seen to *cover* it:
-
-```
-"0.0.0.0:8080"    → Http:*:8080
-"127.0.0.1:8080"  → Http:127.0.0.1:8080
-```
-
-So `assertNoDialOverlap` grows from a `Set` of strings to a pairwise `covers` test. The input is one
-node's address array, so the quadratic cost is irrelevant.
-
-``` ts
-// src/internal/address.ts:136 — today
-const seen = new Set<string>()
-```
-
-Landable independently of the reach types, as a straight correctness fix.
-
-### 5.5.6d Names, and how Reach meets NodePolicy / Proxy / Update (owner, 2026-08-20)
-
-Closes open thread 1 of 5.5.6.
-
-Concept is **Reach**. Tiers are **`machine` / `fleet` / `public`**.
-
-``` ts
-Address.unix("/var/run/w.sock")
-// machine
-
-Address.http("10.0.0.4:8080")
-// fleet
-
-Address.http("https://api.acme.com").pipe(
-  Address.public
-)
-// public
-```
-
-Rejected `internet` for the top tier: `machine` and `fleet` name things you own, `internet` does not,
-and it names one specific network when the tier is not about a network at all.
-
-``` ts
-Address.http("https://api.acme.internal")
-// a corporate intranet — top tier, not the internet
-```
-
-Grammar is mixed on purpose. The first two tiers are physical facts, the third is a permission:
-
-```
-machine   loopback              OS refuses off-box traffic     physical
-fleet     RFC1918 / link-local  router refuses off-LAN         physical
-public    bound wide            nothing refuses anything       policy
-```
-
-`host` was dropped for colliding with hostname fields (`host: "127.0.0.1"`). `private` was dropped as
-a reserved word and as the boolean 5.5.5 retired; `public` alone is fine, since it is only reserved
-inside a class body.
-
-#### Reach vs NodePolicy — two layers over one list
-
-`NodePolicy` already selects subsets of a node's addresses at runtime:
-
-``` ts
-// src/NodePolicy.ts:23
-NodePolicy.primaryAddress("AllUnlabeled")
-NodePolicy.listen("All")
-NodePolicy.advertise("Primary")
-NodePolicy.proxy("Prefer")
-NodePolicy.as("A")
-```
-
-```
-Reach      per-address, static, in the type      what this address MAY do
-Listen     per-process, runtime, layer-provided  what this process binds
-Advertise  per-process, runtime, layer-provided  what Directory publishes
-```
-
-They do not compete. Reach becomes a **ceiling on Advertise**:
-
-``` ts
-Node.make("worker").add(
-  Address.unix("/var/run/w.sock")
-).add(
-  Address.http("https://api.acme.com")
-)
-```
-
-``` ts
-NodePolicy.advertise("All")
-// publishes the https address
-// the unix address is machine-tier — Directory cannot publish it
-```
-
-This is a stronger answer to the Unix worry than 5.5.5. The two-class form hid a socket by not
-importing it; a tier makes it structurally unpublishable, so `advertise("All")` stops being a
-foot-gun.
-
-#### Proxy is a reach downgrade, and that is the rule
-
-```
-public  https://api.acme.com     ← primary, what the world dials
-   │
-   │ NodePolicy.proxy("Prefer")
-   ▼
-machine /var/run/w.A.sock        ← As: "A"
-        /var/run/w.B.sock        ← As: "B"
-```
-
-A proxy hop is the only sanctioned inward crossing: the wide address terminates in this process and
-what leaves is narrower. Reach validates the existing design rather than fighting it.
-
-``` ts
-// legal — wide in, narrow out
-proxy: { from: "public", to: "machine" }
-```
-
-``` ts
-// illegal — the proxy would be reachable from nowhere the target is not
-proxy: { from: "machine", to: "fleet" }
-```
-
-#### Update needs no change, but `simulate` gains a check
-
-The labeled sides are the addresses carrying `A` / `B`, and both are the same tier, so reach is
-invariant across a cutover:
-
-``` ts
-Address.unix({ A: "/var/run/w.A.sock", B: "/var/run/w.B.sock" })
-// both machine
-```
-
-``` ts
-Update.plan({
-  steps: [{ target: "fleet/Worker", successor: workerB, tags: [Worker] }]
-})
-// unchanged
-```
-
-`simulate` already fails closed, and can now compare predecessor to successor:
-
-``` ts
-Update.simulate(plan)
-// UpdateReachWidened: fleet/Worker machine → public
-```
-
-That is the failure a cutover is most likely to cause silently — a successor built from a slightly
-different node definition drifting from fleet to public mid-rollout. It cannot be checked today
-because there is nothing to compare.
-
-#### Stated outright: Reach is a ceiling, never a guarantee of presence
-
-`As` and `Proxy` are per-process `Context.Reference` values, so which tier a process actually exposes
-is a runtime fact while reach is a type-level one.
-
-``` ts
-NodePolicy.listen(["A"])
-// the type still shows the public address on the node
-// this process never binds it
-```
-
-Not a defect — the same split as `Listen` vs the declared list today — but it must not be read as a
-presence guarantee.
 
 ### 5.5.7 Open threads for the deep pass
 
@@ -1364,8 +1047,7 @@ presence guarantee.
 6. **Fleets.** `nodes([A, B])` — one requirement or one per node? Interacts with the existing
    single-node rule for identity-stamped tags (S1).
 7. **`.proxy()` and `active`.** Is the proxy target a requirement or purely a runtime activation?
-   `Update`'s A→B cutover already flips it. Partly answered in 5.5.6d — a proxy hop is a reach
-   downgrade and the tiers constrain its direction; whether the *target* is a requirement is open.
+   `Update`'s A→B cutover already flips it.
 8. **Per-lane targets** (§8.11) — deferred here; multiplies whatever §5 settles on.
 
 ## 6. Open questions
