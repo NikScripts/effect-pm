@@ -115,35 +115,131 @@ const wsDial = (input: number | `:${number}` | string): AddressDial => {
   return { _tag: "WsUrl", url: input };
 };
 
-/** Stable dial identity for overlap checks. @internal */
-export const dialIdentity = (address: AnyAddress): string => {
-  if (address._tag === "UnixFromKey") return "IpcSocket:unixFromKey";
+/** Host forms that all name the same loopback interface. @internal */
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+
+/** Host forms that bind every interface, so they cover any host on the same port. @internal */
+const anyHosts = new Set(["0.0.0.0", "::"]);
+
+/** Default port per URL scheme — a url without one still names a concrete socket. @internal */
+const defaultPorts: Readonly<Record<string, number>> = {
+  "http:": 80,
+  "https:": 443,
+  "ws:": 80,
+  "wss:": 443,
+};
+
+/**
+ * The socket a dial resolves to — what overlap is actually about.
+ *
+ * `kind` is kept: http and ws on one port is a legitimate upgrade-on-the-same-server config, so
+ * they are not treated as the same socket. Within a kind, every spelling of one socket normalises
+ * to one value — a bare port, `localhost`, `127.0.0.1`, and `::1` are all the same listener.
+ *
+ * @internal
+ */
+type DialSocket =
+  | {
+      readonly _tag: "Inet";
+      readonly kind: ProtocolKind;
+      readonly host: string;
+      readonly port: number;
+    }
+  | { readonly _tag: "Path"; readonly path: string }
+  | { readonly _tag: "FromKey" }
+  | { readonly _tag: "Opaque"; readonly value: string };
+
+/** Normalise a url's authority; `Opaque` when it will not parse (never throws). @internal */
+const inetFromUrl = (kind: ProtocolKind, url: string): DialSocket => {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { _tag: "Opaque", value: `${kind}:url:${url}` };
+  }
+  const raw = parsed.hostname.toLowerCase();
+  const host = loopbackHosts.has(raw) ? "127.0.0.1" : anyHosts.has(raw) ? "*" : raw;
+  const port =
+    parsed.port === ""
+      ? (defaultPorts[parsed.protocol] ?? 0)
+      : Number(parsed.port);
+  return { _tag: "Inet", kind, host, port };
+};
+
+/** The socket an address resolves to. @internal */
+const dialSocket = (address: AnyAddress): DialSocket => {
+  if (address._tag === "UnixFromKey") return { _tag: "FromKey" };
   const { kind, dial } = address;
   switch (dial._tag) {
     case "HttpPort":
-      return `${kind}:port:${String(dial.port)}`;
+      // `nodeMake` derives `http://localhost:<port>/rpc` from a bare port, so a bare port and that
+      // url are the same listener.
+      return { _tag: "Inet", kind, host: "127.0.0.1", port: dial.port };
     case "HttpUrl":
-      return `${kind}:url:${dial.url}`;
+      return inetFromUrl(kind, dial.url);
     case "WsUrl":
-      return `${kind}:url:${dial.url}`;
+      return inetFromUrl(kind, dial.url);
     case "UnixPath":
-      return `${kind}:path:${dial.path}`;
+      return { _tag: "Path", path: dial.path };
     case "UnixFromKey":
-      return "IpcSocket:unixFromKey";
+      return { _tag: "FromKey" };
   }
 };
 
-/** Reject duplicate concrete dials. @internal */
+/** Render a {@link DialSocket} for identity and error text. @internal */
+const socketLabel = (socket: DialSocket): string => {
+  switch (socket._tag) {
+    case "Inet":
+      return `${socket.kind}:${socket.host}:${String(socket.port)}`;
+    case "Path":
+      return `IpcSocket:${socket.path}`;
+    case "FromKey":
+      return "IpcSocket:unixFromKey";
+    case "Opaque":
+      return socket.value;
+  }
+};
+
+/**
+ * Stable dial identity for overlap checks — the socket a dial resolves to, not the shape it was
+ * written in. `Address.http(8080)` and `Address.http("http://localhost:8080/rpc")` share one.
+ *
+ * @internal
+ */
+export const dialIdentity = (address: AnyAddress): string =>
+  socketLabel(dialSocket(address));
+
+/** Do two sockets contend for the same listener? Bind-any covers every host on its port. @internal */
+const overlaps = (a: DialSocket, b: DialSocket): boolean => {
+  if (a._tag === "Inet" && b._tag === "Inet") {
+    if (a.kind !== b.kind || a.port !== b.port) return false;
+    return a.host === b.host || a.host === "*" || b.host === "*";
+  }
+  if (a._tag === "Path" && b._tag === "Path") return a.path === b.path;
+  if (a._tag === "FromKey" && b._tag === "FromKey") return true;
+  if (a._tag === "Opaque" && b._tag === "Opaque") return a.value === b.value;
+  return false;
+};
+
+/**
+ * Reject dials that contend for the same listener. Pairwise rather than a `Set` because bind-any
+ * *covers* loopback rather than equalling it; the input is one node's address list, so the
+ * quadratic cost is irrelevant.
+ *
+ * @internal
+ */
 export const assertNoDialOverlap = (
   addresses: ReadonlyArray<AnyAddress>,
 ): void => {
-  const seen = new Set<string>();
-  for (const address of addresses) {
-    const id = dialIdentity(address);
-    if (seen.has(id)) {
-      throw new AddressDialOverlap({ dial: id });
+  const sockets = addresses.map(dialSocket);
+  for (let i = 1; i < sockets.length; i += 1) {
+    for (let j = 0; j < i; j += 1) {
+      const a = sockets[i]!;
+      const b = sockets[j]!;
+      if (overlaps(a, b)) {
+        throw new AddressDialOverlap({ dial: socketLabel(a) });
+      }
     }
-    seen.add(id);
   }
 };
 

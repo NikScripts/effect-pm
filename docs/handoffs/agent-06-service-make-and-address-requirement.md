@@ -1112,7 +1112,7 @@ Node.httpServer(…)
 #### Two survivors
 
 **1. `dialIdentity` keys on the shape of the input, not the socket.** A plain defect, unrelated to
-reach:
+reach. **Fixed 2026-08-21** — see §6.15 item 9.
 
 ``` ts
 // src/internal/address.ts:119
@@ -1962,7 +1962,10 @@ adds
 6. **Migration of unlabeled multiples.** 6.6 makes a label required once a protocol repeats.
 7. **`NodeMakeDef` must brand `Self` from `Key`** (§1.5) before `Node.Service` can be deleted.
 8. **`Store.Service` drift** (§1.6) — arity, `.add`, and the lost key literal.
-9. **`dialIdentity` keys on input shape, not socket** (5.5.6, survivor 1) — independent defect.
+9. ~~**`dialIdentity` keys on input shape, not socket**~~ — **fixed 2026-08-21.** `dialIdentity`
+   now resolves to the socket (`Http:127.0.0.1:8080`), and `assertNoDialOverlap` is pairwise so
+   bind-any *covers* loopback rather than equalling it. `kind` deliberately stays in the identity —
+   dropping it would make websocket-upgrade-on-one-server an error.
 10. **Names.** `Node.of`, `NodeClient` / `NodeServer`, `Node.Of<S>`, `NodeSubset`, and whether the
     server protocol layers keep Effect's `…SocketServer` suffix.
 
@@ -2086,7 +2089,7 @@ of them fragments one node into N.
 
 | # | Change | Blocks |
 |---|--------|--------|
-| a | `dialIdentity` normalises to a socket identity (5.5.6) | nothing — plain defect |
+| a | ~~`dialIdentity` normalises to a socket identity (5.5.6)~~ | **done 2026-08-21** |
 | b | `NodeMakeDef` brands `Self` from `Key` (§1.5) | c |
 | c | Delete `Node.Service` + its nine inline-target overloads | — |
 | d | `Store.Service` arity, `.add`, key literal (§1.6) | — |

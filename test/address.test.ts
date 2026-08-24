@@ -49,4 +49,70 @@ describe("Address", () => {
       ]),
     ).not.toThrow();
   });
+
+  it("identity is the socket a dial resolves to, not how it was written", () => {
+    // `nodeMake` derives `http://localhost:<port>/rpc` from a bare port, so these are one listener.
+    const port = Address.dialIdentity(Address.http(8080));
+    expect(Address.dialIdentity(Address.http(":8080"))).toBe(port);
+    expect(Address.dialIdentity(Address.http("http://localhost:8080/rpc"))).toBe(port);
+    expect(Address.dialIdentity(Address.http("http://127.0.0.1:8080/rpc"))).toBe(port);
+  });
+
+  it("a bare port overlaps the loopback url it derives to", () => {
+    expect(() =>
+      Address.assertNoDialOverlap([
+        Address.http(8080),
+        Address.http("http://localhost:8080/rpc"),
+      ]),
+    ).toThrow(Address.DialOverlap);
+  });
+
+  it("bind-any covers loopback on the same port", () => {
+    expect(() =>
+      Address.assertNoDialOverlap([
+        Address.http("http://0.0.0.0:8080/rpc"),
+        Address.http(8080),
+      ]),
+    ).toThrow(Address.DialOverlap);
+  });
+
+  it("bind-any on another port does not overlap", () => {
+    expect(() =>
+      Address.assertNoDialOverlap([
+        Address.http("http://0.0.0.0:8081/rpc"),
+        Address.http(8080),
+      ]),
+    ).not.toThrow();
+  });
+
+  it("http and ws on one port stay distinct — upgrade-on-the-same-server is legitimate", () => {
+    expect(() =>
+      Address.assertNoDialOverlap([
+        Address.http(":8080"),
+        Address.ws("ws://localhost:8080/rpc"),
+      ]),
+    ).not.toThrow();
+  });
+
+  it("a scheme's default port is the port", () => {
+    expect(Address.dialIdentity(Address.http("https://api.acme.com/rpc"))).toBe(
+      Address.dialIdentity(Address.http("https://api.acme.com:443/rpc")),
+    );
+  });
+
+  it("unix paths overlap only when identical", () => {
+    expect(() =>
+      Address.assertNoDialOverlap([
+        Address.unix("A", "/tmp/w.sock"),
+        Address.unix("B", "/tmp/w.sock"),
+      ]),
+    ).toThrow(Address.DialOverlap);
+
+    expect(() =>
+      Address.assertNoDialOverlap([
+        Address.unix("A", "/tmp/a.sock"),
+        Address.unix("B", "/tmp/b.sock"),
+      ]),
+    ).not.toThrow();
+  });
 });
