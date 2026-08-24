@@ -1,3 +1,4 @@
+import { hasBrand } from "./predicates";
 /**
  * Document fields, patches, and fold — no React.
  *
@@ -79,11 +80,7 @@ export type Patch<F extends object = BaseFields, C extends object = Record<never
 };
 
 export const isPatch = (u: unknown): u is Patch<any, any> =>
-  typeof u === "object" &&
-  u !== null &&
-  PatchTypeId in u &&
-  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
-  (u as Patch)[PatchTypeId] === PatchTypeId;
+  typeof u === "object" && hasBrand(u, PatchTypeId);
 
 export const makePatch = <F extends object, C extends object = Record<never, never>>(
   transform: (prev: F) => F,
@@ -147,6 +144,20 @@ export type FoldContribs<Args extends ReadonlyArray<unknown>> =
  *
  * @internal
  */
+/**
+ * Argument-side completeness check for {@link ../Document.provide}: resolves to
+ * `unknown` (intersection identity) when the folded contribs cover the required
+ * keys, else to a diagnostic tuple type that no argument list satisfies.
+ *
+ * @internal
+ */
+export type ProvideArgsComplete<Args extends ReadonlyArray<unknown>> =
+  IsComplete<ProvideRequired, FoldContribs<Args>> extends true ? unknown
+    : {
+        readonly _error: "Document.provide: incomplete";
+        readonly missing: MissingKeys<ProvideRequired, FoldContribs<Args>>;
+      };
+
 export type ProvideResult<
   CellTag,
   Args extends ReadonlyArray<unknown>,
@@ -166,24 +177,27 @@ export const emptyPartial = (): BaseFieldsPartial => ({
   styles: [],
 });
 
+/** Drop undefined-valued keys — the type is unchanged (they were optional). */
+const pruneUndefined = <T extends object>(value: T): T => {
+  const out = { ...value };
+  for (const [key, entry] of Object.entries(out)) {
+    if (entry === undefined) {
+      Reflect.deleteProperty(out, key);
+    }
+  }
+  return out;
+};
+
 export const mergePartial = <F extends BaseFieldsPartial>(
   prev: F,
   next: Partial<F>,
-): F => {
-  const out: Record<string, unknown> = { ...prev };
-  // SAFE: Object.keys replays next's own keys.
-  for (const key of Object.keys(next) as Array<keyof F>) {
-    const value = next[key];
-    if (value !== undefined) {
-      // SAFE: writing a known key of F into the accumulating record.
-      out[key as string] = value;
-    }
-  }
-  // SAFE: out replays next's own keys — same shape, undefined entries dropped.
-  return out as F;
-};
+): F => ({ ...prev, ...pruneUndefined(next) });
 
 export type ProvideArg<F extends object> = Patch<F> | Partial<F>;
+
+/** Union dispatch by the patch brand — sound narrowing of an already-typed union. */
+const isPatchArg = <F extends object>(u: Patch<F> | Partial<F>): u is Patch<F> =>
+  isPatch(u);
 
 export const foldArgs = <F extends BaseFieldsPartial>(
   initial: F,
@@ -191,13 +205,7 @@ export const foldArgs = <F extends BaseFieldsPartial>(
 ): F => {
   let acc = initial;
   for (const arg of args) {
-    if (isPatch(arg)) {
-      // SAFE: a transform patch maps the accumulated fields bag; F is threaded through.
-      acc = arg.transform(acc as never) as F;
-    } else {
-      // SAFE: non-fn provide arg is a fields partial per ProvideArg.
-      acc = mergePartial(acc, arg as Partial<F>);
-    }
+    acc = isPatchArg<F>(arg) ? arg.transform(acc) : mergePartial(acc, arg);
   }
   return acc;
 };
@@ -225,8 +233,7 @@ export const finalizeFields = <F extends BaseFieldsPartial>(
     links: folded.links ?? [],
     scripts: folded.scripts ?? [],
     styles: folded.styles ?? [],
-  // SAFE: assembled field-by-field just above from Base + Extras defaults.
-  } as CompleteFields<F>;
+  };
 };
 
 /** Mutable cell for Page.document merges (Effect + React bridge). @internal */

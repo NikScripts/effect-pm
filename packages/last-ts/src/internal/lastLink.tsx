@@ -7,11 +7,15 @@
  *
  * @internal
  */
+import * as errors from "./errors";
 import * as React from "react";
 import { Context, Layer } from "effect";
+import * as Predicate from "effect/Predicate";
 import * as Router from "../Router";
 import * as linkRender from "./linkRender";
+import { booleanOrUndefined, getProp, stringOrUndefined } from "./predicates";
 import {
+  callUrlMethod,
   type ApiConstraint,
   type ToHref,
   type UrlBuilder,
@@ -60,16 +64,27 @@ const buildHrefFromParams = (
   const pathArgs = keys.map((key) => {
     const value = props[key];
     if (typeof value !== "string") {
-      throw new Error(`Last.link: missing path param "${key}"`);
+      throw new errors.MissingPathParam({ key });
     }
     return value;
   });
-  // SAFE: loose prop-record read pinned back to the UrlQueryOptions contract.
-  const query = props.query as UrlQuery | undefined;
+  // Runtime-validated read: only a string-valued record is forwarded as ?query pairs.
+  const query = queryRecordOrUndefined(props.query);
   if (query !== undefined) {
-    return method(...pathArgs, { query });
+    return callUrlMethod(method, [...pathArgs, { query }]);
   }
-  return method(...pathArgs);
+  return callUrlMethod(method, pathArgs);
+};
+
+const queryRecordOrUndefined = (u: unknown): UrlQuery | undefined => {
+  if (typeof u !== "object" || u === null || Array.isArray(u)) return undefined;
+  const out: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(u)) {
+    if (typeof value === "string" || value === undefined) {
+      out[key] = value;
+    }
+  }
+  return out;
 };
 
 type AnchorProps = {
@@ -89,13 +104,10 @@ const LinkedAnchor = (props: {
   readonly layer?: Layer.Layer<unknown, never, never>;
 }): React.ReactElement => {
   const router = Router.useRouter();
-  return linkRender.useRenderLink(
-    props.linkProps,
-    // SAFE: loose view of the installed router's typed builder — same runtime record.
-    router.urls as UrlBuilderLoose,
-    router,
-    props.layer,
-  );
+  // `useRouter()` with no type argument defaults `A = ApiConstraint`, and `UrlBuilder<A>`'s
+  // conditional resolves to `UrlBuilderLoose` for that default — `router.urls` is already
+  // this type, no cast needed.
+  return linkRender.useRenderLink(props.linkProps, router.urls, router, props.layer);
 };
 
 const wrapWithLink = (
@@ -203,6 +215,28 @@ const splitProps = (
   return { componentProps, linkRest };
 };
 
+const ARIA_CURRENT_VALUES: ReadonlySet<string> = new Set([
+  "page",
+  "step",
+  "location",
+  "date",
+  "time",
+  "true",
+  "false",
+]);
+
+const ariaCurrentOrUndefined = (
+  u: unknown,
+): React.AriaAttributes["aria-current"] => {
+  if (typeof u === "boolean") return u;
+  if (typeof u === "string" && ARIA_CURRENT_VALUES.has(u)) {
+    // Erasure seam: `ARIA_CURRENT_VALUES.has` confirms `u` is one of the finite aria-current
+    // string literals; `Set<string>.has` doesn't itself narrow to the literal union.
+    return u as "page" | "step" | "location" | "date" | "time" | "true" | "false";
+  }
+  return undefined;
+};
+
 const renderLinked = (
   mode: Mode,
   props: Record<string, unknown>,
@@ -210,18 +244,16 @@ const renderLinked = (
   layer?: Layer.Layer<unknown, never, never>,
 ): React.ReactElement => {
   const common = {
-    // SAFE (this block): loose prop-record reads pinned back to the LinkOpts contract.
-    className: props.className as string | undefined,
-    title: props.title as string | undefined,
-    replace: props.replace as boolean | undefined,
-    // SAFE (these four): loose prop-record reads pinned back to the LinkOpts contract.
-    "data-kind": props["data-kind"] as string | undefined,
-    onClick: props.onClick as
-      | React.MouseEventHandler<HTMLAnchorElement>
-      | undefined,
-    "aria-current": props["aria-current"] as
-      | React.AriaAttributes["aria-current"]
-      | undefined,
+    className: stringOrUndefined(props.className),
+    title: stringOrUndefined(props.title),
+    replace: booleanOrUndefined(props.replace),
+    "data-kind": stringOrUndefined(props["data-kind"]),
+    // Erasure seam: `Predicate.isFunction` confirms callability; the exact event-handler
+    // signature stays a compile-time-only contract no runtime check can verify further.
+    onClick: Predicate.isFunction(props.onClick)
+      ? (props.onClick as React.MouseEventHandler<HTMLAnchorElement>)
+      : undefined,
+    "aria-current": ariaCurrentOrUndefined(props["aria-current"]),
   };
 
   switch (mode._tag) {
@@ -236,26 +268,34 @@ const renderLinked = (
         return wrapWithLink(body, { ...common, out }, layer);
       }
       if (mode.allowTo && to !== undefined && to !== null) {
+        if (typeof to !== "string" && typeof to !== "function") {
+          throw new errors.InvariantViolated({
+            what: "Last.link `to` prop must be a string or a function",
+          });
+        }
         return wrapWithLink(
           body,
           {
             ...common,
-            // SAFE: loose view of the typed `to` — literal hrefs widen to string.
+            // Erasure seam: loose view of the typed `to` — literal hrefs widen to string;
+            // the runtime check above already confirmed the string/function shape.
             to: to as string | ((urls: UrlBuilderLoose) => string),
           },
           layer,
         );
       }
-      throw new Error("Last.link: pass to or out");
+      throw new errors.LinkTargetMissing();
     }
     case "attrGroup": {
       const to = props.to;
       if (typeof to !== "function") {
-        throw new Error(
-          "Last.link: group-narrowed link expects to={(group) => …}",
-        );
+        throw new errors.InvariantViolated({
+          what: "Last.link group-narrowed link expects to={(group) => …}",
+        });
       }
-      // SAFE: mode 'group' is only built from a function `to` (see Mode construction above).
+      // Erasure seam: mode 'group' is only built from a function `to` (see Mode construction
+      // above); the typeof check confirms `to` is callable, its parameter/return shape stays
+      // a compile-time-only contract.
       const href = (to as (g: UrlBuilderLoose) => string)(mode.group);
       return wrapWithLink(body, { ...common, to: href }, layer);
     }
@@ -268,18 +308,11 @@ const renderLinked = (
 
 const isComponent = (u: unknown): u is AnyComponent =>
   typeof u === "function" ||
-  (typeof u === "object" &&
-    u !== null &&
-    // SAFE: inside the guard — `in` probe on a non-null object.
-    "$$typeof" in (u as object));
+  (typeof u === "object" && u !== null && getProp(u, "$$typeof") !== undefined);
 
 const isContextKey = (u: unknown): u is Context.Key<any, any> =>
   Context.isKey(u) ||
-  (typeof u === "function" &&
-    u !== null &&
-    "key" in u &&
-    // SAFE: inside the guard that proves the shape — the typeof check IS the validation.
-    typeof (u as { readonly key: unknown }).key === "string");
+  (typeof u === "function" && typeof getProp(u, "key") === "string");
 
 /** Props for a wrapped component or View/Service render fn. */
 export type PropsOfLinked<C> = C extends React.ComponentType<infer P extends object>
@@ -357,57 +390,57 @@ export const link: {
   const Component = isComponent(second) ? second : undefined;
   let opts: LinkOpts<any> | undefined;
   let layer: Layer.Layer<unknown, never, never> | undefined;
-  // Boolean guards (not inline narrows): keep `third` / `fourth` as `unknown` at the cast
-  // sites, so the unknown-channel Layer type from `isLayer`'s predicate never lands in a
-  // typed position. SAFE: an overload-checked kit Layer is stored erased; it is only
-  // Layer.built into the ambient link context.
-  const thirdIsLayer: boolean = Layer.isLayer(third);
-  const fourthIsLayer: boolean = Layer.isLayer(fourth);
+  // `Layer.isLayer` real-narrows to `Layer<unknown, unknown, unknown>` — its E/R stay
+  // `unknown` (the runtime brand carries no phantom info), so the link contract's `never,
+  // never` is a compile-time-only promise the overloads above already checked.
   if (Component !== undefined) {
-    if (thirdIsLayer) {
+    if (Layer.isLayer(third)) {
       opts = undefined;
-      // SAFE: guarded by thirdIsLayer above; stored erased (see note).
       layer = third as Layer.Layer<unknown, never, never>;
     } else {
-      // SAFE: overload contract — non-layer third is the options bag.
+      // Erasure seam: overload contract — non-layer third is the options bag.
       opts = third as LinkOpts<any> | undefined;
-      layer = fourthIsLayer
-        // SAFE: guarded by fourthIsLayer above; stored erased (see note).
+      layer = Layer.isLayer(fourth)
         ? (fourth as Layer.Layer<unknown, never, never>)
         : undefined;
     }
-  } else if (thirdIsLayer) {
-    // SAFE: overload contract — with a layer third, second is the options bag.
+  } else if (Layer.isLayer(third)) {
+    // Erasure seam: overload contract — with a layer third, second is the options bag.
     opts = second as LinkOpts<any>;
-    // SAFE: guarded by thirdIsLayer above; stored erased (see note).
     layer = third as Layer.Layer<unknown, never, never>;
   } else {
-    // SAFE: overload contract — remaining arg shape is the options bag.
+    // Erasure seam: overload contract — remaining arg shape is the options bag.
     opts = second as LinkOpts<any> | undefined;
   }
   const resolvedOpts: LinkOpts<any> = opts ?? { to: true };
 
   const Linked = (props: Record<string, unknown>): React.ReactElement => {
     const router = Router.useRouter();
-    const mode = resolveMode(
-      // SAFE: loose view of the installed router's typed builder — same runtime record.
-      router.urls as UrlBuilderLoose,
-      resolvedOpts,
-    );
+    // See the note on `LinkedAnchor` above — `router.urls` is already `UrlBuilderLoose`
+    // for the default `A = ApiConstraint`, no cast needed.
+    const mode = resolveMode(router.urls, resolvedOpts);
     const hasComponent = Component !== undefined;
     const { componentProps, linkRest } = splitProps(mode, props, hasComponent);
 
     let body: React.ReactNode = hasComponent
       ? undefined
-      // SAFE: non-component branch — children flow through as plain ReactNode.
+      // Erasure seam: non-component branch — children flow through as plain ReactNode;
+      // ReactNode's structure is too broad for a meaningful runtime check.
       : (props.children as React.ReactNode);
 
     if (Component !== undefined) {
-      const resolved = isContextKey(Component)
-        ? Context.get(lastContext.useEffectContext(), Component)
+      const resolved: unknown = isContextKey(Component)
+        ? Context.get(
+            lastContext.useEffectContext(),
+            // Erasure seam: isContextKey confirmed `Component` carries a Context.Key brand,
+            // but its real Identifier isn't known here — Context.get requires `never` against
+            // the ambient `Context<never>`.
+            Component as unknown as Context.Key<never, unknown>,
+          )
         : Component;
       body = React.createElement(
-        // SAFE: isComponent guarded this value; the loose prop record is the render contract.
+        // Erasure seam: isComponent/isContextKey guarded this value; the loose prop record
+        // is the render contract (typed props are HandlerForEndpoint's concern, not this loop).
         resolved as React.ComponentType<Record<string, unknown>>,
         componentProps,
       );
@@ -422,5 +455,8 @@ export const link: {
   };
   Linked.displayName = "Last.link";
   return Linked;
-// SAFE: never-erased impl behind the typed link overloads above — they are the contract.
+// Erasure seam: never-erased impl behind the typed link overloads above — they are the
+// contract; the impl's `unknown` parameters are structurally compatible with every overload's
+// concrete parameter types (contravariance), so this is the one cast the overload/impl split
+// requires (matches Effect's own overloaded-function pattern, e.g. HttpApiBuilder.handle).
 }) as typeof link;

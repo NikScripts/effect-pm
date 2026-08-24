@@ -28,17 +28,15 @@ const queryFromSearch = (search: string): Record<string, string> => {
 
 const toNode = (
   value: React.ReactNode | React.ComponentType<Record<string, never>>,
-  args: Route.HandleArgs,
 ): React.ReactNode => {
   if (value === null || value === undefined || typeof value === "boolean") {
     return null;
   }
   if (typeof value === "function") {
-    return React.createElement(
-      // SAFE: legacy zero-prop components ignore extra args; HandleArgs is the render contract.
-      value as unknown as React.ComponentType<Route.HandleArgs>,
-      args,
-    );
+    // The union types this as a zero-prop component, so it is rendered with zero
+    // props — a component that wants HandleArgs comes through the handler registry
+    // (HandlerRuntime.Page), not through an Effect success.
+    return React.createElement(value);
   }
   return value;
 };
@@ -64,17 +62,14 @@ const PageEffectView = (props: {
               props.onOverride();
             },
           }),
-        // SAFE: Request + Override provided above discharge the page effect's requirements;
-        ) as Effect.Effect<
-          React.ReactNode | React.ComponentType<Record<string, never>>
-        >,
+        ),
       ),
     // Rematch when the location identity changes.
     [runtime, props.effect, props.request.href],
   );
   const result = AtomReact.useAtomValue(atom);
   if (AsyncResult.isSuccess(result)) {
-    const node = toNode(result.value, props.args);
+    const node = toNode(result.value);
     if (node === null || node === undefined || typeof node === "boolean") {
       return null;
     }
@@ -123,14 +118,14 @@ const MatchedBody = (props: {
       } else if (h._tag === "PageElement") {
         body = h.element;
       } else {
-        body = React.createElement(PageEffectWithLayout, {
+        const el = React.createElement(PageEffectWithLayout, {
           effect: h.effect,
           request: props.request,
           args,
           groupLayout,
         });
-        // SAFE: guarded by isValidElement just above.
-        return body as React.ReactElement;
+        body = el;
+        return el;
       }
     }
   }
@@ -185,8 +180,7 @@ const PageEffectWithLayout = (props: {
 export const Outlet = (props: {
   readonly router: Service;
 }): React.ReactElement | null => {
-  // SAFE: the router's match is this catalog's Match; Service erases the generics.
-  const match = props.router.match as Match | undefined;
+  const match = props.router.match;
   if (match === undefined) return null;
 
   const request: pageServices.RequestValue = {

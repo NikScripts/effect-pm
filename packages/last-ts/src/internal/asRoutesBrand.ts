@@ -29,7 +29,8 @@ export type AsRoutesEffect<Items = never> = Effect.Effect<
   never
 > &
   AsRoutesBrand & {
-    readonly [AsRoutesItems]: Items;
+    /** Phantom — optional so runtime values simply omit it. */
+    readonly [AsRoutesItems]?: Items;
   };
 
 export const isAsRoutesBrand = (u: unknown): u is AsRoutesBrand =>

@@ -39,7 +39,9 @@ export declare const PageTypeId: unique symbol;
  * @internal
  */
 export type Page = Schema.Top & {
-  readonly [PageTypeId]: typeof PageTypeId;
+  /** Phantom brand — optional so the runtime schema simply omits it; the real
+   *  discriminator is the `~lastTsPage` annotation ({@link isPageSchema}). */
+  readonly [PageTypeId]?: typeof PageTypeId;
 };
 
 /**
@@ -49,8 +51,7 @@ export type Page = Schema.Top & {
  */
 export const Page: Page = Schema.String.annotate({
   "~lastTsPage": true,
-// SAFE: the annotation IS the Page brand; asText only re-skins the string schema.
-}).pipe(HttpApiSchema.asText({ contentType: "text/html" })) as unknown as Page;
+}).pipe(HttpApiSchema.asText({ contentType: "text/html" }));
 
 /** @internal */
 export const isPageSchema = (schema: Schema.Top): boolean =>
@@ -78,6 +79,11 @@ export const isPageEndpoint = (
  */
 export type PageEndpointBrand = {
   readonly "~lastTsPageEndpoint": true;
+};
+
+/** The runtime stamp for {@link PageEndpointBrand} — brands are real properties here. */
+export const pageEndpointBrand: PageEndpointBrand = {
+  "~lastTsPageEndpoint": true,
 };
 
 /** @internal */

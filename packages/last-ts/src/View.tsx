@@ -162,7 +162,7 @@ export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _A>
   ? Props
   : T extends { readonly Service: ViewFn<infer P> }
     ? P
-    : T extends { readonly Type: infer P extends object }
+    : T extends { readonly Type?: infer P extends object }
       ? P
       : never;
 
@@ -265,8 +265,8 @@ export interface ViewStamps<
 > {
   readonly [annotationsSym]: Annotations;
   readonly [kindSym]: typeof kind;
-  /** Phantom — component props. */
-  readonly Type: Props;
+  /** Phantom — component props. Optional so the runtime object simply omits it. */
+  readonly Type?: Props;
 }
 
 /** Required View handle — {@link Context.Service}. @public */
@@ -288,7 +288,7 @@ export type ViewHandleDefault<
  *
  * @public
  */
-export type Type<T> = T extends { readonly Type: infer P } ? P : never;
+export type Type<T> = T extends { readonly Type?: infer P extends object } ? P : never;
 
 /**
  * Props + annotations + an R-style **Requirement** type param (open until discharged).
@@ -325,16 +325,25 @@ export interface Prototype<
   readonly Prototype: <
     NewProps extends object = Record<never, never>,
     NewRequirement extends AnyAnnotations = Record<never, never>,
-  >() => <const NewAnnotations extends AnyAnnotations = Record<never, never>>(
-    annotations?: NewAnnotations,
-  ) => Prototype<
-    Flat<Props & NewProps>,
-    NextRequirement<
-      MergeRequirement<Requirement, NewRequirement>,
+  >() => {
+    // No-annotations step: the bag is unchanged (the optional-argument↔generic-default
+    // correlation is written out as overloads so no erasure is needed anywhere).
+    (): Prototype<
+      Flat<Props & NewProps>,
+      NextRequirement<MergeRequirement<Requirement, NewRequirement>, Annotations>,
+      Annotations
+    >;
+    <const NewAnnotations extends AnyAnnotations>(
+      annotations: NewAnnotations,
+    ): Prototype<
+      Flat<Props & NewProps>,
+      NextRequirement<
+        MergeRequirement<Requirement, NewRequirement>,
+        Flat<Annotations & NewAnnotations>
+      >,
       Flat<Annotations & NewAnnotations>
-    >,
-    Flat<Annotations & NewAnnotations>
-  >;
+    >;
+  };
   /**
    * Mint a View handle (Effect v4 naming).
    *
@@ -377,61 +386,82 @@ const makePrototype = <
   bag: Annotations,
 ): Prototype<Props, Requirement, Annotations> => ({
   annotations: bag,
-  Prototype:
-    <NewProps extends object = Record<never, never>, NewRequirement extends AnyAnnotations = Record<never, never>>() =>
-    <const NewAnnotations extends AnyAnnotations = Record<never, never>,>(next?: NewAnnotations) => {
-      type NextProps = Flat<Props & NewProps>;
-      type NextAnnotations = Flat<Annotations & NewAnnotations>;
-      type NextReq = NextRequirement<
+  Prototype: <
+    NewProps extends object = Record<never, never>,
+    NewRequirement extends AnyAnnotations = Record<never, never>,
+  >() => {
+    type NextProps = Flat<Props & NewProps>;
+    function step(): Prototype<
+      NextProps,
+      NextRequirement<MergeRequirement<Requirement, NewRequirement>, Annotations>,
+      Annotations
+    >;
+    function step<const NewAnnotations extends AnyAnnotations>(
+      next: NewAnnotations,
+    ): Prototype<
+      NextProps,
+      NextRequirement<
         MergeRequirement<Requirement, NewRequirement>,
-        NextAnnotations
-      >;
-      return makePrototype<NextProps, NextReq, NextAnnotations>({
-        ...bag,
-        // SAFE: omitted annotations mean NewAnnotations inferred its default (empty bag);
-        // {} is that value. Pure optional-generic defaulting, nothing to validate.
-        ...(next ?? ({} as NewAnnotations)),
-      });
-    },
-  Service: ((<Self, NewProps extends object = Record<never, never>>() =>
-    (key: string, second?: unknown, third?: unknown) => {
-      type NextProps = Flat<Props & NewProps>;
+        Flat<Annotations & NewAnnotations>
+      >,
+      Flat<Annotations & NewAnnotations>
+    >;
+    function step(next?: AnyAnnotations): unknown {
+      return makePrototype({ ...bag, ...(next ?? {}) });
+    }
+    return step;
+  },
+  Service: <Self, NewProps extends object = Record<never, never>>() => {
+    type NextProps = Flat<Props & NewProps>;
+    function mint<
+      const K extends string,
+      const NewAnnotations extends AnyAnnotations = Record<never, never>,
+    >(
+      key: K,
+      defaultView: ViewFn<NextProps>,
+      annotations?: NewAnnotations,
+    ): ViewHandleDefault<NextProps, Flat<Annotations & NewAnnotations>>;
+    function mint<
+      const K extends string,
+      const NewAnnotations extends AnyAnnotations = Record<never, never>,
+    >(
+      key: K,
+      annotations?: NewAnnotations,
+    ): ViewHandle<Self, K, NextProps, Flat<Annotations & NewAnnotations>>;
+    function mint(
+      key: string,
+      second?: ViewFn<NextProps> | AnyAnnotations,
+      third?: AnyAnnotations,
+    ): unknown {
+      // Runtime narrowing fills the overload gap: a function second argument is the
+      // default view, an object one is the annotations bag.
       let defaultView: ViewFn<NextProps> | undefined;
       let extra: AnyAnnotations = {};
       if (typeof second === "function") {
-        // SAFE: erased overload impl — the typed Prototype["Service"] contract above already
-        // pinned this arg as ViewFn<NextProps>; the runtime guard re-checks it is a function.
-        defaultView = second as ViewFn<NextProps>;
-        if (third !== undefined && typeof third === "object" && third !== null) {
-          // SAFE: guarded non-null object; the contract typed it as the annotations bag.
-          extra = third as AnyAnnotations;
+        defaultView = second;
+        if (third !== undefined) {
+          extra = third;
         }
-      } else if (
-        second !== undefined &&
-        typeof second === "object" &&
-        second !== null
-      ) {
-        // SAFE: guarded non-null object; the contract typed it as the annotations bag.
-        extra = second as AnyAnnotations;
+      } else if (second !== undefined) {
+        extra = second;
       }
       const merged = { ...bag, ...extra };
       const stamped = {
         [annotationsSym]: merged,
         [kindSym]: kind,
-        // SAFE: phantom props stamp — never read at runtime, only its type is.
-        Type: undefined as unknown as NextProps,
       };
       if (defaultView !== undefined) {
+        const view = defaultView;
         const base = Context.Reference(key, {
-          defaultValue: () => defaultView,
+          defaultValue: () => view,
         });
         return Object.assign(base, stamped);
       }
       const base = Context.Service<Self, ViewFn<NextProps>>()(key);
       return Object.assign(base, stamped);
-    // SAFE: never-erased impl behind the typed Service contract of the Prototype interface;
-    // the overloads above are the source of truth. No runtime value to validate.
-    }) as Prototype<Props, Requirement, Annotations>["Service"]),
+    }
+    return mint;
+  },
 });
 
 /**
@@ -440,19 +470,24 @@ const makePrototype = <
  *
  * @public
  */
-export const Prototype =
-  <Props extends object = Record<never, never>, Requirement extends AnyAnnotations = Record<never, never>>() =>
-  <const Annotations extends AnyAnnotations = Record<never, never>>(
-    annotations?: Annotations,
-  ): Prototype<
-    Props,
-    NextRequirement<Requirement, Annotations>,
-    Annotations
-  > =>
-    makePrototype<Props, NextRequirement<Requirement, Annotations>, Annotations>(
-      // SAFE: omitted annotations mean Annotations inferred its default (empty bag).
-      (annotations ?? {}) as Annotations,
-    );
+export const Prototype = <
+  Props extends object = Record<never, never>,
+  Requirement extends AnyAnnotations = Record<never, never>,
+>(): {
+  (): Prototype<Props, Requirement, Record<never, never>>;
+  <const Annotations extends AnyAnnotations>(
+    annotations: Annotations,
+  ): Prototype<Props, NextRequirement<Requirement, Annotations>, Annotations>;
+} => {
+  function start(): Prototype<Props, Requirement, Record<never, never>>;
+  function start<const Annotations extends AnyAnnotations>(
+    annotations: Annotations,
+  ): Prototype<Props, NextRequirement<Requirement, Annotations>, Annotations>;
+  function start(annotations?: AnyAnnotations): unknown {
+    return makePrototype(annotations ?? {});
+  }
+  return start;
+};
 
 /**
  * View service handle — Effect v4 `Context.Service` / `Context.Reference`.

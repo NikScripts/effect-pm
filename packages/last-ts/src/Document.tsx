@@ -9,10 +9,12 @@
  */
 "use client";
 
+import { hasBrand } from "./internal/predicates";
 import * as React from "react";
 import { Context, Effect, Layer } from "effect";
 import * as core from "./internal/documentCore";
 import * as docReact from "./internal/documentReact";
+import * as errors from "./internal/errors";
 
 export type DocumentMeta = core.DocumentMeta;
 export type DocumentLink = core.DocumentLink;
@@ -44,6 +46,12 @@ export type AnyDocument<Extras extends object = Record<never, never>> = {
 
 const identityTitle = (title: string): string => title;
 
+/** The minted document class: abstract-constructable and branded. @public */
+export type Handle<Extras extends object = Record<never, never>> = (abstract new (
+  _: never,
+) => Record<never, never>) &
+  AnyDocument<Extras>;
+
 /**
  * Mint a Document — Effect → head children; fields via {@link Fields}.
  *
@@ -54,7 +62,7 @@ export const make =
   (
     key: string,
     render: Effect.Effect<React.ReactNode, never, Fields>,
-  ): (abstract new (_: never) => Record<never, never>) & AnyDocument<Extras> => {
+  ): Handle<Extras> => {
     const Head = docReact.makeHeadComponent(render);
     const Doc = class {
       static readonly [DocumentTypeId] = DocumentTypeId;
@@ -63,18 +71,11 @@ export const make =
       static readonly Head = Head;
       declare static readonly "~last-ts/Document/fields": FieldsOf<Extras>;
     };
-    // SAFE: class-factory erasure — the statics assembled above ARE the AnyDocument shape;
-    // TS cannot compose the abstract-constructor intersection from the build.
-    return Doc as unknown as (abstract new (_: never) => Record<never, never>) &
-      AnyDocument<Extras>;
+    return Doc;
   };
 
 const isDocumentClass = (u: unknown): u is AnyDocument =>
-  typeof u === "function" &&
-  u !== null &&
-  DocumentTypeId in u &&
-  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
-  (u as unknown as AnyDocument)[DocumentTypeId] === DocumentTypeId;
+  typeof u === "function" && hasBrand(u, DocumentTypeId);
 
 /** Package default Document. @public */
 export class Default extends make()(
@@ -155,26 +156,30 @@ export const Head: Context.Reference<React.FC> = Context.Reference(
  *
  * @public
  */
-export const transform: {
-  <F extends object, C extends object = Record<never, never>>(
-    fn: (prev: F) => F,
-  ): Patch<F, C>;
-  <D extends AnyDocument<any>, C extends object = Record<never, never>>(
-    doc: D,
-    fn: (prev: D["~last-ts/Document/fields"]) => D["~last-ts/Document/fields"],
-  ): Patch<D["~last-ts/Document/fields"], C>;
-} = ((
-  first: ((prev: any) => any) | AnyDocument,
-  second?: (prev: any) => any,
-): Patch<any, any> => {
-  if (typeof first === "function" && !isDocumentClass(first) && second === undefined) {
-    // SAFE: guarded to a bare function; the overloads above pinned its real signature.
-    return core.makePatch(first as (prev: any) => any);
+export function transform<F extends object, C extends object = Record<never, never>>(
+  fn: (prev: F) => F,
+): Patch<F, C>;
+export function transform<
+  D extends AnyDocument<any>,
+  C extends object = Record<never, never>,
+>(
+  doc: D,
+  fn: (prev: D["~last-ts/Document/fields"]) => D["~last-ts/Document/fields"],
+): Patch<D["~last-ts/Document/fields"], C>;
+export function transform<F extends object>(
+  first: ((prev: F) => F) | AnyDocument,
+  second?: (prev: F) => F,
+): Patch<F, Record<never, never>> {
+  // Runtime narrowing fills the overload gap: a bare function is the one-arg form; a
+  // Document class routes the two-arg form. Anything else fails loudly below.
+  if (typeof first === "function" && !isDocumentClass(first)) {
+    return core.makePatch(first);
   }
-  // SAFE: in the two-arg overload `second` is the transform fn per the contract above.
-  return core.makePatch(second as (prev: any) => any);
-  // SAFE: erased impl behind the typed overloads — they are the source of truth.
-}) as typeof transform;
+  if (second === undefined) {
+    throw new errors.DocumentTransformArguments();
+  }
+  return core.makePatch(second);
+}
 
 /** @public */
 export const title = (
@@ -276,14 +281,11 @@ export const makeCell = (
  */
 export const provide = <const Args extends ReadonlyArray<ProvideArg>>(
   doc: AnyDocument<any>,
-  ...args: Args
-): core.ProvideResult<Cell, Args> =>
-  // SAFE: ProvideResult only refines the Layer error channel by Args at the type level;
-  // makeCell performs the actual runtime validation (throws on missing title).
-  Layer.succeed(Cell, makeCell(doc, ...args)) as core.ProvideResult<
-    Cell,
-    Args
-  >;
+  // Completeness is checked on the arguments (where the mistake is): an incomplete fold
+  // makes the intersection unsatisfiable and surfaces the missing keys in the error.
+  // makeCell re-checks at runtime and throws DocumentTitleMissing.
+  ...args: Args & core.ProvideArgsComplete<Args>
+): Layer.Layer<Cell> => Layer.succeed(Cell, makeCell(doc, ...args));
 
 export {
   Provider as FieldsProvider,

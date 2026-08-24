@@ -36,7 +36,6 @@
  * @see docs/handoffs/ui-routes-dream.md
  */
 import * as Context from "effect/Context";
-import { dual } from "effect/Function";
 import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
@@ -44,6 +43,7 @@ import type { ReactNode } from "react";
 import type * as pageModule from "./Page";
 import * as pageMint from "./internal/pageMint";
 import * as endpoint from "./internal/route";
+import * as errors from "./internal/errors";
 import * as fileRouter from "./internal/fileRouter";
 import * as catalog from "./internal/routes";
 
@@ -117,15 +117,26 @@ export class Handler extends Context.Service<Handler, Handle>()(
  *
  * @public
  */
-export const handle: {
-  (fn: Handle): <E extends Constraint>(self: E) => E;
-  <E extends Constraint>(self: E, fn: Handle): E;
-} = dual(2, <E extends Constraint>(self: E, fn: Handle): E =>
-  // SAFE: Constraint.annotate erases to Constraint but returns the same endpoint shape with
-  // one annotation added; restating E preserves the caller's typed catalog. No runtime value
-  // beyond the endpoint itself to validate.
-  self.annotate(Handler, fn) as E,
-);
+export function handle(fn: Handle): <E extends Constraint>(self: E) => E;
+export function handle<E extends Constraint>(self: E, fn: Handle): E;
+export function handle(
+  first: Handle | Constraint,
+  second?: Handle,
+): unknown {
+  // Runtime dispatch by the endpoint brand (endpoints are functions at runtime, so a
+  // `typeof` probe cannot tell them from a render fn).
+  if (isEndpoint(first)) {
+    if (second === undefined) {
+      throw new errors.InvariantViolated({
+        what: "Route.handle(endpoint) requires a render function",
+      });
+    }
+    // The overloads promise `E` back: `annotate` returns the same endpoint value with
+    // one annotation added, so the caller's typed catalog is preserved.
+    return first.annotate(Handler, second);
+  }
+  return <E extends Constraint>(self: E) => handle(self, first);
+}
 
 /**
  * Read {@link Handler} from a match (if the destination used {@link handle}).
@@ -225,13 +236,20 @@ export const prefix = <E extends Constraint>(
  *
  * @public
  */
-export const annotate = <E extends Constraint, I, S>(
+export function annotate<E extends Constraint, I, S>(
   self: E,
   tag: Context.Key<I, S>,
   value: S,
-): E =>
-  // SAFE: same erasure as `handle` above — annotate preserves the endpoint's shape.
-  self.annotate(tag, value) as E;
+): E;
+export function annotate(
+  self: Constraint,
+  tag: Context.Key<unknown, unknown>,
+  value: unknown,
+): unknown {
+  // The overload promises `E` back: `annotate` returns the same endpoint value with one
+  // annotation added, so the caller's typed catalog is preserved.
+  return self.annotate(tag, value);
+}
 
 /** Join two absolute path templates. @public */
 export const joinPath: (prefix: Path | "/", path: Path | "/") => Path =

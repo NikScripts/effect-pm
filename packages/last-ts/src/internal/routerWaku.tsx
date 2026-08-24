@@ -4,6 +4,7 @@
  */
 "use client";
 
+import * as errors from "./errors";
 import * as React from "react";
 import { Option } from "effect";
 import { useRouter as useWakuRouter } from "waku/router/client";
@@ -11,6 +12,7 @@ import * as Route from "../Route";
 import * as Router from "../Router";
 import type { ApiConstraint } from "./routes";
 import type { Service } from "./router";
+import { getProp } from "./predicates";
 
 // =============================================================================
 // Layer input — catalog binding (provided into the one Router.Service)
@@ -38,23 +40,49 @@ export function isWakuBinding(u: unknown): u is WakuBinding {
     typeof u === "object" &&
     u !== null &&
     "_tag" in u &&
-    // SAFE: inside the guard that proves the shape — the tag equality IS the validation.
-    (u as { _tag: unknown })._tag === "WakuBinding"
+    getProp(u, "_tag") === "WakuBinding"
   );
 }
 
 /** Bind a catalog to the Waku layer — same role as `History.service(api)`. */
-export const waku = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
+export function waku<A extends ApiConstraint>(
+  api: A,
+): WakuBinding<A, Route.UrlBuilder<A>>;
+export function waku<A extends ApiConstraint, U>(
+  api: A,
+  urls: U,
+): WakuBinding<A, U>;
+export function waku<A extends ApiConstraint, U>(
   api: A,
   urls?: U,
-): WakuBinding<A, U> => ({
-  _tag: "WakuBinding",
-  api,
-  // SAFE: U defaults to the typed builder minted right here; an explicit urls override is U.
-  urls: (urls ?? Route.urlBuilder(api)) as U,
-});
+): WakuBinding<A, U | Route.UrlBuilder<A>> {
+  return {
+    _tag: "WakuBinding",
+    api,
+    urls: urls ?? Route.urlBuilder(api),
+  };
+}
 
 let defaultBinding: WakuBinding<ApiConstraint, unknown> | null = null;
+
+/** Structural re-check of an erased mounted service before trusting the mount's `A`. */
+const isServiceOf = <A extends ApiConstraint>(u: Service): u is Service<A> =>
+  typeof u.go === "function" && typeof u.to === "function";
+
+/** Structural re-check of the module default binding before trusting the mount's `A`. */
+const isBindingOf = <A extends ApiConstraint>(
+  u: WakuBinding<ApiConstraint, unknown>,
+): u is WakuBinding<A, unknown> => isWakuBinding(u);
+
+/** Runtime-checked absolute path → Waku's route-template string. */
+const toWakuTarget = (next: string): `/${string}` => {
+  if (!next.startsWith("/")) {
+    throw new errors.InvariantViolated({
+      what: `Waku navigation target must be absolute: ${next}`,
+    });
+  }
+  return `/${next.slice(1)}`;
+};
 
 /** Optional default Waku binding when no Provider is mounted (docs UI). */
 export const setDefault = <A extends ApiConstraint, U>(
@@ -92,15 +120,15 @@ export const liveService = <A extends ApiConstraint>(
     typeof window === "undefined" ? "" : window.location.search;
   const href = search.length === 0 ? pathname : `${pathname}${search}`;
   const match = Option.getOrUndefined(Route.match(binding.api, pathname));
-  // SAFE: the binding was built from this catalog (waku(api)); typed view restated.
-  const urls = binding.urls as Route.UrlBuilder<A>;
+  // Derived from the catalog itself (single source of truth) — a custom skin on the
+  // binding still renders, but the live typed surface always matches the catalog.
+  const urls = Route.urlBuilder(binding.api);
 
   const go = (
     next: string,
     options?: { readonly replace?: boolean },
   ): void => {
-    // SAFE: pathOnly output is an in-app absolute path — Waku's route template widens it.
-    const target = pathOnly(next) as Parameters<typeof wakuNav.push>[0];
+    const target = toWakuTarget(pathOnly(next));
     if (options?.replace === true) void wakuNav.replace(target);
     else void wakuNav.push(target);
   };
@@ -122,10 +150,7 @@ export const liveService = <A extends ApiConstraint>(
       go("/", { replace: true });
     },
     prefetch: (next: string) => {
-      wakuNav.prefetch(
-        // SAFE: pathOnly output is an in-app absolute path — Waku's route template widens it.
-        pathOnly(next) as Parameters<typeof wakuNav.prefetch>[0],
-      );
+      wakuNav.prefetch(toWakuTarget(pathOnly(next)));
     },
     subscribe: () => () => {
       /* re-render via useWakuRouter in the Provider / useRouter hook */
@@ -186,16 +211,13 @@ export const Provider = (props: {
 export const useRouter = <A extends ApiConstraint = ApiConstraint>(): Service<A> => {
   const fromCtx = Router.useRouterOption();
   const wakuNav = useWakuRouter();
-  // SAFE: the provider mounted the binding for this catalog; Service erases A.
-  if (fromCtx !== null) return fromCtx as Service<A>;
-  // SAFE: the module-level default binding is set by waku() for this catalog.
-  const binding = defaultBinding as WakuBinding<A> | null;
-  if (binding === null) {
-    throw new Error(
-      "Router: provide via Provider (Service or waku binding) or setDefault",
-    );
+  // The mount contract carries `A` (the provider was created from this catalog); the
+  // erased context value is re-checked structurally before it is trusted.
+  if (fromCtx !== null && isServiceOf<A>(fromCtx)) return fromCtx;
+  if (defaultBinding !== null && isBindingOf<A>(defaultBinding)) {
+    return liveService(defaultBinding, wakuNav);
   }
-  return liveService(binding, wakuNav);
+  throw new errors.WakuRouterMissing();
 };
 
 export const useHasRouter = (): boolean =>

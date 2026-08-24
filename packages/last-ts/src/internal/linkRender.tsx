@@ -5,6 +5,7 @@
  */
 "use client";
 
+import * as errors from "./errors";
 import * as React from "react";
 import { Context, Effect, Layer } from "effect";
 import * as Link from "../Link";
@@ -40,9 +41,11 @@ const modifierClick = (event: React.MouseEvent): boolean =>
  * @internal
  */
 export const mergeLinkLayer = (
-  parent: Context.Context<unknown>,
+  // `Context<never>` = "holds at least nothing": every real context assigns in
+  // (contravariance), and typed reads go through keys / references.
+  parent: Context.Context<never>,
   layer: Layer.Layer<unknown, never, never> | undefined,
-): Context.Context<unknown> => {
+): Context.Context<never> => {
   if (layer === undefined) return parent;
   const built = Effect.runSync(Effect.scoped(Layer.build(layer)));
   return Context.merge(parent, built);
@@ -57,7 +60,7 @@ export const renderLink = <A extends ApiConstraint>(
   props: RenderLinkProps<A>,
   urls: Route.UrlBuilder<A>,
   router: Service,
-  effectCtx: Context.Context<unknown>,
+  effectCtx: Context.Context<never>,
 ): React.ReactElement => {
   const ctx = Context.add(effectCtx, RouterTag, router);
   const Anchor = Context.get(ctx, Link.View);
@@ -85,7 +88,7 @@ export const renderLink = <A extends ApiConstraint>(
   }
 
   if (props.to === undefined) {
-    throw new Error("Router.link: pass to or out");
+    throw new errors.LinkTargetMissing();
   }
   const href =
     typeof props.to === "function" ? props.to(urls) : props.to;
@@ -122,12 +125,7 @@ export const useRenderLink = <A extends ApiConstraint>(
   layer?: Layer.Layer<unknown, never, never>,
 ): React.ReactElement => {
   const fromProvider = React.useContext(lastContext.EffectReactContext);
-  const parent: Context.Context<unknown> =
-    fromProvider !== null
-      // SAFE: provider contexts hold arbitrary services; unknown is their honest view.
-      ? (fromProvider as Context.Context<unknown>)
-      // SAFE: the empty context is the vacuous unknown-services bag.
-      : (Context.empty() as Context.Context<unknown>);
+  const parent: Context.Context<never> = fromProvider ?? Context.empty();
   const effectCtx =
     layer === undefined ? parent : mergeLinkLayer(parent, layer);
   return renderLink(props, urls, router, effectCtx);

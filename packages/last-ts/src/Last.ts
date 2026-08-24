@@ -128,21 +128,20 @@ export const kindOf = (tag: unknown): string | undefined => {
  *
  * @public
  */
-export const provide: {
-  <A, E>(effect: Effect.Effect<A, E, never>): A;
-  <A, E, R, E2 = never>(
-    effect: Effect.Effect<A, E, R>,
-    requirements: Layer.Layer<R, E2, never>,
-  ): A;
-} = ((
-  // Never-erased impl signature — the overloads above are the public contract; `never`
-  // keeps the body free of `any`-channel effects (the trailing cast restates the overloads).
-  effect: Effect.Effect<never, never, never>,
-  requirements?: Layer.Layer<never, never, never>,
-) => {
-  const fulfilled =
-    requirements === undefined ? effect : Effect.provide(effect, requirements);
-  return Effect.runSync(fulfilled);
-// SAFE: never-erased impl behind the typed overloads above; the body only optionally
-// provides and runs. No runtime value to validate.
-}) as unknown as typeof provide;
+export function provide<A, E>(effect: Effect.Effect<A, E, never>): A;
+export function provide<A, E, R, E2 = never>(
+  effect: Effect.Effect<A, E, R>,
+  requirements: Layer.Layer<R, E2, never>,
+): A;
+export function provide<A, E, R, E2 = never>(
+  effect: Effect.Effect<A, E, R>,
+  requirements?: Layer.Layer<R, E2, never>,
+): A {
+  if (requirements !== undefined) {
+    return Effect.runSync(Effect.provide(effect, requirements));
+  }
+  // Overload 1 is the only way to reach this branch, and it pins `R = never` when no
+  // requirements are passed; TypeScript cannot thread that arity↔R correlation into a
+  // shared implementation, so this is the one place the proof is restated.
+  return Effect.runSync(effect as Effect.Effect<A, E, never>);
+}

@@ -1,6 +1,7 @@
 /**
  * Internal impl for {@link ../Route} — HttpApiEndpoint with Page default success.
  */
+import * as errors from "./errors";
 import * as Context from "effect/Context";
 import { dual } from "effect/Function";
 import * as Option from "effect/Option";
@@ -90,13 +91,10 @@ export const get = <
     query: options?.query,
     headers: options?.headers,
     success: pageSuccess.Page,
-    // SAFE: forwards the caller-typed error option; the slot constraint (ErrorNoStream)
-    // is unexpressible through RequestOptions without re-deriving get's whole generic row.
-    error: options?.error as never,
+    error: options?.error,
   });
-  // SAFE: brand-only intersection on the value get() just returned — no shape change;
-  // IsPageEndpoint reads the brand after success codec wraps.
-  return endpoint as typeof endpoint & pageSuccess.PageEndpointBrand;
+  // The brand is stamped for real at runtime — the type follows from the value.
+  return Object.assign(endpoint, pageSuccess.pageEndpointBrand);
 };
 
 export type { RequestOptions } from "./routeRequest";
@@ -146,9 +144,7 @@ export const params: {
 } = dual(2, (self: Constraint, schema: Schema.Top): Constraint => {
   const success = Array.from(self.success ?? [pageSuccess.Page]);
   const error = Array.from(self.error ?? []);
-  // SAFE: an endpoint path is absolute by construction (get requires `/${string}`);
-  // the erased Constraint stores it as string.
-  const next = HttpApiEndpoint.get(self.identifier, self.path as Path, {
+  const next = HttpApiEndpoint.get(self.identifier, toAbsolutePath(self.path), {
     params: schema,
     query: self.query,
     headers: self.headers,
@@ -156,31 +152,34 @@ export const params: {
       success.length === 0 ? pageSuccess.Page
       : success.length === 1 ? success[0]!
       : success,
-    // SAFE: `error` re-feeds schemas read off the endpoint itself; the option slot's
-    // ErrorNoStream constraint is unexpressible for an erased ReadonlySet round-trip.
-    error: (error.length === 0 ? undefined
-    : error.length === 1 ? error[0]!
-    : error) as never,
+    error:
+      error.length === 0 ? undefined
+      : error.length === 1 ? error[0]!
+      : error,
   });
-  // SAFE: a field-for-field rebuild of the same endpoint with one schema swapped — the
-  // typed overloads above (ReParams) are the source of truth; the brand survives because
-  // the success set is carried over verbatim.
-  return next.annotateMerge(
-    self.annotations,
-    // SAFE: see the rebuild note above — same endpoint, one schema swapped, brand carried.
-  ) as unknown as Constraint & pageSuccess.PageEndpointBrand;
+  // Same endpoint, one schema swapped; the page brand is re-stamped for real.
+  return Object.assign(
+    next.annotateMerge(self.annotations),
+    pageSuccess.pageEndpointBrand,
+  );
 });
+
+/** Runtime-validated absolute path — rebuilds the template-literal proof. */
+export const toAbsolutePath = (value: string): Path => {
+  if (!value.startsWith("/")) {
+    throw new errors.MissingPathParam({ key: value });
+  }
+  return `/${value.slice(1)}`;
+};
 
 /** Join `/a` + `/b` → `/a/b`; `/a` + `/` → `/a`. */
 export const joinPath = (prefix: Path | "/", path: Path | "/"): Path => {
-  // SAFE (all three): every branch returns a string that starts with "/" by construction;
-  // TS cannot carry the template-literal proof through slice/concat.
-  if (path === "/") return (prefix === "/" ? "/" : prefix) as Path;
-  if (prefix === "/") return path as Path;
+  if (path === "/") return prefix === "/" ? "/" : prefix;
+  if (prefix === "/") return path;
   const left = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
-  const right = path.startsWith("/") ? path : `/${path}`;
-  // SAFE: `right` starts with "/" on both branches, so the concatenation is absolute.
-  return `${left}${right}` as Path;
+  const joined = `${left}${path}`;
+  // Constructive proof: `prefix` is absolute, so the concatenation is too.
+  return `/${joined.slice(1)}`;
 };
 
 export type CompiledPath = {
@@ -287,7 +286,7 @@ export const compilePath = (path: string): CompiledPath => {
       const value = params[token.key];
       if (value === undefined) {
         if (token._tag === "Param" && token.optional) continue;
-        throw new Error(`Missing path parameter: ${token.key}`);
+        throw new errors.MissingPathParam({ key: token.key });
       }
       out += `${token.slash}${encodePathValue(value, token._tag === "Splat")}`;
     }

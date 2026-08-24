@@ -8,8 +8,10 @@
  */
 "use client";
 
+import { hasBrand, getProp } from "./internal/predicates";
 import * as React from "react";
 import { Context, Effect, Layer } from "effect";
+import * as errors from "./internal/errors";
 import * as layoutReact from "./internal/layoutReact";
 
 type GroupImplLike = {
@@ -65,11 +67,7 @@ export class Override extends Context.Service<Override, OverrideCell>()(
 ) {}
 
 const isLayoutClass = (u: unknown): u is AnyLayout =>
-  typeof u === "function" &&
-  u !== null &&
-  LayoutTypeId in u &&
-  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
-  (u as unknown as AnyLayout)[LayoutTypeId] === LayoutTypeId;
+  typeof u === "function" && hasBrand(u, LayoutTypeId);
 
 /** Resolve a layout class or bare FC to a zero-prop component. @internal */
 export const toComponent = (layout: AnyLayout | React.FC): React.FC =>
@@ -78,10 +76,8 @@ export const toComponent = (layout: AnyLayout | React.FC): React.FC =>
 const isGroupImpl = (u: unknown): u is GroupImplLike =>
   typeof u === "object" &&
   u !== null &&
-  "handlers" in u &&
   "layout" in u &&
-  // SAFE: inside the guard that proves the shape — the instanceof check IS the validation.
-  (u as GroupImplLike).handlers instanceof Map;
+  getProp(u, "handlers") instanceof Map;
 
 const patchGroupLayouts = <A,>(
   ctx: Context.Context<A>,
@@ -93,8 +89,7 @@ const patchGroupLayouts = <A,>(
       next.set(key, { ...value, layout: component });
     }
   }
-  // SAFE: same entries as ctx (values only re-skinned with a layout) — A is restated, not invented.
-  return Context.makeUnsafe(next) as Context.Context<A>;
+  return Context.makeUnsafe<A>(next);
 };
 
 /**
@@ -126,14 +121,17 @@ export const OutletProvider = layoutReact.OutletProvider;
  *
  * @public
  */
+/** The minted layout class: abstract-constructable, branded, and a Reference. @public */
+export type Handle = (abstract new (_: never) => Record<never, never>) &
+  AnyLayout &
+  Context.Reference<React.FC>;
+
 export const make =
   () =>
   (
     key: string,
     render: BodyRender,
-  ): (abstract new (_: never) => Record<never, never>) &
-    AnyLayout &
-    Context.Reference<React.FC> => {
+  ): Handle => {
     const Component = layoutReact.makeBodyComponent(key, render);
     const reference = Context.Reference(key, {
       defaultValue: () => Component,
@@ -144,13 +142,7 @@ export const make =
       static readonly render = render;
       static readonly Component = Component;
     };
-    // SAFE: class-factory erasure — statics assembled above, Reference grafted on; TS cannot
-    // compose the abstract-constructor intersection from the build. Nothing to validate.
-    return Object.assign(Cls, reference) as unknown as (abstract new (
-      _: never,
-    ) => Record<never, never>) &
-      AnyLayout &
-      Context.Reference<React.FC>;
+    return Object.assign(Cls, reference);
   };
 
 /**
@@ -194,22 +186,13 @@ export const provide = (layout: AnyLayout | React.FC): ProvideOp => {
     Layer.effectContext(
       Effect.gen(function* () {
         const ctx = yield* Effect.scoped(
-          Layer.build(
-            // SAFE: providing Slot is exactly what discharges R (R = Slot in every caller);
-            // TS cannot subtract a provided service from a generic R. Nothing to validate.
-            Layer.provide(self, Layer.succeed(Slot, component)) as Layer.Layer<
-              A,
-              E,
-              never
-            >,
-          ),
+          Layer.build(Layer.provide(self, Layer.succeed(Slot, component))),
         );
         return patchGroupLayouts(ctx, component);
       }),
-      // SAFE: restates the same discharge (Exclude<R, Slot>) on the wrapper Layer.
-    ) as Layer.Layer<A, E, Exclude<R, Slot>>;
+    );
 
-  return new Proxy(layerProvide, {
+  const op = new Proxy(layerProvide, {
     get(target, prop, receiver) {
       if (Reflect.has(effect, prop)) {
         return Reflect.get(effect, prop, effect);
@@ -222,7 +205,17 @@ export const provide = (layout: AnyLayout | React.FC): ProvideOp => {
     getPrototypeOf() {
       return Object.getPrototypeOf(effect);
     },
-    // SAFE: the Proxy merges the dual surfaces (Effect + Layer transform) ProvideOp declares;
-    // both delegates are typed above. TS cannot type a Proxy union structurally.
-  }) as unknown as ProvideOp;
+  });
+  // The type system cannot see through a Proxy, so the dual surface is checked at
+  // runtime instead: the value must be callable (the Layer transform) and yieldable
+  // (the fiber Effect it delegates to).
+  if (!isProvideOp(op)) {
+    throw new errors.InvariantViolated({
+      what: "Layout.provide proxy must be callable and yieldable",
+    });
+  }
+  return op;
 };
+
+const isProvideOp = (u: unknown): u is ProvideOp =>
+  typeof u === "function" && Effect.isEffect(u);

@@ -5,6 +5,7 @@
  */
 "use client";
 
+import * as errors from "./errors";
 import * as React from "react";
 import { Effect } from "effect";
 import type {
@@ -42,9 +43,7 @@ export const RequestProvider = (props: {
 export const useRequest = (): RequestValue => {
   const value = React.useContext(RequestReact);
   if (value === null) {
-    throw new Error(
-      "Page.useRequest: render under Router.Outlet (Request provider)",
-    );
+    throw new errors.PageRequestMissing();
   }
   return value;
 };
@@ -116,9 +115,7 @@ export const DocumentRoot = (props: {
 export const useDocument = (): DocumentValue => {
   const bridge = React.useContext(DocumentReact);
   if (bridge === null) {
-    throw new Error(
-      "Page.useDocument: render under Router.Outlet (Document provider)",
-    );
+    throw new errors.PageDocumentMissing({ hook: "useDocument" });
   }
   return bridge.value;
 };
@@ -131,9 +128,7 @@ export const useDocument = (): DocumentValue => {
 export const useDocumentApi = (): DocumentApi => {
   const bridge = React.useContext(DocumentReact);
   if (bridge === null) {
-    throw new Error(
-      "Page.useDocumentApi: render under Router.Outlet (Document provider)",
-    );
+    throw new errors.PageDocumentMissing({ hook: "useDocumentApi" });
   }
   return bridge.api;
 };

@@ -7,8 +7,10 @@
  *
  * @internal
  */
+import * as errors from "./errors";
 import * as React from "react";
 import { Context, Effect, Layer, Option } from "effect";
+import * as Predicate from "effect/Predicate";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Layout from "../Layout";
 import * as Page from "../Page";
@@ -224,14 +226,14 @@ const registerHandler = (
   // skip the static route-map check (HttpApi has no deferred endpoints).
   const deferred = catalog.hasDeferredDestinations(self.group);
   if (!deferred && !Object.hasOwn(self.group.routes, identifier)) {
-    throw new Error(
-      `Route "${identifier}" not found in Router.Group "${self.group.identifier}"`,
-    );
+    throw new errors.InvariantViolated({
+      what: `Route "${identifier}" not found in Router.Group "${self.group.identifier}"`,
+    });
   }
   if (self.handlers.has(identifier)) {
-    throw new Error(
-      `Handler for Route "${identifier}" is already registered in Router.Group "${self.group.identifier}"`,
-    );
+    throw new errors.InvariantViolated({
+      what: `Handler for Route "${identifier}" is already registered in Router.Group "${self.group.identifier}"`,
+    });
   }
   const endpoint = self.group.routes[identifier];
   const asPage =
@@ -240,9 +242,16 @@ const registerHandler = (
     pageSuccess.isPageEndpoint(endpoint);
 
   if (!asPage) {
+    if (!Predicate.isFunction(handler)) {
+      throw new errors.InvariantViolated({
+        what: `Handler for Route "${identifier}" must be a function`,
+      });
+    }
     self.handlers.set(identifier, {
       _tag: "Api",
-      // SAFE: non-page endpoints take the HttpApi-style effect handler per HandlerForEndpoint.
+      // Erasure seam: non-page endpoints take the HttpApi-style effect handler per
+      // HandlerForEndpoint — the parameter/return shape is a compile-time contract the
+      // caller already owes; runtime confirms `handler` is at least callable.
       handler: handler as (
         request: unknown,
       ) => Effect.Effect<unknown, unknown, unknown>,
@@ -263,23 +272,27 @@ const registerHandler = (
     return self;
   }
 
-  // Boolean guard (not an inline narrow) keeps `handler` un-narrowed, so the any-channel
-  // Effect type from `isEffect`'s predicate never lands in a typed position.
-  const handlerIsEffect: boolean = Effect.isEffect(handler);
-  if (handlerIsEffect) {
+  if (Effect.isEffect(handler)) {
     self.handlers.set(identifier, {
       _tag: "PageEffect",
-      // SAFE: a page handler's Effect is contracted upstream (HandlerForEndpoint) to
-      // ReactNode success; Request/Override are provided at render. Channels are erased
-      // in the registry and unobservable at runtime.
+      // Erasure seam: a page handler's Effect is contracted upstream (HandlerForEndpoint) to
+      // ReactNode success; Request/Override are provided at render. Channels are erased in
+      // the registry and unobservable at runtime — `Effect.isEffect` confirms `handler` is
+      // genuinely an Effect; its success type stays a compile-time-only contract.
       effect: handler as Effect.Effect<React.ReactNode>,
     });
     return self;
   }
 
+  if (!Predicate.isFunction(handler)) {
+    throw new errors.InvariantViolated({
+      what: `Handler for Route "${identifier}" must be a component, element, or Effect`,
+    });
+  }
   self.handlers.set(identifier, {
     _tag: "Page",
-    // SAFE: remaining case — HandlerForEndpoint types page handlers as components.
+    // Erasure seam: remaining case — HandlerForEndpoint types page handlers as components;
+    // runtime confirms it's at least callable (component internals aren't checkable here).
     page: handler as React.ComponentType<Route.HandleArgs>,
   });
   return self;
@@ -307,27 +320,12 @@ const HandlersProto = {
         registerHandler(this, identifier, entry);
       } else if (typeof entry === "function") {
         registerHandler(this, identifier, entry);
-      } else if (
-        entry !== null &&
-        typeof entry === "object" &&
-        "page" in entry
-      ) {
-        // SAFE: structural probe of the handleAll entry bag; each shape is re-checked below.
-        const e = entry as {
-          readonly page: unknown;
-        };
-        registerHandler(this, identifier, e.page);
-      } else if (
-        entry !== null &&
-        typeof entry === "object" &&
-        "handler" in entry
-      ) {
-        registerHandler(
-          this,
-          identifier,
-          // SAFE: handleAll entries may wrap the handler under a `handler` key — probed above.
-          (entry as { readonly handler: unknown }).handler,
-        );
+      } else if (entry !== null && typeof entry === "object" && "page" in entry) {
+        // `"page" in entry` narrows the object to expose `.page` at `unknown` directly —
+        // no cast needed; `registerHandler` re-checks the real shape below.
+        registerHandler(this, identifier, entry.page);
+      } else if (entry !== null && typeof entry === "object" && "handler" in entry) {
+        registerHandler(this, identifier, entry.handler);
       }
     }
     return this;
@@ -401,10 +399,11 @@ const adoptAnnotatedHandlers = (
     if (handlers.has(id)) continue;
     const annotated = Context.getOption(route.annotations, Handler);
     if (Option.isSome(annotated)) {
+      // `Handler`'s Shape (`Route.Handle = (args: HandleArgs) => ReactNode`) is directly
+      // assignable to `React.ComponentType<Route.HandleArgs>` — no cast needed.
       handlers.set(id, {
         _tag: "Page",
-        // SAFE: a Page-success Handler annotation is a component per HandlerForEndpoint.
-        page: annotated.value as React.ComponentType<Route.HandleArgs>,
+        page: annotated.value,
       });
     }
   }
@@ -450,24 +449,34 @@ export const group = <
   | GroupLayoutRequirements<A["groups"][Identifier]>
   | GroupRequirements<A["groups"][Identifier]>
 > =>
+  // Boundary cast (matches Effect's own HttpApiBuilder.group): the Effect below is typed
+  // against its own concrete R/E (Layout.Slot, Effect.die's never), while the declared
+  // return threads Return's error/context through Handlers.Error / Handlers.Context —
+  // a per-callback contract Effect.gen's inference can't see from inside the generator.
   Layer.effectContext(
     Effect.gen(function* () {
-      // SAFE: string-indexed group lookup on the erased catalog record.
-      const g = api.groups[groupIdentifier] as GroupTop | undefined;
+      // String-indexed group lookup on the erased catalog record — `Identifier extends
+      // keyof A["groups"]` is a compile-time promise about `api`'s shape, not a runtime
+      // guarantee, so the lookup keeps `| undefined` and is checked below rather than
+      // trusted.
+      const g: GroupTop | undefined = api.groups[groupIdentifier];
       if (g === undefined) {
         return yield* Effect.die(
           `RouterBuilder.group: group "${String(groupIdentifier)}" not on catalog "${api.identifier}"`,
         );
       }
-      // SAFE: never-erased handlers builder — the group() overloads typed the real callback.
+      // Erasure seam: never-erased handlers builder — the group() overloads typed the real
+      // callback; `makeHandlers(g)`'s widened GroupTop can't structurally match the narrower
+      // per-identifier type the caller's `build` signature promises.
       const result = build(makeHandlers(g) as never);
       if (typeof result === "string") {
         return yield* Effect.die(`RouterBuilder.group: ${result}`);
       }
       const handlers: Handlers<any, any> = Effect.isEffect(result)
-        // SAFE: effect branch — the builder returned an Effect of handlers.
+        // Erasure seam: effect branch — the builder returned an Effect of handlers; the
+        // success type is the compile-time contract the group() overloads already checked.
         ? yield* (result as Effect.Effect<Handlers<any, any>>)
-        // SAFE: non-effect branch — the builder returned handlers directly.
+        // Erasure seam: non-effect branch — the builder returned handlers directly.
         : (result as Handlers<any, any>);
       const needsLayout = groupNeedsLayoutRuntime(g);
       const layout = needsLayout
@@ -479,8 +488,6 @@ export const group = <
       };
       return Context.makeUnsafe(new Map([[g.key, impl]]));
     }),
-    // SAFE: the effectContext above registers exactly this group service under g.key; the
-    // typed Layer row restates the group() contract (error/context from the builder Return).
   ) as unknown as Layer.Layer<
     catalog.Group.Service<ApiIdOf<A>, Identifier>,
     Handlers.Error<Return>,
@@ -506,21 +513,23 @@ export const layer = <
   never,
   catalog.Group.ToService<Id, Groups> | R
 > =>
+  // Boundary cast (matches Effect's own HttpApiBuilder.layer): `resolveApi`'s R is
+  // resolved against `api`'s union parameter type (`ApiConstraint` widens it to
+  // `unknown`), while the declared return threads the caller's precise `Api<Id, Groups,
+  // R, DeferredGroups>` — a distinction Effect.gen's inference can't recover from inside
+  // the generator either.
   Layer.effectContext(
     Effect.gen(function* () {
-      const resolved = yield* catalog.resolveApi(
-        // SAFE: the typed catalog view of the erased api value for resolveApi's R accounting.
-        api as Api<Id, Groups, R, DeferredGroups>,
-      );
+      const resolved = yield* catalog.resolveApi(api);
       const services = yield* Effect.context<never>();
       const availableGroups = Array.from(services.mapUnsafe.keys()).filter(
         (key) => key.startsWith(GROUP_KEY_PREFIX),
       );
       const groups = new Map<string, GroupImpl>();
-      // SAFE: a resolved catalog's group map values are groups by construction.
-      for (const g of Object.values(resolved.groups) as Array<GroupTop>) {
-        // SAFE: group impls are registered under g.key by the group() Layer above.
-        let impl = services.mapUnsafe.get(g.key) as GroupImpl | undefined;
+      for (const g of Object.values(resolved.groups)) {
+        // `services.mapUnsafe` is `ReadonlyMap<string, any>` (Context's own public field) —
+        // no cast needed; group impls are registered under g.key by the group() Layer above.
+        let impl: GroupImpl | undefined = services.mapUnsafe.get(g.key);
         if (impl === undefined) {
           impl = synthesizeGroupFromAnnotations(g);
         }
@@ -548,7 +557,6 @@ export const layer = <
         Context.add(Registry, { api: resolved, groups }),
       );
     }),
-  // SAFE: restates the typed Layer the layer() contract above declares for catalog A.
   ) as Layer.Layer<
     Catalog | Registry,
     never,

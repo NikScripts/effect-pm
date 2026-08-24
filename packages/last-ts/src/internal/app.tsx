@@ -53,15 +53,14 @@ const defaultRouterMount = (
 ): React.ReactElement =>
   React.createElement(Router.Provider, { value: service, children });
 
-const makeLayerProvider = <R, E = never>(
-  layer: Layer.Layer<R, E, never>,
+const makeLayerProvider = <R,>(
+  // E = never at the type level: the boot below runs synchronously, so a failing
+  // layer is a compile error here instead of a runtime throw.
+  layer: Layer.Layer<R, never, never>,
   ctxClass?: lastContext.LastContextClass,
 ): ((props: {
   readonly children: React.ReactNode;
 }) => React.ReactElement) => {
-  // SAFE: never-erased for the runSync boot below; the public signature constrains E=never and
-  // RIn=never, and A is only read back out of the built Context by typed getOption calls.
-  const erased = layer as unknown as Layer.Layer<never, never, never>;
   const ContextProvider =
     ctxClass !== undefined
       ? lastContext.makeContextProvider(ctxClass)
@@ -70,18 +69,10 @@ const makeLayerProvider = <R, E = never>(
     readonly children: React.ReactNode;
   }): React.ReactElement => {
     const boot = React.useMemo(() => {
-      const ctx = Effect.runSync(
-        Effect.scoped(Layer_.build(erased)),
-      );
-      const router = Option.getOrNull(
-        Context.getOption(ctx, Router.Router),
-      // SAFE: Router.Router's service IS the router Service; Option.getOrNull erased it.
-      ) as Service | null;
+      const ctx = Effect.runSync(Effect.scoped(Layer_.build(layer)));
+      const router = Option.getOrNull(Context.getOption(ctx, Router.Router));
       const cell = Option.getOrNull(Context.getOption(ctx, Document.Cell));
-      const runtime = Atom.runtime(
-        // SAFE: succeedContext of the built context re-provides exactly what boot built.
-        Layer_.succeedContext(ctx) as Layer.Layer<never, never, never> as never,
-      );
+      const runtime = Atom.runtime(Layer_.succeedContext(ctx));
       return { runtime, router, cell, ctx };
     }, []);
     let body: React.ReactNode = props.children;
@@ -103,24 +94,16 @@ const makeLayerProvider = <R, E = never>(
             children: body,
           })
         : body;
-    return React.createElement(
-      AtomReact.RegistryProvider,
-      null,
-      React.createElement(
-        // SAFE: RuntimeProvider's generic props don't fit createElement's overloads; the
-        AtomReact.RuntimeProvider as never,
-        // runtime value matches the provider's runtime prop contract.
-        { runtime: boot.runtime },
-        React.createElement(
-          lastContext.EffectContextProvider,
-          // SAFE: boot.ctx is the built provider context typed through the never-erased
-          // boot layer; the provider's lookups are spec-driven and dynamic.
-          {
-            context: boot.ctx as Context.Context<any>,
-            children: withDocument,
-          },
-        ),
-      ),
+    // JSX (not createElement): the runtime provider is generic, and JSX inference
+    // instantiates its props from the runtime value where createElement cannot.
+    return (
+      <AtomReact.RegistryProvider>
+        <AtomReact.RuntimeProvider runtime={boot.runtime}>
+          <lastContext.EffectContextProvider context={boot.ctx}>
+            {withDocument}
+          </lastContext.EffectContextProvider>
+        </AtomReact.RuntimeProvider>
+      </AtomReact.RegistryProvider>
     );
   };
   Provider.displayName = "Last.provider";
@@ -136,28 +119,23 @@ const makeLayerProvider = <R, E = never>(
  *
  * @public
  */
-export const provider: {
-  <R, E = never>(
-    layer: Layer.Layer<R, E, never>,
-  ): (props: { readonly children: React.ReactNode }) => React.ReactElement;
-  (
-    ctx: lastContext.LastContextClass,
-  ): (props: { readonly children: React.ReactNode }) => React.ReactElement;
-  <R, E = never>(
-    layer: Layer.Layer<R, E, never>,
-    ctx: lastContext.LastContextClass,
-  ): (props: { readonly children: React.ReactNode }) => React.ReactElement;
-} = ((
-  first: Layer.Layer<never, never, never> | lastContext.LastContextClass,
+export function provider<R>(
+  layer: Layer.Layer<R, never, never>,
+): (props: { readonly children: React.ReactNode }) => React.ReactElement;
+export function provider(
+  ctx: lastContext.LastContextClass,
+): (props: { readonly children: React.ReactNode }) => React.ReactElement;
+export function provider<R>(
+  layer: Layer.Layer<R, never, never>,
+  ctx: lastContext.LastContextClass,
+): (props: { readonly children: React.ReactNode }) => React.ReactElement;
+export function provider<R>(
+  first: Layer.Layer<R, never, never> | lastContext.LastContextClass,
   second?: lastContext.LastContextClass,
-) => {
+): (props: { readonly children: React.ReactNode }) => React.ReactElement {
+  // Runtime dispatch by the context-class brand fills the overload gap.
   if (lastContext.isContextClass(first)) {
     return lastContext.makeContextProvider(first);
   }
-  return makeLayerProvider(
-    // SAFE: non-context first arg is the fulfilled Layer per the overload contract.
-    first as Layer.Layer<never, never, never>,
-    second,
-  );
-// SAFE: never-erased impl behind the typed provider overloads above.
-}) as typeof provider;
+  return makeLayerProvider(first, second);
+}

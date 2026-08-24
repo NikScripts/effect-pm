@@ -25,6 +25,7 @@
  *
  * @see docs/handoffs/router-httpapi-lock.md
  */
+import * as errors from "./internal/errors";
 import * as React from "react";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as fileRouter from "./internal/fileRouter";
@@ -229,7 +230,7 @@ export const Provider = (props: {
 export const useRouter = (): Service => {
   const router = React.useContext(RouterReactContext);
   if (router === null) {
-    throw new Error("Router: render inside Router.Provider");
+    throw new errors.RouterProviderMissing();
   }
   const [, bump] = React.useReducer((n: number) => n + 1, 0);
   React.useEffect(() => router.subscribe(bump), [router]);
@@ -310,15 +311,12 @@ export type LinkComponent<A extends ApiConstraint> = (
 export const link = <A extends ApiConstraint>(
   api: A,
 ): LinkComponent<A> => {
+  // Typed urls derive from the catalog itself (single source of truth) — no need to
+  // restate the erased router's builder.
+  const urls = Route.urlBuilder(api);
   const Link = (props: LinkProps<A>): React.ReactElement => {
     const router = useRouter();
-    return linkRender.useRenderLink(
-      props,
-      // SAFE: the installed router IS the one built for catalog A (link(api) is authored
-      // beside it); Service erases A, so the typed builder is restated, not invented.
-      router.urls as Route.UrlBuilder<A>,
-      router,
-    );
+    return linkRender.useRenderLink(props, urls, router);
   };
   Link.displayName = `Router.link(${api.identifier})`;
   return Link;

@@ -42,7 +42,8 @@ export const filePathFromGlobKey = (key: string): string | undefined => {
 
 export type PathEntry = {
   readonly id: string;
-  readonly routePath: string;
+  /** Absolute (`/…`) — enforced at the type level so tables can't smuggle loose paths. */
+  readonly routePath: endpoint.Path;
 };
 
 export type EntryRoute<E extends PathEntry> = endpoint.Constraint &
@@ -60,14 +61,11 @@ export type RoutesOf<Entries extends ReadonlyArray<PathEntry>> = EntryRoute<
 export const destinationsOf = <const Entries extends ReadonlyArray<PathEntry>>(
   entries: Entries,
 ): ReadonlyArray<RoutesOf<Entries>> =>
-  entries.map(
-    (entry) =>
-      // SAFE (both): routePath rows are authored absolute; the union restates the table's rows.
-      endpoint.get(entry.id, entry.routePath as endpoint.Path) as RoutesOf<
-        // SAFE (both): routePath rows are authored absolute; the union restates the table's row types.
-        Entries
-      >,
-  );
+  entries.map((entry) => toEntryRoute<Entries>(entry));
+
+const toEntryRoute = <Entries extends ReadonlyArray<PathEntry>>(
+  entry: Entries[number],
+): RoutesOf<Entries> => endpoint.get(entry.id, entry.routePath);
 
 /**
  * Effect of Route destinations from a typed file-router table.
@@ -80,8 +78,7 @@ export const fileSystem = <const Entries extends ReadonlyArray<PathEntry>>(
   const effect = Effect.sync(() => destinationsOf(entries));
   return Object.assign(effect, {
     [AsRoutesTypeId]: { root: { key: "fileSystem", members: {} } },
-  // SAFE: erased effect restated as the typed AsRoutesEffect the table's row types declare.
-  }) as unknown as AsRoutesEffect<RoutesOf<Entries>>;
+  });
 };
 
 /**

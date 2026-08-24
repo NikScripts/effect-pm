@@ -4,10 +4,12 @@
  *
  * @internal
  */
+import * as errors from "./errors";
 import * as React from "react";
 import { Context, Layer, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "../AtomReact";
+import { getProp, hasBrand } from "./predicates";
 import {
   ContextScope,
   type Api,
@@ -31,19 +33,11 @@ export type LastContextClass<S extends Spec = Spec> = {
 };
 
 const isLastContext = (u: unknown): u is LastContextClass =>
-  typeof u === "function" &&
-  u !== null &&
-  LastContextTypeId in u &&
-  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
-  (u as unknown as LastContextClass)[LastContextTypeId] === LastContextTypeId;
+  typeof u === "function" && hasBrand(u, LastContextTypeId);
 
 const isKey = (u: unknown): u is Context.Key<any, any> =>
   Context.isKey(u) ||
-  (typeof u === "function" &&
-    u !== null &&
-    "key" in u &&
-    // SAFE: inside the guard — typeof probe on a key-shaped object.
-    typeof (u as { readonly key: unknown }).key === "string");
+  (typeof u === "function" && typeof getProp(u, "key") === "string");
 
 type ServiceValue<T> = [T] extends [LastContextClass<infer Nested>]
   ? TypeOfSpec<Nested>
@@ -100,7 +94,7 @@ export const useEffectContext = (): Context.Context<any> => {
   const runtime = AtomReact.useRuntime();
   const result = AtomReact.useAtomValue(runtime);
   if (!AsyncResult.isSuccess(result)) {
-    throw new Error("Last: Atom runtime Context not ready");
+    throw new errors.RuntimeContextNotReady();
   }
   return result.value;
 };
@@ -140,15 +134,21 @@ const registerBags = (
  *
  * @internal
  */
+/** The minted context class: abstract-constructable and spec-branded. @internal */
+export type ContextHandle<S extends Spec = Spec> = (abstract new () => Record<
+  never,
+  never
+>) &
+  LastContextClass<S>;
+
 export const context = <const S extends Spec>(
   spec: S,
-): (abstract new () => Record<never, never>) & LastContextClass<S> => {
+): ContextHandle<S> => {
   abstract class Ctx {
     static readonly [LastContextTypeId] = LastContextTypeId;
     static readonly spec = spec;
   }
-  // SAFE: class-factory erasure — the statics assembled above ARE the LastContextClass shape.
-  return Ctx as unknown as (abstract new () => Record<never, never>) & LastContextClass<S>;
+  return Ctx;
 };
 
 /** Active ContextScope classes mounted for the current match (catalog→group→route). */
@@ -171,28 +171,30 @@ export const ActiveScopesProvider = (props: {
     props.children,
   );
 
+const isBagOf = <C extends LastContextClass<any>>(
+  u: object,
+  ctx: C,
+): u is TypeOfSpec<C["spec"]> => Object.keys(ctx.spec).every((key) => key in u);
+
 const readBag = <C extends LastContextClass<any>>(
   store: BagsStore,
   ctx: C,
 ): TypeOfSpec<C["spec"]> => {
   const bag = store.get(ctx);
   if (bag === undefined) {
-    throw new Error(
-      "Last.use: context was not registered — mount it via Last.provider(ctx) or a router .context scope on the active path",
-    );
+    throw new errors.ContextNotRegistered();
   }
-  // SAFE: bags are registered per spec (resolveBag) — the typed view restates that shape.
-  return bag as TypeOfSpec<C["spec"]>;
+  // Runtime re-check: every spec key must be present on the registered bag.
+  if (!isBagOf(bag, ctx)) {
+    throw new errors.ContextNotRegistered();
+  }
+  return bag;
 };
 
 const scopeOf = (
   annotations: Context.Context<never>,
 ): LastContextClass | undefined => {
-  const opt = Context.getOption(
-    // SAFE: annotation-bag read — getOption returns None when the scope key is absent.
-    annotations as Context.Context<ContextScope>,
-    ContextScope,
-  );
+  const opt = Context.getOption(annotations, ContextScope);
   return Option.isSome(opt) ? opt.value : undefined;
 };
 
@@ -215,9 +217,7 @@ type ScopeSel =
 const isScopeSel = (u: unknown): u is ScopeSel =>
   typeof u === "object" &&
   u !== null &&
-  ScopeSelTypeId in u &&
-  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
-  (u as ScopeSel)[ScopeSelTypeId] === ScopeSelTypeId;
+  hasBrand(u, ScopeSelTypeId);
 
 type ScopeTree = {
   readonly [key: string]: ScopeTree | ScopeSel;
@@ -225,16 +225,14 @@ type ScopeTree = {
 
 const scopeTree = (api: ApiConstraint): ScopeTree => {
   const root: Record<string, ScopeTree | ScopeSel> = {};
-  // SAFE: an erased catalog's group map values are groups by construction.
-  for (const g of Object.values(api.groups) as Array<GroupTop>) {
+  for (const g of Object.values(api.groups)) {
     const groupSel: ScopeSel = {
       [ScopeSelTypeId]: ScopeSelTypeId,
       _tag: "group",
       group: g,
     };
     const nest: Record<string, ScopeTree | ScopeSel> = {};
-    // SAFE: an erased catalog's route map values are route constraints by construction.
-    for (const route of Object.values(g.routes) as Array<RouteConstraint>) {
+    for (const route of Object.values(g.routes)) {
       nest[route.identifier] = {
         [ScopeSelTypeId]: ScopeSelTypeId,
         _tag: "route",
@@ -287,9 +285,7 @@ const mergeActiveBags = (
 const useStore = (): BagsStore => {
   const store = React.useContext(BagsReactContext);
   if (store === null) {
-    throw new Error(
-      "Last.use: wrap the tree in Last.provider(layer) (router scopes mount under Outlet)",
-    );
+    throw new errors.ContextProviderMissing();
   }
   return store;
 };
@@ -326,40 +322,38 @@ export function use(
   const api = first;
   if (second === undefined) {
     if (active.length > 0) {
-      // SAFE: the merged bags are exactly the catalog's mounted scopes — the typed view restates them.
-      return mergeActiveBags(store, active) as RouterContextBag<typeof api>;
+      return mergeActiveBags(store, active);
     }
     const root = scopeOf(api.annotations);
     if (root === undefined) {
-      throw new Error(
-        `Last.use: catalog "${api.identifier}" has no .context(…)`,
-      );
+      throw new errors.ContextScopeMissing({
+        subject: `Last.use: catalog "${api.identifier}" has no .context(…)`,
+      });
     }
     return readBag(store, root);
   }
 
   if (typeof second === "string") {
-    // SAFE: string-indexed group lookup on the erased catalog record.
-    const group = api.groups[second] as GroupTop | undefined;
+    const group: GroupTop | undefined = api.groups[second];
     if (group === undefined) {
-      throw new Error(
-        `Last.use: group "${second}" not on catalog "${api.identifier}"`,
-      );
+      throw new errors.ContextScopeMissing({
+        subject: `Last.use: group "${second}" not on catalog "${api.identifier}"`,
+      });
     }
     const ctx = scopeOf(group.annotations);
     if (ctx === undefined) {
-      throw new Error(
-        `Last.use: group "${second}" has no .context(…)`,
-      );
+      throw new errors.ContextScopeMissing({
+        subject: `Last.use: group "${second}" has no .context(…)`,
+      });
     }
     return readBag(store, ctx);
   }
 
   const selected = second(scopeTree(api));
   if (!isScopeSel(selected)) {
-    throw new Error(
-      "Last.use: selector must return a group or uncalled route (e.g. (r) => r.docs)",
-    );
+    throw new errors.ContextScopeMissing({
+      subject: "Last.use: selector must return a group or uncalled route (e.g. (r) => r.docs)",
+    });
   }
   const annotations =
     selected._tag === "group"
@@ -367,11 +361,12 @@ export function use(
       : selected.route.annotations;
   const ctx = scopeOf(annotations);
   if (ctx === undefined) {
-    throw new Error(
-      selected._tag === "group"
-        ? `Last.use: group "${selected.group.identifier}" has no .context(…)`
-        : `Last.use: route "${selected.route.identifier}" has no .context(…)`,
-    );
+    throw new errors.ContextScopeMissing({
+      subject:
+        selected._tag === "group"
+          ? `Last.use: group "${selected.group.identifier}" has no .context(…)`
+          : `Last.use: route "${selected.route.identifier}" has no .context(…)`,
+    });
   }
   return readBag(store, ctx);
 }
@@ -402,20 +397,36 @@ export const provideContext: {
     E | E2,
     Exclude<R, ServicesOf<C>> | R2
   >;
-} = ((
-  first: Layer.Layer<never> | LastContextClass<any>,
-  second?: Layer.Layer<never>,
-) => {
-  // SAFE: one-arg overload — first is the kit Layer per the contract above.
-  const kit = second !== undefined ? second : (first as Layer.Layer<never>);
-  // Type-level discharge of ServicesOf<Ctx> lives in the overloads above;
-  // runtime is provideMerge only, for both the kit-only and ctx+kit forms.
-  return <A, E, R>(self: Layer.Layer<A, E, R>) =>
-    Layer.provideMerge(self, kit);
-  // SAFE: never-erased impl behind the typed overloads — the overloads restate the
-  // real channel algebra; the body only merges layers. No runtime value to validate.
-// (see SAFE note above the impl)
-}) as unknown as typeof provideContext;
+} = (() => {
+  const isCtxArg = <Out, E2, R2>(
+    u: Layer.Layer<Out, E2, R2> | LastContextClass<any>,
+  ): u is LastContextClass<any> => isLastContext(u);
+  const dispatch = <Out, E2, R2>(
+    first: Layer.Layer<Out, E2, R2> | LastContextClass<any>,
+    second?: Layer.Layer<Out, E2, R2>,
+  ) => {
+    // Runtime dispatch by the context-class brand; a ctx without a kit fails loudly.
+    const kit = isCtxArg(first) ? second : first;
+    if (kit === undefined) {
+      throw new errors.InvariantViolated({
+        what: "Last.provideContext(ctx) requires a kit Layer",
+      });
+    }
+    return <A, E, R>(self: Layer.Layer<A, E, R>) => Layer.provideMerge(self, kit);
+  };
+  // The ctx+kit overload additionally excludes ServicesOf<C> at the type level (View
+  // Reference defaults need not appear in the kit) — a claim with no runtime
+  // representation, so the export is narrowed by a predicate after the runtime
+  // dispatch above has validated the argument shapes.
+  const isProvideContext = (u: unknown): u is typeof provideContext =>
+    typeof u === "function";
+  if (!isProvideContext(dispatch)) {
+    throw new errors.InvariantViolated({
+      what: "provideContext dispatcher must be callable",
+    });
+  }
+  return dispatch;
+})();
 
 const providerCache = new WeakMap<
   LastContextClass,

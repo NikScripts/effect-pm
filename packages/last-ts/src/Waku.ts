@@ -41,6 +41,7 @@ import * as appInternal from "./internal/app";
 import * as Router from "./Router";
 import * as routerBuilder from "./internal/routerBuilder";
 import type { ApiConstraint } from "./internal/routes";
+import * as routesInternal from "./internal/routes";
 import * as wakuInternal from "./internal/routerWaku";
 import type * as Route from "./Route";
 
@@ -59,7 +60,6 @@ const stubService = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
     readonly registry?: Router.Service["_handlers"];
   },
 ): Router.Service => {
-  const binding = wakuInternal.waku(api, options?.urls);
   return {
     api,
     _tag: "Waku" as const,
@@ -67,10 +67,9 @@ const stubService = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
     search: "",
     href: "/",
     match: undefined,
-    // SAFE: the typed UrlBuilder<A> and UrlBuilderLoose describe the same runtime record —
-    // literal PathHref returns vs `string` — but strict function variance can't relate the
-    // method shapes. Purely a type-level widening of the same value.
-    urls: binding.urls as Route.UrlBuilderLoose,
+    // The stub's loose urls derive from the catalog itself — same source the typed
+    // builder is derived from.
+    urls: routesInternal.urlBuilderLoose(api),
     go: () => undefined,
     to: () => undefined,
     back: () => undefined,

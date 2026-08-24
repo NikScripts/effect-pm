@@ -5,6 +5,7 @@
  */
 "use client";
 
+import * as errors from "./errors";
 import * as React from "react";
 import { Context, Effect, Layer } from "effect";
 import type { BaseFields, FieldsCell } from "./documentCore";
@@ -58,9 +59,7 @@ export const makeCell = (
 export const useCell = (): DocumentCell => {
   const cell = React.useContext(CellReact);
   if (cell === null) {
-    throw new Error(
-      "Document: render under Document.FieldsProvider (RootLayout / Last.provider)",
-    );
+    throw new errors.DocumentFieldsMissing();
   }
   return cell;
 };
@@ -100,12 +99,9 @@ export const cellFromProvide = (
 ): DocumentCell => {
   const complete = finalizeFields(folded);
   if (complete === undefined) {
-    throw new Error(
-      "Document.provide: missing required title (and titleTransform after fold)",
-    );
+    throw new errors.DocumentTitleMissing();
   }
-  // SAFE: completeFields filled every base field just above.
-  return makeCell(complete as BaseFields, head);
+  return makeCell(complete, head);
 };
 
 export type HeadRender = Effect.Effect<React.ReactNode, never, Fields>;
@@ -120,14 +116,7 @@ export const makeHeadComponent = (render: HeadRender): React.FC => {
     const fields = useFields();
     const node = React.useMemo(
       () =>
-        Effect.runSync(
-          // SAFE: Fields provided here discharges the render effect's only requirement.
-          render.pipe(Effect.provideService(Fields, fields)) as Effect.Effect<
-            React.ReactNode,
-            never,
-            never
-          >,
-        ),
+        Effect.runSync(render.pipe(Effect.provideService(Fields, fields))),
       [fields, render],
     );
     return React.createElement(React.Fragment, null, node);

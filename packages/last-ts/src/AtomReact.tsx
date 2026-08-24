@@ -25,6 +25,7 @@
  * </AtomReact.RegistryProvider>
  * ```
  */
+import * as errors from "./internal/errors";
 import * as React from "react";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 
@@ -59,7 +60,7 @@ export const RegistryProvider = (props: {
 const useRegistry = (): AtomRegistry.AtomRegistry => {
   const registry = React.useContext(RegistryContext);
   if (registry === null) {
-    throw new Error("AtomReact: render inside <RegistryProvider>");
+    throw new errors.RegistryProviderMissing();
   }
   return registry;
 };
@@ -158,9 +159,7 @@ export const RuntimeProvider = <R, E = never>(props: {
 export const useRuntime = (): AnyRuntime => {
   const rt = React.useContext(RuntimeContext);
   if (rt === null) {
-    throw new Error(
-      "AtomReact.useRuntime: wrap the tree in <RuntimeProvider runtime={…}>",
-    );
+    throw new errors.RuntimeProviderMissing();
   }
   return rt;
 };

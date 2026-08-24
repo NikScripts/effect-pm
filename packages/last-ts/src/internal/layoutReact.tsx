@@ -5,11 +5,12 @@
  */
 "use client";
 
+import * as errors from "./errors";
 import * as React from "react";
 import { Effect } from "effect";
 import * as Document from "../Document";
 import { emptyPartial, finalizeFields } from "./documentCore";
-import { useCellOption } from "./documentReact";
+import { makeCell, useCellOption } from "./documentReact";
 
 const stubFields = (): Document.BaseFields => {
   const complete = finalizeFields({
@@ -18,10 +19,14 @@ const stubFields = (): Document.BaseFields => {
     lang: "en",
   });
   if (complete === undefined) {
-    throw new Error("layoutReact: stubFields finalize failed");
+    throw new errors.InvariantViolated({ what: "layoutReact stub fields must finalize" });
   }
   return complete;
 };
+
+/** A renderer without a mounted provider still gets a fully working (stub) cell. */
+const stubCell = (): Document.DocumentCell =>
+  makeCell(stubFields(), Document.ReferenceHead);
 
 const OutletReact = React.createContext<React.ReactNode>(null);
 
@@ -62,19 +67,16 @@ export type RootRender = Effect.Effect<
 export const makeBodyComponent = (key: string, render: BodyRender): React.FC => {
   const Component: React.FC = () => {
     const cell = useCellOption();
-    const node =
-      cell === null
-        ? Effect.runSync(
-            // SAFE: a no-requirement body effect per the Layout.make contract.
-            render as Effect.Effect<React.ReactNode, never, never>,
-          )
-        : Effect.runSync(
-            render.pipe(
-              Effect.provideService(Document.Cell, cell),
-              Effect.provideService(Document.Fields, cell.get()),
-            // SAFE: Override provided just above discharges the body effect's only requirement.
-            ) as Effect.Effect<React.ReactNode, never, never>,
-          );
+    // The type system says the render needs Fields | Cell; both branches now really
+    // provide them (a stub cell when no provider mounted), so no erasure is needed and
+    // a body that reads the Cell cannot die at runtime.
+    const active = cell ?? stubCell();
+    const node = Effect.runSync(
+      render.pipe(
+        Effect.provideService(Document.Cell, active),
+        Effect.provideService(Document.Fields, active.get()),
+      ),
+    );
     return React.createElement(React.Fragment, null, node);
   };
   Component.displayName = `Layout(${key})`;
@@ -95,23 +97,14 @@ export const makeRootComponent = (
   ) => {
     const cell = useCellOption();
     const Head = Document.ReferenceHead;
-    const tree =
-      cell === null
-        ? Effect.runSync(
-            render.pipe(
-              Effect.provideService(Document.Fields, stubFields()),
-              Effect.provideService(Document.Head, Head),
-            // SAFE: Fields provided just above discharges the render effect's only requirement.
-            ) as Effect.Effect<React.ReactNode, never, never>,
-          )
-        : Effect.runSync(
-            render.pipe(
-              Effect.provideService(Document.Cell, cell),
-              Effect.provideService(Document.Fields, cell.get()),
-              Effect.provideService(Document.Head, Head),
-            // SAFE: Fields provided just above discharges the render effect's only requirement.
-            ) as Effect.Effect<React.ReactNode, never, never>,
-          );
+    const active = cell ?? stubCell();
+    const tree = Effect.runSync(
+      render.pipe(
+        Effect.provideService(Document.Cell, active),
+        Effect.provideService(Document.Fields, active.get()),
+        Effect.provideService(Document.Head, Head),
+      ),
+    );
     return React.createElement(OutletProvider, {
       body: props.children,
       children: tree,

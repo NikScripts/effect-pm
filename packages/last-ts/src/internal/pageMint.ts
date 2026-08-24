@@ -3,10 +3,13 @@
  *
  * @internal
  */
+import * as errors from "./errors";
 import * as React from "react";
 import { Effect } from "effect";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import type { RequestOptions } from "./routeRequest";
+import type * as pageServices from "./pageServices";
+import { hasBrand } from "./predicates";
 
 export const TypeId = "~last-ts/Page" as const;
 
@@ -22,8 +25,20 @@ export type Mode = "static" | "dynamic";
  */
 export type Default =
   | React.ReactElement
-  | React.ComponentType
-  | Effect.Effect<React.ReactNode, unknown, unknown>;
+  // The render contract: hosts and the Outlet hand every page component the matched
+  // HandleArgs; narrower author props (`{ params: { slug } }`) are supertypes of it.
+  | React.ComponentType<HandleArgs>
+  // The one requirement a page Effect may declare: the matched Request. Hosts and the
+  // Outlet both provide it, so the channel is honest instead of `unknown`-erased.
+  | Effect.Effect<React.ReactNode, never, pageServices.Request>;
+
+/** Loose render args every page component can rely on (mirrors ../Route.HandleArgs). */
+export type HandleArgs = {
+  readonly params: Record<string, string>;
+  readonly query: Record<string, string>;
+  readonly pathname: string;
+  readonly href: string;
+};
 
 /**
  * Page mint — value + class base.
@@ -43,25 +58,13 @@ export interface AnyPage<
 }
 
 export const isPage = (u: unknown): u is AnyPage =>
-  typeof u === "function" &&
-  u !== null &&
-  TypeId in u &&
-  // SAFE: inside the guard that proves the shape — the brand equality IS the validation.
-  (u as AnyPage)[TypeId] === TypeId;
+  typeof u === "function" && hasBrand(u, TypeId);
 
 const isOptionsBag = (u: unknown): u is RequestOptions => {
   if (u === null || typeof u !== "object") return false;
   if (React.isValidElement(u)) return false;
   if (Effect.isEffect(u)) return false;
   return true;
-};
-
-const pageProto = {
-  [TypeId]: TypeId,
-  pipe(this: AnyPage) {
-    // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
-    return pipeArguments(this, arguments);
-  },
 };
 
 const makeProto = <
@@ -72,15 +75,17 @@ const makeProto = <
   readonly mode: M;
   readonly default: Default;
 }): AnyPage<Options, M> => {
-  function PageMint() {}
-  Object.setPrototypeOf(PageMint, pageProto);
+  class PageMint {}
   return Object.assign(PageMint, {
     [TypeId]: TypeId,
     options: options.options,
     mode: options.mode,
     default: options.default,
-  // SAFE: mint assembled field-by-field above; AnyPage restates it with the mode literal.
-  }) as unknown as AnyPage<Options, M>;
+    pipe(this: AnyPage) {
+      // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
+      return pipeArguments(this, arguments);
+    },
+  });
 };
 
 type Body =
@@ -88,16 +93,15 @@ type Body =
   // `never` props: accepts a component of ANY props shape (contravariance) — the host
   // adapts the actual props (soft-nav `params` bags, Waku flats) at render time.
   | React.ComponentType<never>
-  | Effect.Effect<React.ReactNode, unknown, unknown>;
+  | Effect.Effect<React.ReactNode, never, pageServices.Request>;
 
 type MakeOverload = {
   <const O extends RequestOptions, P extends object>(
     options: O,
-    body: React.ComponentType<P> | React.ReactElement | Effect.Effect<
-      React.ReactNode,
-      unknown,
-      unknown
-    >,
+    body:
+      | React.ComponentType<P>
+      | React.ReactElement
+      | Effect.Effect<React.ReactNode, never, pageServices.Request>,
   ): AnyPage<O, "dynamic">;
   (
     body: Body,
@@ -107,11 +111,10 @@ type MakeOverload = {
 type StaticOverload = {
   <const O extends RequestOptions, P extends object>(
     options: O,
-    body: React.ComponentType<P> | React.ReactElement | Effect.Effect<
-      React.ReactNode,
-      unknown,
-      unknown
-    >,
+    body:
+      | React.ComponentType<P>
+      | React.ReactElement
+      | Effect.Effect<React.ReactNode, never, pageServices.Request>,
   ): AnyPage<O, "static">;
   (
     body: Body,
@@ -119,43 +122,54 @@ type StaticOverload = {
 };
 
 const parseArgs = (
-  args: ReadonlyArray<unknown>,
+  first: RequestOptions | Default,
+  second?: Default,
 ): { readonly options: RequestOptions; readonly default: Default } => {
-  if (args.length === 1) {
-    // SAFE: one-arg form — the sole arg is the page default per the overload contract.
-    return { options: {}, default: args[0] as Default };
+  // Runtime dispatch fills the overload gap: an options bag routes the two-arg form,
+  // anything else is the page default; a mismatched shape fails loudly.
+  if (second === undefined) {
+    if (isOptionsBag(first)) {
+      throw new errors.PageMakeArguments();
+    }
+    return { options: {}, default: first };
   }
-  const [first, second] = args;
-  if (isOptionsBag(first)) {
-    // SAFE: two-arg form — second is the page default per the overload contract.
-    return { options: first, default: second as Default };
+  if (!isOptionsBag(first)) {
+    throw new errors.PageMakeArguments();
   }
-  throw new Error(
-    "Page.make: expected Page.make(default) or Page.make(options, default)",
-  );
+  return { options: first, default: second };
 };
 
-/** @internal */
-export const make = ((...args: ReadonlyArray<unknown>) => {
-  const parsed = parseArgs(args);
-  return makeProto({
-    options: parsed.options,
-    mode: "dynamic",
-    default: parsed.default,
-  });
-// SAFE: never-erased impl behind the typed make overloads above.
-}) as MakeOverload;
+// The overload objects correlate the options generic with the two-argument form —
+// TypeScript cannot check a single implementation against that correlation, so the
+// dispatchers validate their argument shapes at runtime (parseArgs throws
+// PageMakeArguments on a mismatch) and the export is narrowed by a predicate.
+const minter = <M extends Mode>(mode: M) =>
+  (first: RequestOptions | Default, second?: Default): AnyPage<RequestOptions, M> => {
+    const parsed = parseArgs(first, second);
+    return makeProto({
+      options: parsed.options,
+      mode,
+      default: parsed.default,
+    });
+  };
 
+const isMakeOverload = (u: unknown): u is MakeOverload => typeof u === "function";
+const isStaticOverload = (u: unknown): u is StaticOverload =>
+  typeof u === "function";
+
+const makeDispatch = minter("dynamic");
+if (!isMakeOverload(makeDispatch)) {
+  throw new errors.InvariantViolated({ what: "Page.make dispatcher must be callable" });
+}
 /** @internal */
-export const static_ = ((...args: ReadonlyArray<unknown>) => {
-  const parsed = parseArgs(args);
-  return makeProto({
-    options: parsed.options,
-    mode: "static",
-    default: parsed.default,
-  });
-// SAFE: never-erased impl behind the typed static overloads above.
-}) as StaticOverload;
+export const make: MakeOverload = makeDispatch;
+
+const staticDispatch = minter("static");
+if (!isStaticOverload(staticDispatch)) {
+  throw new errors.InvariantViolated({ what: "Page.static dispatcher must be callable" });
+}
+/** @internal */
+export const static_: StaticOverload = staticDispatch;
 
 /** @internal */
 export const remintStatic = <

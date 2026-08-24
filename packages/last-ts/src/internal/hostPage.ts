@@ -7,9 +7,11 @@
  * @internal
  */
 import * as React from "react";
+import * as errors from "./errors";
 import { Effect } from "effect";
 import type { RequestOptions } from "./routeRequest";
 import * as pageMint from "./pageMint";
+import * as pageServices from "./pageServices";
 import type * as Route from "../Route";
 
 /**
@@ -166,6 +168,14 @@ export const hostPropsToHandleArgs = (
   return { pathname, href, params, query };
 };
 
+/** Union dispatch by the Effect runtime guard — sound narrowing of the typed union. */
+const isEffectBody = (
+  u:
+    | React.ComponentType<pageMint.HandleArgs>
+    | Effect.Effect<React.ReactNode, never, pageServices.Request>,
+): u is Effect.Effect<React.ReactNode, never, pageServices.Request> =>
+  Effect.isEffect(u);
+
 const toComponent = (
   body: pageMint.Default,
   filePath?: string,
@@ -175,35 +185,31 @@ const toComponent = (
     Fixed.displayName = "Page.default(element)";
     return Fixed;
   }
-  // Boolean guard (not an inline narrow) keeps `body` un-narrowed, so the any-channel
-  // Effect type from `isEffect`'s predicate never lands in a typed position.
-  const bodyIsEffect: boolean = Effect.isEffect(body);
-  if (bodyIsEffect) {
-    // RSC host: run the Effect once per request. Do **not** import View /
-    // AtomReact here — those are client-only (`createContext`) and break RSC.
-    // Soft-nav Outlet still uses View.effect / Atom for live Effect pages.
-    // SAFE: a Page mint's Effect body is contracted upstream to ReactNode success with no
-    // requirements (host pages are self-contained); channels are unobservable at runtime.
-    const program = body as Effect.Effect<React.ReactNode>;
+  if (isEffectBody(body)) {
+    // RSC host: run the Effect once per request, providing the matched Request from
+    // the host's flat props. Do **not** import View / AtomReact here — those are
+    // client-only (`createContext`) and break RSC.
+    const program = body;
     // Plain Promise-returning fn (not `async`) — this is the React Server Component
     // boundary; React awaits the returned Promise itself.
-    const EffectPage = (): Promise<React.ReactNode> =>
-      Effect.runPromise(program).then((node) =>
+    const EffectPage: HostComponent = (props) => {
+      const request = hostPropsToHandleArgs(props, filePath);
+      return Effect.runPromise(
+        program.pipe(Effect.provideService(pageServices.Request, request)),
+      ).then((node) =>
         node === null || node === undefined || typeof node === "boolean"
           ? null
           : node,
       );
+    };
     EffectPage.displayName = "Page.default(effect)";
-    // SAFE: an RSC page is a zero-prop Promise component — HostComponent widens props.
-    return EffectPage as HostComponent;
+    return EffectPage;
   }
-  // SAFE: non-element, non-effect body is a component per pageMint.Default.
-  const Comp = body as React.ComponentType<Route.HandleArgs>;
-  const Wrapped: React.FC<Record<string, unknown>> = (props) =>
+  const Comp = body;
+  const Wrapped: HostComponent = (props) =>
     React.createElement(Comp, hostPropsToHandleArgs(props, filePath));
   Wrapped.displayName = "Page.default(component)";
-  // SAFE: the wrapper takes the flat host prop record HostComponent declares.
-  return Wrapped as HostComponent;
+  return Wrapped;
 };
 
 /**
@@ -214,7 +220,7 @@ const toComponent = (
  *
  * @internal
  */
-export const fromPage: {
+type FromPageOverloads = {
   <const P extends string, O extends RequestOptions>(
     path: P,
     page: pageMint.AnyPage<O, "static">,
@@ -225,7 +231,7 @@ export const fromPage: {
   ): { readonly path: P; readonly render: "dynamic"; readonly component: HostComponent };
   <const P extends string>(
     path: P,
-    page: React.ComponentType,
+    page: React.ComponentType<pageMint.HandleArgs>,
   ): { readonly path: P; readonly render: "dynamic"; readonly component: HostComponent };
   <O extends RequestOptions>(
     page: pageMint.AnyPage<O, "static">,
@@ -233,40 +239,55 @@ export const fromPage: {
   <O extends RequestOptions>(
     page: pageMint.AnyPage<O, "dynamic">,
   ): HostPageDynamic;
-  (page: React.ComponentType): HostPageDynamic;
-} = ((
-  pathOrPage: string | pageMint.AnyPage | React.ComponentType,
-  maybePage?: pageMint.AnyPage | React.ComponentType,
-): HostPage => {
-  const filePath = typeof pathOrPage === "string" ? pathOrPage : undefined;
-  const page = (
-    typeof pathOrPage === "string" ? maybePage! : pathOrPage
-  // SAFE: two-arg overload — args[1] is the page/component per the contract above.
-  ) as pageMint.AnyPage | React.ComponentType;
+  (page: React.ComponentType<pageMint.HandleArgs>): HostPageDynamic;
+};
 
-  if (pageMint.isPage(page)) {
-    if (page.mode === "static") {
+export const fromPage: FromPageOverloads = (() => {
+  const dispatch = (
+    pathOrPage:
+      | string
+      | pageMint.AnyPage
+      | React.ComponentType<pageMint.HandleArgs>,
+    maybePage?: pageMint.AnyPage | React.ComponentType<pageMint.HandleArgs>,
+  ): HostPage => {
+    // Runtime dispatch fills the overload gap; a missing page fails loudly.
+    let filePath: string | undefined;
+    let page: pageMint.AnyPage | React.ComponentType<pageMint.HandleArgs>;
+    if (typeof pathOrPage === "string") {
+      if (maybePage === undefined) {
+        throw new errors.InvariantViolated({
+          what: "fromPage(path) requires a page or component",
+        });
+      }
+      filePath = pathOrPage;
+      page = maybePage;
+    } else {
+      page = pathOrPage;
+    }
+
+    if (pageMint.isPage(page)) {
       return {
         ...(filePath !== undefined ? { path: filePath } : {}),
-        render: "static" as const,
+        render: page.mode === "static" ? ("static" as const) : ("dynamic" as const),
         component: toComponent(page.default, filePath),
       };
     }
+    const Comp = page;
+    const Wrapped: HostComponent = (props) =>
+      React.createElement(Comp, hostPropsToHandleArgs(props, filePath));
     return {
       ...(filePath !== undefined ? { path: filePath } : {}),
       render: "dynamic" as const,
-      component: toComponent(page.default, filePath),
+      component: Wrapped,
     };
-  }
-  // SAFE: non-mint, non-element, non-effect default is a component per pageMint.Default.
-  const Comp = page as React.ComponentType<Route.HandleArgs>;
-  const Wrapped: React.FC<Record<string, unknown>> = (props) =>
-    React.createElement(Comp, hostPropsToHandleArgs(props, filePath));
-  return {
-    ...(filePath !== undefined ? { path: filePath } : {}),
-    render: "dynamic" as const,
-    // SAFE: the wrapper takes the flat host prop record HostComponent declares.
-    component: Wrapped as HostComponent,
   };
-// SAFE: never-erased impl behind the typed fromPage overloads above.
-}) as typeof fromPage;
+  // The overload object correlates path/page argument shapes with the returned render
+  // mode; the dispatcher validates those shapes at runtime, and the export is narrowed
+  // by a predicate (the correlation itself has no runtime representation).
+  const isFromPageOverloads = (u: unknown): u is FromPageOverloads =>
+    typeof u === "function";
+  if (!isFromPageOverloads(dispatch)) {
+    throw new errors.InvariantViolated({ what: "fromPage dispatcher must be callable" });
+  }
+  return dispatch;
+})();

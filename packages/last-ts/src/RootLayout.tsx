@@ -19,6 +19,11 @@ export type RootRender = layoutReact.RootRender;
 
 const RootLayoutTypeId = "~last-ts/RootLayout" as const;
 
+/** The minted root-layout class: abstract-constructable, branded, and a Reference. @public */
+export type Handle = (abstract new (_: never) => Record<never, never>) &
+  AnyRootLayout &
+  Context.Reference<React.FC<{ readonly children: React.ReactNode }>>;
+
 /**
  * Minted root layout — Component takes host `children` into the outlet slot.
  *
@@ -63,9 +68,7 @@ export const make =
   (
     key: string,
     render: RootRender,
-  ): (abstract new (_: never) => Record<never, never>) &
-    AnyRootLayout &
-    Context.Reference<React.FC<{ readonly children: React.ReactNode }>> => {
+  ): Handle => {
     const Component = layoutReact.makeRootComponent(key, render);
     const reference = Context.Reference(key, {
       defaultValue: () => Component,
@@ -76,14 +79,7 @@ export const make =
       static readonly render = render;
       static readonly Component = Component;
     };
-    // SAFE: class-factory erasure — Cls carries the statics assembled above and
-    // Object.assign grafts the Reference; TS can't compose an abstract-constructor
-    // intersection from that build. No runtime value to validate.
-    return Object.assign(Cls, reference) as unknown as (abstract new (
-      _: never,
-    ) => Record<never, never>) &
-      AnyRootLayout &
-      Context.Reference<React.FC<{ readonly children: React.ReactNode }>>;
+    return Object.assign(Cls, reference);
   };
 
 /**
