@@ -1290,9 +1290,34 @@ NodePolicy.PrimaryAddress   —       dissolves; see 6.6
 NodePolicy.Proxy            —       un-replaced; see 6.15 item 1
 ```
 
-Supporting evidence that the stamp was never load-bearing: `NodePolicyConfigKey` is written at
-`nodeMake.ts:237` and read only by `nodePolicyOf`, whose only callers are its own tests
-(`test/node-make.test.ts:27`, `:44`). No runtime path consumes it.
+**The entire module is inert — verified 2026-08-21.** Not just the stamp: every one of the five
+knobs has zero consumers anywhere outside `NodePolicy.ts` itself.
+
+```
+0  NodePolicy.PrimaryAddress          1  LookupPolicy.Sticky
+0  NodePolicy.Listen                  8  LookupPolicy.StreamGap
+0  NodePolicy.Advertise               2  LookupPolicy.ColdAmbiguous
+0  NodePolicy.Proxy                   4  LookupPolicy.Pick
+0  NodePolicy.As                      3  LookupPolicy.Verify
+                                      3  LookupPolicy.Conflict
+                                      3  LookupPolicy.Yield
+```
+
+`NodePolicyConfigKey` is written at `nodeMake.ts:237` and read only by `nodePolicyOf`, whose only
+callers are its own tests (`test/node-make.test.ts:27`, `:44`).
+
+So "NodePolicy dissolves" is **not a redesign — it is deleting dead code**, with zero behaviour
+change. That makes it the safest item in §6, not a risky one. LookupPolicy is live and its rework
+(6.7) is the one that actually changes behaviour.
+
+It also means the module's own documented examples describe a no-op:
+
+``` ts
+// src/NodePolicy.ts:23 — none of these do anything today
+NodePolicy.listen("All")
+NodePolicy.advertise("Primary")
+NodePolicy.proxy("Prefer")
+```
 
 ### 6.6 `PrimaryAddress` dissolving forces labels
 
@@ -1942,11 +1967,28 @@ adds
 
 ### 6.15 Problems still to solve
 
-1. **Stable address across a process swap.** Owner: *"It has to be stable."* Claims already exist —
-   `Identity` is "exclusive HyperService key claims (first wins; dead winners replaceable)" — and
-   `Hyperlink.ts:4342` claims `{ key, nodeKey, kind, url?, path? }`. Open: whether the socket is
-   what stays fixed (needs `SO_REUSEPORT` or a bind gap) or the identity is (dialers re-resolve).
-   Proxy was the answer to the first; it is currently un-replaced.
+1. **Stable address across a process swap — never built.** Owner: *"It has to be stable."*
+   **Correction (2026-08-21): proxy was not an answer that got cut.** `NodePolicy.Proxy` has zero
+   consumers; it was a declaration that never did anything. Nothing regressed — the socket-stable
+   swap has never existed.
+
+   What *is* implemented is the identity-stable swap. `restartSuccessor` spawns B with its own dial,
+   stamps `Advice.prefer(B)` while A is still up, then shuts A down:
+
+   ``` ts
+   // src/internal/launcher.ts:1428
+   yield* up(options.successor)
+   // Sticky dual-serve: stamp Advice.prefer(B) while A is still up so
+   // lookupClient / peersLayer rebinds before shutdown tears A down.
+   yield* Effect.forEach(options.tags, (tag) => Advice.prefer(tag.key, successorKey), …)
+   yield* nodeShutdown(outgoing)
+   ```
+
+   So fleet-internal clients already survive a cutover by re-resolving. The requirement is really
+   about **clients that do not participate in Lookup** — a browser, a curl, another org's service —
+   which hold a URL and cannot re-resolve. Open: whether Hyperlink binds a stable front itself
+   (a forwarder, or `SO_REUSEPORT` handoff), or treats that as the ingress/load-balancer's job,
+   which is where it usually already lives for a public HTTP address.
 2. **A Lookup node on every machine.** Owner wants one per machine so an intra-machine dial never
    leaves the box. `Address.unixFromKey` already derives a socket path from the node key with no
    round trip — how much of this is already covered, and what the per-machine Lookup adds.
