@@ -7,7 +7,7 @@ REVIEW.md
 AI_CONTEXT.md
 
 # Dependencies
-node_modules/
+node_modules
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
@@ -20,6 +20,11 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.keys
+# dotenvx: encrypted docs/site/.env is commit-safe (private key stays in .env.keys)
+!docs/site/.env
+!docs/site/.env.example
+docs/site/.env.keys
 
 # IDE
 .vscode/
@@ -41,6 +46,10 @@ pnpm-debug.log*
 # Testing
 coverage/
 .nyc_output/
+
+# Dream-redeploy active worker (file-swap target; regenerated each run)
+examples/launcher/dream-redeploy-worker.active.ts
+examples/launcher/dream-redeploy-worker.active-*.ts
 
 # Misc
 scratchpad/

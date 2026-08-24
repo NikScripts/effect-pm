@@ -8,18 +8,32 @@
 import { Effect, Schema, Stream } from "effect";
 import type { Scope } from "effect/Scope";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
-import { StoreScopeNotRegistered } from "./errors";
+import { StoreScopeNotRegistered, StoreWriteError } from "./errors";
+import { retype } from "../nodeServerCommon";
 import {
   isStoreContractValue,
   materializeContractHandle,
   type StoreContractValue,
 } from "./contractDef";
-import { applyQueryOpts, queryOptsFromReadPayload } from "./helpers";
+import { applyQueryOpts, isRecord, limitOpts, queryOptsFromReadPayload, windowOpts } from "./helpers";
 import type { StoreChangeEvent, StoreJournalDecodeError } from "./errors";
 import { StoreChangeEvent as StoreChangeEventClass } from "./errors";
 import { decodeJournalPayload, encodeJournalPayload } from "./journalCodec";
 import { trimScopeRetention } from "./journalRetention";
 import { APPEND_TAG, QUERY_TAG, type FlatStoreHandleOf, type StoreHandleOf, type StoreSpec } from "./spec";
+import { filterRowsByWhere } from "./where";
+
+const encodeCodecJson = <S extends Schema.Schema<unknown>>(
+  schema: S,
+  value: unknown,
+): Effect.Effect<unknown, never, never> =>
+  retype(Schema.encodeUnknownEffect(Schema.toCodecJson(schema))(value) as never);
+
+const decodeUnknownSchema = <S extends Schema.Schema<unknown>>(
+  schema: S,
+  value: unknown,
+): Effect.Effect<Schema.Schema.Type<S>, never, never> =>
+  retype(Schema.decodeUnknownEffect(schema)(value) as never);
 
 /** @internal */
 export interface StoredRow {
@@ -116,18 +130,50 @@ export const makeScopeHandle = <S extends StoreSpec>(
     if (entry._tag === APPEND_TAG) {
       (handle as Record<string, unknown>)[name] = (payload: unknown) =>
         Effect.gen(function* () {
-          const decoded = yield* Schema.decodeUnknownEffect(entry.schema)(payload);
-          const inputs = Array.isArray(decoded) ? decoded : [decoded];
+          const inputs = Array.isArray(payload) ? payload : [payload];
           for (const one of inputs) {
-            const encoded = yield* encodeJournalPayload(one);
-            yield* sideEffects.journal.write({
-              event: name,
-              primaryKey: sideEffects.scopeKey,
-              payload: encoded,
-              effect: () => Effect.void,
-            });
+            // `append` receives DECODED domain values. `Schema.toCodecJson` is Effect's own
+            // schema→JSON codec — it serializes rich types (`DateTime`, `Exit`, `Cause`, `Duration`)
+            // to a JSON-safe form and decodes them back, which the naive object walk cannot.
+            //
+            // An encode/serialization failure here means the value does not fit the declared shape —
+            // a programming bug, not a runtime condition — so it `orDie`s as a defect (surfacing the
+            // bug) rather than becoming a catchable failure. The `journal.write` below is left as a
+            // normal failure: a journal/IO write error stays in the cause and remains catchable.
+            const wire = yield* Effect.orDie(
+              encodeCodecJson(entry.schema, one),
+            );
+            const encoded = yield* Effect.orDie(encodeJournalPayload(wire));
+            // The journal/IO write is the genuine catchable write failure — surface it as
+            // `StoreWriteError` (the encode above already `orDie`s a schema mismatch as a defect).
+            yield* sideEffects.journal
+              .write({
+                event: name,
+                primaryKey: sideEffects.scopeKey,
+                payload: encoded,
+                effect: () => Effect.void,
+              })
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new StoreWriteError({
+                      cause,
+                      detail: `append to scope "${sideEffects.scopeKey}" (event "${name}")`,
+                    }),
+                ),
+              );
             if (sideEffects.maxRows !== undefined) {
-              yield* trimScopeRetention(sideEffects.scopeKey, sideEffects.maxRows);
+              // Retention trim is part of the same write path — a trim IO failure is a write hiccup,
+              // not a bug, so it too becomes a catchable `StoreWriteError` (swallowed by the guard).
+              yield* trimScopeRetention(sideEffects.scopeKey, sideEffects.maxRows).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new StoreWriteError({
+                      cause,
+                      detail: `retention trim on scope "${sideEffects.scopeKey}"`,
+                    }),
+                ),
+              );
             }
           }
         });
@@ -135,19 +181,31 @@ export const makeScopeHandle = <S extends StoreSpec>(
       const sourceKeys = querySourceKeys(spec, entry);
       (handle as Record<string, unknown>)[name] = (payload: unknown) =>
         Effect.gen(function* () {
-          const decodedPayload = yield* Schema.decodeUnknownEffect(entry.payload)(payload);
+          const decodedPayload = yield* decodeUnknownSchema(entry.payload, payload);
           const entries = yield* sideEffects.journal.entries;
           const rows = yield* rowsForScope(entries, sideEffects.scopeKey, sourceKeys);
           const capped = capRetention(
             [...rows].sort((a, b) => a.occurredAtMillis - b.occurredAtMillis),
             sideEffects.maxRows,
           );
-          const matched = applyQueryOpts(
+          const where =
+            isRecord(decodedPayload) && "where" in decodedPayload
+              ? decodedPayload.where
+              : undefined;
+          // Window first, then field filters, then limit — so `limit` counts matching rows.
+          const queryOpts = queryOptsFromReadPayload(decodedPayload);
+          const windowed = applyQueryOpts(
             capped,
-            queryOptsFromReadPayload(decodedPayload),
+            windowOpts(queryOpts),
+            (row) => row.occurredAtMillis,
+          );
+          const filtered = filterRowsByWhere(windowed, where, (row) => row.payload);
+          const matched = applyQueryOpts(
+            filtered,
+            limitOpts(queryOpts),
             (row) => row.occurredAtMillis,
           ).map((row) => row.payload);
-          return yield* Schema.decodeUnknownEffect(entry.result)(matched);
+          return yield* decodeUnknownSchema(Schema.toCodecJson(entry.result), matched);
         });
     }
   }
@@ -156,35 +214,18 @@ export const makeScopeHandle = <S extends StoreSpec>(
 };
 
 /** @internal */
-export const materializeStoreHandle = (
-  input: StoreSpec | StoreContractValue,
-  sideEffects: AppendSideEffects,
-): StoreHandleOf<StoreSpec | StoreContractValue> => {
-  if (isStoreContractValue(input)) {
-    return materializeContractHandle(input, sideEffects) as StoreHandleOf<StoreContractValue>;
-  }
-  return makeScopeHandle(input, sideEffects) as StoreHandleOf<StoreSpec>;
-};
-
-/** @internal */
-export const acquireFromScopes = <Input extends StoreSpec | StoreContractValue>(
-  scopes: ReadonlyMap<string, ScopeState>,
-  key: string,
+export const materializeStoreHandle = <Input extends StoreSpec | StoreContractValue>(
   input: Input,
-): Effect.Effect<StoreHandleOf<Input>, StoreScopeNotRegistered, EventJournal.EventJournal> =>
-  Effect.gen(function* () {
-    const scope = scopes.get(key);
-    if (scope === undefined) {
-      return yield* new StoreScopeNotRegistered({ key });
-    }
-    const journal = yield* EventJournal.EventJournal;
-    const sideEffects: AppendSideEffects = {
-      journal,
-      scopeKey: key,
-      maxRows: scope.maxRows,
-    };
-    return materializeStoreHandle(input, sideEffects) as StoreHandleOf<Input>;
-  });
+  sideEffects: AppendSideEffects,
+): StoreHandleOf<Input> => {
+  // Handles are built by dynamic property assignment, so this is the one boundary between runtime
+  // construction and the static type. Tightening `Input` here makes the whole resolution chain
+  // (`bridge.at` → `Tag.store`) precise, removing the casts consumers/tests otherwise carry.
+  if (isStoreContractValue(input)) {
+    return materializeContractHandle(input, sideEffects) as StoreHandleOf<Input>;
+  }
+  return makeScopeHandle(input, sideEffects) as StoreHandleOf<Input>;
+};
 
 /** @internal */
 export const changesFromScopes = (

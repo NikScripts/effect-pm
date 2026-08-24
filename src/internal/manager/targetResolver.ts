@@ -1,5 +1,5 @@
 /**
- * Pure target resolution helpers for multi-group ProcessManager CLI commands.
+ * Pure target resolution helpers for multi-group DaemonManager CLI commands.
  *
  * The CLI keeps canonical ids Effect-style and case-preserving, but users can
  * type normalized suffixes such as `north-west/billing-group/sync-invoices`.
@@ -10,44 +10,44 @@
  */
 
 /** Candidate command target from a fetched group contract. */
-export interface ProcessManagerTargetCandidate {
+export interface DaemonManagerTargetCandidate {
   readonly key: string;
-  readonly kind: "process" | "queue";
-  readonly groupId: string;
+  readonly kind: string;
+  readonly wireKey: string;
   readonly controls: ReadonlyArray<string>;
 }
 
-/** Exactly one process or queue matched the user's input. */
-export interface ResolvedProcessManagerTarget {
+/** Exactly one daemon or queue matched the user's input. */
+export interface ResolvedDaemonManagerTarget {
   readonly _tag: "Resolved";
   readonly input: string;
   readonly normalizedInput: string;
-  readonly candidate: ProcessManagerTargetCandidate;
+  readonly candidate: DaemonManagerTargetCandidate;
 }
 
-/** More than one process or queue matched the user's input. */
-export interface AmbiguousProcessManagerTarget {
+/** More than one daemon or queue matched the user's input. */
+export interface AmbiguousDaemonManagerTarget {
   readonly _tag: "Ambiguous";
   readonly input: string;
   readonly normalizedInput: string;
   readonly candidates: ReadonlyArray<{
-    readonly candidate: ProcessManagerTargetCandidate;
+    readonly candidate: DaemonManagerTargetCandidate;
     readonly minimumSuffix: string;
     readonly unique: boolean;
   }>;
 }
 
-/** No process or queue matched the user's input. */
-export interface MissingProcessManagerTarget {
+/** No daemon or queue matched the user's input. */
+export interface MissingDaemonManagerTarget {
   readonly _tag: "Missing";
   readonly input: string;
   readonly normalizedInput: string;
 }
 
-export type ProcessManagerTargetResolution =
-  | ResolvedProcessManagerTarget
-  | AmbiguousProcessManagerTarget
-  | MissingProcessManagerTarget;
+export type DaemonManagerTargetResolution =
+  | ResolvedDaemonManagerTarget
+  | AmbiguousDaemonManagerTarget
+  | MissingDaemonManagerTarget;
 
 const splitSegments = (id: string): ReadonlyArray<string> =>
   id.split("/").filter((segment) => segment.length > 0);
@@ -65,8 +65,8 @@ const normalizeSegment = (segment: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-/** Normalize a full process/queue key or user-entered alias. */
-export const normalizeProcessManagerTarget = (input: string): string =>
+/** Normalize a full daemon/queue key or user-entered alias. */
+export const normalizeDaemonManagerTarget = (input: string): string =>
   splitSegments(input)
     .map(normalizeSegment)
     .filter((segment) => segment.length > 0)
@@ -104,16 +104,16 @@ const shortestUniqueSuffix = (
 };
 
 /**
- * Resolve one user-entered target against process and queue candidates.
+ * Resolve one user-entered target against daemon and queue candidates.
  */
-export const resolveProcessManagerTarget = (
+export const resolveDaemonManagerTarget = (
   input: string,
-  candidates: ReadonlyArray<ProcessManagerTargetCandidate>,
-): ProcessManagerTargetResolution => {
-  const normalizedInput = normalizeProcessManagerTarget(input);
+  candidates: ReadonlyArray<DaemonManagerTargetCandidate>,
+): DaemonManagerTargetResolution => {
+  const normalizedInput = normalizeDaemonManagerTarget(input);
   const indexed = candidates.map((candidate) => ({
     candidate,
-    normalizedId: normalizeProcessManagerTarget(candidate.key),
+    normalizedId: normalizeDaemonManagerTarget(candidate.key),
   }));
   const matches = indexed.filter(({ normalizedId }) =>
     isSuffixMatch(normalizedId, normalizedInput)

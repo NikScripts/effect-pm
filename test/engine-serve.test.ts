@@ -1,22 +1,22 @@
 import { Context, Duration, Effect, Layer } from "effect";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
-import * as Process from "../src/Process";
-import { Polling } from "../src/Polling";
-
-// The engine-serve gap: Resource.serve is query-only (no worker/tick engine). QueueResource.serve /
-// Process.serve must RUN the engine AND preserve R so a per-resource Layer.provide isolates the
+import * as Hyperlink from "../src/Hyperlink";
+import * as Daemon from "../src/Daemon";
+import * as Polling from "../src/Polling";
+import * as PmNode from "../src/Node";
+// The engine-serve gap: Hyperlink.serve is query-only (no worker/tick engine). WorkPool.serve /
+// Daemon.serve must RUN the engine AND preserve R so a per-resource Layer.provide isolates the
 // dependency. Proof: two processes whose TICK reads the same Dep tag with different values; each engine
 // must actually fire, and each must see its own value.
 
 const observed: Array<string> = [];
 
 class Dep extends Context.Service<Dep, string>()(
-  "@nikscripts/effect-pm/test/engine-serve.test/Dep",
+  "hyperlink-ts/test/engine-serve.test/Dep",
 ) {}
 class Recorder extends Context.Service<Recorder, (dep: string) => Effect.Effect<void>>()(
-  "@nikscripts/effect-pm/test/engine-serve.test/Recorder",
+  "hyperlink-ts/test/engine-serve.test/Recorder",
 ) {}
 const recorderLayer = Layer.succeed(Recorder, (dep) =>
   Effect.sync(() => {
@@ -24,8 +24,8 @@ const recorderLayer = Layer.succeed(Recorder, (dep) =>
   }),
 );
 
-class ProcA extends Process.Tag<ProcA>()("engine-serve/ProcA") {}
-class ProcB extends Process.Tag<ProcB>()("engine-serve/ProcB") {}
+class ProcA extends Daemon.Service<ProcA>()("engine-serve/ProcA") {}
+class ProcB extends Daemon.Service<ProcB>()("engine-serve/ProcB") {}
 
 // one tick body — reads its Dep and records it. R = Dep | Recorder.
 const tick = Effect.gen(function* () {
@@ -35,15 +35,15 @@ const tick = Effect.gen(function* () {
 });
 const cfg = { effect: tick, polling: Polling.spaced(Duration.millis(50)) };
 
-const Node = Resource.httpServer().pipe(
+const Node = PmNode.httpServer().pipe(
   Layer.provideMerge(
     Layer.mergeAll(
-      Process.serve(ProcA, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depA"))),
-      Process.serve(ProcB, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depB"))),
+      Daemon.serveMemory(ProcA, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depA"))),
+      Daemon.serveMemory(ProcB, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depB"))),
     ),
   ),
   Layer.provide(recorderLayer), // Dep discharged per resource; Recorder shared
-  Layer.provide(Resource.servedResourcesLayer),
+  Layer.provide(Hyperlink.servedHyperServicesLayer),
   Layer.provide(NodeHttpServer.layerTest),
 );
 

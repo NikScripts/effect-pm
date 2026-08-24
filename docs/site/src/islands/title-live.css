@@ -1,0 +1,112 @@
+.last-title-live {
+  --tl-bg: #f3efe6;
+  --tl-ink: #1c1915;
+  --tl-muted: #6b6458;
+  --tl-panel: #fffdf8;
+  --tl-line: #d9d0c0;
+  --tl-accent: #0f6b5c;
+  --tl-accent-ink: #f4fffc;
+  border: 1px solid var(--tl-line);
+  background:
+    radial-gradient(circle at 10% 0%, #ffe8c8 0%, transparent 45%),
+    radial-gradient(circle at 90% 20%, #c8ebe3 0%, transparent 40%),
+    var(--tl-bg);
+  color: var(--tl-ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  overflow: hidden;
+}
+
+.last-title-live-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--tl-line);
+  background: color-mix(in srgb, var(--tl-panel) 85%, transparent);
+}
+
+.last-title-live-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.last-title-live-meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  color: var(--tl-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.last-title-live .page {
+  max-width: none;
+  margin: 0;
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+
+.last-title-live header h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.last-title-live header p {
+  margin: 0 0 1.1rem;
+  color: var(--tl-muted);
+  font-size: 0.95rem;
+}
+
+.last-title-live .panel {
+  background: var(--tl-panel);
+  border: 1px solid var(--tl-line);
+  padding: 1rem 1.15rem 1.25rem;
+}
+
+.last-title-live .eyebrow {
+  margin: 0 0 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tl-muted);
+}
+
+.last-title-live .eyebrow:not(:first-child) {
+  margin-top: 1rem;
+}
+
+.last-title-live h1 {
+  margin: 0 0 0.4rem;
+  font-size: 2rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.last-title-live .muted {
+  margin: 0 0 0.65rem;
+  color: var(--tl-muted);
+  font-size: 0.92rem;
+}
+
+.last-title-live .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.last-title-live button {
+  appearance: none;
+  border: 1px solid var(--tl-accent);
+  background: var(--tl-accent);
+  color: var(--tl-accent-ink);
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.last-title-live button:hover {
+  filter: brightness(1.05);
+}

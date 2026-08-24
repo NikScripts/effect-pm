@@ -1,16 +1,19 @@
 # Examples (`examples/`)
 
-Runnable teaching scripts organized in two layers:
+**Find an example:** open the **[Examples index](../docs/examples.md)** (hub — grouped like the
+guides), or go to `examples/<topic>/<name>.ts` and run `pnpm run example:<topic>-<name>`.
+
+Paired docs live at `docs/examples/<topic>/<name>.md`, Twoslash-`include` the same `.ts`, and
+link to **related examples** (often more than one). Full demos are under [`apps/`](./apps/).
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| **Forms** | [`forms/`](./forms/) | One API shape per file — minimal, focused references |
-| **Scenarios** | [`scenarios/`](./scenarios/) | Descriptive compositions showing subsystems working together |
-| **Shared** | [`shared/`](./shared/) | Test doubles, harness helpers, small shared utilities |
+| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `readiness/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/`, `ui/` | One API shape per file — same names as the guides |
+| **Scenarios** | [`scenarios/`](./scenarios/) | Multi-file / multi-process compositions |
+| **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets, Router mini-docs (not 1:1 Twoslash yet) |
+| **Shared** | [`shared/`](./shared/) | Harness helpers |
 
-Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API tables: [docs/PROCESS-API.md](../docs/PROCESS-API.md), [docs/RESOURCE-API.md](../docs/RESOURCE-API.md).
-
-**Conventions:** Each file has a one-line module header (what + how to run). Teaching notes live **inline next to the code** they describe. Imports omit `.js` extensions — examples run via `tsx` on `.ts` sources directly.
+Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
 
 ---
 
@@ -18,127 +21,218 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 
 - **Node.js** compatible with the repo `engines` field in `package.json`.
 - **Dependencies** installed from the package root (`pnpm install`).
-- Most examples use **`tsx`** via `pnpm run example:*` or `npx tsx`.
+- Most examples use **`tsx`** via `pnpm run example:*`.
 
 ---
 
 ## Suggested tracks
 
-| Track | Read / run in this order |
-|-------|--------------------------|
-| **Start here** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) + the toolkit-by-example guide (`docs/guides/toolkit-by-example.md`) |
-| **Dashboard / TUI** | [`resource-tui/`](./resource-tui/) — terminal dashboards over the resource tags |
-| **Queues** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) → [`forms/queue/custom-queue-resource-n-level.ts`](./forms/queue/custom-queue-resource-n-level.ts) |
-| **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
-| **Process runtime** | `pnpm run example:process-supervisor-patterns` |
-| **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
-| **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
-| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) |
+| Track | Read / run |
+|-------|------------|
+| **Start here** | [`work-pool/priority-retry.ts`](./work-pool/priority-retry.ts) → [hub § WorkPool](../docs/examples.md) |
+| **WorkPool** | `priority-retry` → `named-lanes` → store / serve / durable / refill / metrics |
+| **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
+| **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` → serve / result / schedule / configure |
+| **Node & discovery** | `tag-addressed` → … → `identity-coordinator` → `ask-incumbent-takeover` → `drain-yield-refuse` → `handoff-ab-cutover` → `serve-handoff` → `policy-lookup-cutover` → `lookup-follow-handoff` → `peers-layer-rebind` → `launch-shutdown` |
+| **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` → edge examples |
+| **Launcher** | `minimal-up` → `handle-phases` → `token-injection` → `ready-services` → `ready-timeout` → `lookup-membership` → `ensure-lookup` |
+| **Readiness** | `readiness/with-readiness` → `all-ready` → `monitored-dependency` → `degraded-health` |
+| **Logs** | `logs/live-bus` → `node-journal` → `hyperlink-logs` → `lineage-scope` → `levels` |
+| **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
+| **Observe** | `observe-pack-demo` → `observe-recipes` → `observe-work-pool-pack` / daemon / gate packs · guide [Observe](../docs/guides/observe.md) |
+| **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
+| **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` · `example:apps-router-docs` |
+| **UI Router** | [`ui/router-mini-docs.ts`](./ui/router-mini-docs.ts) + [`ui/group-nav.ts`](./ui/group-nav.ts) → [hub § UI](../docs/examples.md#ui) · `example:ui-group-nav` · browser `example:apps-router-docs` |
 
 ---
 
-## Forms catalog
+## Topic catalog
 
-### Queue
+Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (see `package.json`).
 
-| File | Teaches |
-|------|---------|
-| [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) | `QueueResource.Service`, priority, dedup key, handler retry |
-| [`forms/queue/custom-queue-resource-n-level.ts`](./forms/queue/custom-queue-resource-n-level.ts) | `CustomQueueResource.Tag`, named lanes, `add(item, level?)`, weighted take |
-
-### Resource
+### Lifecycle — guide [Lifecycle](../docs/guides/lifecycle.md)
 
 | File | Teaches |
 |------|---------|
-| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `RunResource.make` unit and input forms + concurrency |
-| [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | `RunResourceStore` per-type facts + `RunResourceState` transitions |
-| [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
-| [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiResource.Service` + `ApiMetrics.Tag` |
-| [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar capture |
+| [`lifecycle/make-and-tools.ts`](./lifecycle/make-and-tools.ts) | `deferStart`, `Lifecycle.from` / `of`, `stop` → Off |
 
-### ProcessStore
+### WorkPool — guide [Work pools](../docs/guides/work-pools.md)
 
 | File | Teaches |
 |------|---------|
-| [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
-| [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + facet reads on SQLite |
+| [`work-pool/priority-retry.ts`](./work-pool/priority-retry.ts) | Priority, dedup key, handler retry |
+| [`work-pool/named-lanes.ts`](./work-pool/named-lanes.ts) | Named lanes, weighted take |
+| [`work-pool/store-analytics.ts`](./work-pool/store-analytics.ts) | `WorkPool.store` soft analytics |
+| [`work-pool/serve-client.ts`](./work-pool/serve-client.ts) | `WorkPool.serve` + `Hyperlink.client` |
+| [`work-pool/durable-sqlite.ts`](./work-pool/durable-sqlite.ts) | SQLite durable backlog recovery |
+| [`work-pool/refill.ts`](./work-pool/refill.ts) | `refill.onStart` / `onDrained` |
+| [`work-pool/rate-limit.ts`](./work-pool/rate-limit.ts) | Drain `rateLimit` config |
+| [`work-pool/history-metrics.ts`](./work-pool/history-metrics.ts) | `HistoryStore` + `metrics.query` |
+| [`work-pool/typed-success.ts`](./work-pool/typed-success.ts) | Tag `success` + `Completed.success` |
+| [`work-pool/configure.ts`](./work-pool/configure.ts) | `WorkPool.configure` layer patch |
 
-Storage options:
-
-- `ProcessStorage.layer` — in-memory built-in storage facets for tests and demos.
-- `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
-- `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
-- `QueueResourceStore` — queue semantic storage facet.
-
-### Schedule
-
-| File | Teaches |
-|------|---------|
-| [`forms/schedule/schedule-at.ts`](./forms/schedule/schedule-at.ts) | `ProcessSchedule.at` (one-shot) |
-| [`forms/schedule/schedule-window.ts`](./forms/schedule/schedule-window.ts) | `ProcessSchedule.window` (bounded) |
-| [`forms/schedule/schedule-define.ts`](./forms/schedule/schedule-define.ts) | `ProcessSchedule.define` composition |
-| [`forms/schedule/schedule-controls-initializer.ts`](./forms/schedule/schedule-controls-initializer.ts) | Controls from `schedule` initializer |
-| [`forms/schedule/schedule-controls-in-effect.ts`](./forms/schedule/schedule-controls-in-effect.ts) | `Process.scheduleControls` in tick body |
-| [`forms/schedule/schedule-controls-external-fiber.ts`](./forms/schedule/schedule-controls-external-fiber.ts) | External fiber via `ProcessSchedule` service |
-
-### Polling
+### Gate — guide [Gates](../docs/guides/gates.md)
 
 | File | Teaches |
 |------|---------|
-| [`forms/polling/polling-accelerating.ts`](./forms/polling/polling-accelerating.ts) | `Polling.accelerating` |
-| [`forms/polling/schedule-delayed-start.ts`](./forms/polling/schedule-delayed-start.ts) | Disarmed until `startAt` |
-| [`forms/polling/polling-spaced-read.ts`](./forms/polling/polling-spaced-read.ts) | `Polling.spaced` + feed read |
-| [`forms/polling/polling-accelerating-reset-cadence.ts`](./forms/polling/polling-accelerating-reset-cadence.ts) | `resetCadence` on score change |
-| [`forms/polling/polling-accelerating-peek-cadence.ts`](./forms/polling/polling-accelerating-peek-cadence.ts) | `peekCadence` + event buffer |
+| [`gate/unit-and-input.ts`](./gate/unit-and-input.ts) | Unit/input forms + concurrency |
+| [`gate/store-readback.ts`](./gate/store-readback.ts) | Auto-write + store readback |
+| [`gate/runtime-observer.ts`](./gate/runtime-observer.ts) | Observable handle via `Subscribable` |
+| [`gate/http-client.ts`](./gate/http-client.ts) | `HttpClientGate.transformClient` |
+| [`gate/http-api-client.ts`](./gate/http-api-client.ts) | `Gate.HttpApiClient` Tag |
+| [`gate/http-api-layer.ts`](./gate/http-api-layer.ts) | `Gate.httpApiClientLayer` |
+| [`gate/rate-limit-fleet.ts`](./gate/rate-limit-fleet.ts) | Rate limit across fleet |
 
-
-## Scenarios catalog
+### Daemon — guide [Daemons](../docs/guides/daemons.md)
 
 | File | Teaches |
 |------|---------|
-| [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern |
-| [`scenarios/nwslsoccer/`](./scenarios/nwslsoccer/) | Real HttpApi client against NWSL SDP (optional local tree) |
+| [`daemon/store-auto-write.ts`](./daemon/store-auto-write.ts) | `Daemon.layer` + `Daemon.store` auto-append |
+| [`daemon/typed-failed-error.ts`](./daemon/typed-failed-error.ts) | Typed `Failed.error` in history |
+| [`daemon/serve-client.ts`](./daemon/serve-client.ts) | `Daemon.serve` + `Hyperlink.client` |
+| [`daemon/result-ref.ts`](./daemon/result-ref.ts) | Tag `success` + `result.get` / `changes` |
+| [`daemon/tag-schedule.ts`](./daemon/tag-schedule.ts) | `Daemon.schedule` on a tag |
+| [`daemon/configure.ts`](./daemon/configure.ts) | `Daemon.configure` layer patch |
+
+### Node — [Identity coordinator](../docs/guides/identity-coordinator.md) · [Policy](../docs/guides/policy.md) · [Fleets and peers](../docs/services/fleets-and-peers.md)
+
+| File | Teaches |
+|------|---------|
+| [`node/tag-addressed.ts`](./node/tag-addressed.ts) | `Node.Service` + unix/client |
+| [`node/tag-bound.ts`](./node/tag-bound.ts) | Tag carries node |
+| [`node/clients.ts`](./node/clients.ts) | `Node.clients` catalog |
+| [`node/addressless-serve.ts`](./node/addressless-serve.ts) / [`addressless-call.ts`](./node/addressless-call.ts) | Lookup-piped addressless |
+| [`node/nameless-unix-*.ts`](./node/) | Nameless unix serve/call/demo |
+| [`node/nameless-http-serve.ts`](./node/nameless-http-serve.ts) / [`nameless-ws-serve.ts`](./node/nameless-ws-serve.ts) | Protocol siblings |
+| [`node/prototype.ts`](./node/prototype.ts) | `Node.Prototype.make` |
+| [`node/as-lookup.ts`](./node/as-lookup.ts) | `Node.asLookup` |
+| [`node/identity-coordinator.ts`](./node/identity-coordinator.ts) | Router + workers + Lookup |
+| [`node/ask-incumbent-takeover.ts`](./node/ask-incumbent-takeover.ts) | Same `nodeKey` dial replace / `yieldRefuse` |
+| [`node/drain-yield-refuse.ts`](./node/drain-yield-refuse.ts) | `Node.drain` + yield refuse + `IncumbentAlive` |
+| [`node/handoff-ab-cutover.ts`](./node/handoff-ab-cutover.ts) | WorkPool baked A→B on `Node.shutdown` |
+| [`node/serve-handoff.ts`](./node/serve-handoff.ts) | Custom `serve(…, { handoff })` / `HandoffDeferred` |
+| [`node/policy-lookup-cutover.ts`](./node/policy-lookup-cutover.ts) | `Policy.provide` sticky + `Advice.prefer` early-move |
+| [`node/lookup-follow-handoff.ts`](./node/lookup-follow-handoff.ts) | Same-address Lookup A→B via `Lookup.follow` |
+| [`node/peers-layer-rebind.ts`](./node/peers-layer-rebind.ts) | Directory `peersLayer` hot-rebind |
+| [`node/launch-shutdown.ts`](./node/launch-shutdown.ts) | `Node.launch` exits on `Node.shutdown` |
+| [`node/verify-connection.ts`](./node/verify-connection.ts) | `verifyConnection` + `Policy.verify*` · [Client verify](../docs/guides/client-verify.md) |
+
+### Fleet
+
+| File | Teaches |
+|------|---------|
+| [`fleet/telemetry-glass.ts`](./fleet/telemetry-glass.ts) | Telemetry fleet glass |
+| [`fleet/health-glass.ts`](./fleet/health-glass.ts) | FleetHealth |
+| [`fleet/shardmap-sessions.ts`](./fleet/shardmap-sessions.ts) | ShardMap sessions |
+| [`fleet/telemetry-alone.ts`](./fleet/telemetry-alone.ts) | `Telemetry.alone` |
+| [`fleet/shardmap-persist.ts`](./fleet/shardmap-persist.ts) | ShardMap `{ filename }` persistence |
+| [`fleet/health-with-readiness.ts`](./fleet/health-with-readiness.ts) | FleetHealth from readiness rows |
+
+### Launcher — guide [Launcher](../docs/guides/launcher.md)
+
+| File | Teaches |
+|------|---------|
+| [`launcher/lookup-membership.ts`](./launcher/lookup-membership.ts) | Launcher → Lookup membership |
+| [`launcher/ensure-lookup.ts`](./launcher/ensure-lookup.ts) | `ensureLookup` adopt/spawn then app `up` |
+| [`launcher/minimal-up.ts`](./launcher/minimal-up.ts) | `Launcher.up` spawn → Ready → handoff |
+| [`launcher/handle-phases.ts`](./launcher/handle-phases.ts) | Explicit `spawn` / `awaitReady` / `handoff` / `kill` |
+| [`launcher/token-injection.ts`](./launcher/token-injection.ts) | `Launcher.command` env vs argv tokens |
+| [`launcher/ready-services.ts`](./launcher/ready-services.ts) | `ready.services` named Tags |
+| [`launcher/ready-timeout.ts`](./launcher/ready-timeout.ts) | `ReadyTimedOut` / `ChildExited` by `_tag` |
+| [`launcher/ready-worker-child.ts`](./launcher/ready-worker-child.ts) | Child helper for Launcher examples |
+
+### Readiness — service [Readiness & Health](../docs/services/readiness.md)
+
+| File | Teaches |
+|------|---------|
+| [`readiness/with-readiness.ts`](./readiness/with-readiness.ts) | `Hyperlink.withReadiness` |
+| [`readiness/all-ready.ts`](./readiness/all-ready.ts) | `Hyperlink.allReady` + `readinessOf` |
+| [`readiness/monitored-dependency.ts`](./readiness/monitored-dependency.ts) | `Hyperlink.monitoredDependency` |
+| [`readiness/degraded-health.ts`](./readiness/degraded-health.ts) | `/health` degraded body |
+
+### Hyperlink · Logs · Store · Schedule · Polling · Config · Observe
+
+| File | Teaches |
+|------|---------|
+| [`hyperlink/tag-defaults.ts`](./hyperlink/tag-defaults.ts) | Tag defaults |
+| [`hyperlink/shared-spec-wire.ts`](./hyperlink/shared-spec-wire.ts) | Shared Spec wire |
+| [`hyperlink/counter-layer.ts`](./hyperlink/counter-layer.ts) | Counter Tag + `Hyperlink.layer` |
+| [`hyperlink/serve-client.ts`](./hyperlink/serve-client.ts) | Same Counter Tag over RPC |
+| [`hyperlink/method-kinds.ts`](./hyperlink/method-kinds.ts) | `effect` / `effectFn` / `ref` / `stream` |
+| [`logs/live-bus.ts`](./logs/live-bus.ts) | `Logs.layer` + stream/snapshot |
+| [`logs/node-journal.ts`](./logs/node-journal.ts) | `Node.logs` + `Logs.byNode` |
+| [`logs/hyperlink-logs.ts`](./logs/hyperlink-logs.ts) | `Hyperlink.logs(tag).stream` / `.query` |
+| [`logs/lineage-scope.ts`](./logs/lineage-scope.ts) | `Logs.withScope` + `LogEntry` predicates |
+| [`logs/levels.ts`](./logs/levels.ts) | Live stream floor vs durable tail floor |
+| [`store/memory.ts`](./store/memory.ts) / [`sqlite.ts`](./store/sqlite.ts) | Store backends |
+| [`store/soft-override-work-pool.ts`](./store/soft-override-work-pool.ts) | AppStore Soft override into WorkPool |
+| [`store/one-store-many-regs.ts`](./store/one-store-many-regs.ts) | One store with node, queue, and daemon regs |
+| [`store/durable-and-soft.ts`](./store/durable-and-soft.ts) | Durable backlog vs Soft journal |
+| [`store/history-presence.ts`](./store/history-presence.ts) | `HistoryStore` omit vs provide |
+| [`store/loud-missing-registration.ts`](./store/loud-missing-registration.ts) | Loud Soft failure on missing engine reg |
+| [`schedule/*.ts`](./schedule/) | `at` / `window` / `define` / controls |
+| [`polling/*.ts`](./polling/) | accelerating / spaced / reset / peek / delayed-start |
+| [`config/hot-swap.ts`](./config/hot-swap.ts) | Dynamic config hot swap |
+| [`observe/pack-demo.ts`](./observe/pack-demo.ts) | `Observe.bind` + compositional pack |
+| [`observe/work-pool-pack.ts`](./observe/work-pool-pack.ts) | `Observe.bind` + `WorkPoolView.pack` |
+| [`observe/recipes.ts`](./observe/recipes.ts) | `Observe.atom` / `query` / `fn` / `poll` |
+| [`observe/scan-fold.ts`](./observe/scan-fold.ts) | `Observe.scan` + `Observe.fold` |
+| [`observe/hyperlink-atom.ts`](./observe/hyperlink-atom.ts) | `Hyperlink.atom` / `query` / `fn` adapters |
+| [`observe/daemon-pack.ts`](./observe/daemon-pack.ts) | `Observe.bind` + `DaemonView.pack` |
+| [`observe/gate-pack.ts`](./observe/gate-pack.ts) | `Observe.bind` + `GateView.pack` |
+
+---
+
+## Scenarios
+
+| File | Docs |
+|------|------|
+| [`scenarios/multi-protocol-dual-serve.ts`](./scenarios/multi-protocol-dual-serve.ts) | [page](../docs/examples/scenarios/multi-protocol-dual-serve.md) |
+| [`scenarios/schedule-sync-from-db.ts`](./scenarios/schedule-sync-from-db.ts) | [page](../docs/examples/scenarios/schedule-sync-from-db.md) |
+| [`scenarios/serve-per-deps.ts`](./scenarios/serve-per-deps.ts) | [page](../docs/examples/scenarios/serve-per-deps.md) |
+| [`scenarios/nwslsoccer/gate-http-api-client.ts`](./scenarios/nwslsoccer/gate-http-api-client.ts) | [page](../docs/examples/scenarios/gate-http-api-client.md) |
+
+---
+
+## Apps (`examples/apps/`)
+
+Prefer `example:apps-*` / `example:<topic>-<name>` scripts. Legacy compat aliases were removed for first-release cleanup.
+
+| App | Path | Start |
+|-----|------|-------|
+| TUI | [`apps/tui/`](./apps/tui/) | `pnpm run example:apps-tui` |
+| Web | [`apps/web/`](./apps/web/) | `example:apps-web` + `example:apps-web-server` |
+| Dashboard | [`apps/dashboard/`](./apps/dashboard/) | `example:apps-dashboard` |
+| CLI | [`apps/cli/`](./apps/cli/) | `example:apps-cli` |
+| Queue widget | [`apps/queue-widget/`](./apps/queue-widget/) | `example:apps-queue-widget` |
+| View compose | [`apps/view-compose/`](./apps/view-compose/) | `example:apps-view-compose` |
 
 ---
 
 ## npm scripts (from package root)
 
-| Script | What it runs |
-|--------|----------------|
-| `pnpm run example:queue-resource` | Queue form |
-| `pnpm run example:process-patterns` | Alias for `example:process-supervisor-patterns` |
-| `pnpm run example:process-supervisor-patterns` | Accelerating + delayed-start forms |
-| `pnpm run example:sports-polling-accelerating` | All three sports polling forms |
-| `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
-| `pnpm run example:schedule-control-basics` | `at` + `window` + `define` forms |
-| `pnpm run example:schedule-control-db-sync` | DB sync scenario |
-| `pnpm run example:run-resource` | RunResource form |
-| `pnpm run example:http-client-run-gate` | HttpClient gate form |
-| `pnpm run example:http-api-resource` | HttpApiResource form |
-| `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |
-| `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |
-
-Run any file directly:
+Prefer `example:<topic>-<name>` for teaching scripts and `example:apps-*` for apps.
+Composites: `example:schedule-basics`, `example:schedule-controls`, `example:polling-sports`,
+`example:daemon-patterns`.
 
 ```bash
-npx tsx examples/forms/schedule/schedule-at.ts
+pnpm run example:work-pool-priority-retry
+pnpm run example:gate-unit-and-input
+npx tsx examples/schedule/at.ts
 ```
 
 ---
 
 ## Control port
 
-Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is set. Keep the scenario and CLI on the **same** port.
+Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is set.
 
 ---
 
 ## For AI assistants
 
-When answering questions about **behavior**, prefer **source of truth** in this order:
+1. `src/*.ts` + TSDoc  
+2. Living book + [Examples hub](../docs/examples.md)  
+3. `examples/<topic>/` for one API shape; `scenarios/` for composition; `apps/` for product demos  
 
-1. `src/*.ts` implementation + TSDoc
-2. `docs/PROCESS-API.md` / `docs/RESOURCE-API.md` for tables
-3. `docs/guides/toolkit-by-example.md` / `docs/guides/history-and-persistence.md` for patterns
-4. **`forms/`** for a single API shape; **`scenarios/`** for composition patterns
-
-Committed agent map: [docs/AGENTS.md](../docs/AGENTS.md).
+Committed agent map: [AGENTS.md](../AGENTS.md).

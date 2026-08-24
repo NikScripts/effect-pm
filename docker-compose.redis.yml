@@ -1,0 +1,13 @@
+# Local Redis for fleet RateLimiter / Effect Persistence / PersistedQueue.
+#
+#   docker compose -f docker-compose.redis.yml up -d
+#   export REDIS_URL=redis://127.0.0.1:6379
+#   pnpm exec vitest run test/rate-limit-redis.test.ts test/effect-redis-stores.test.ts
+#
+# Or without Docker: `redis-server --daemonize yes` then the same REDIS_URL.
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]

@@ -1,10 +1,12 @@
 /**
- * Log annotation keys + per-scope annotation helpers for effect-pm log capture.
+ * Log **annotation keys** + per-scope annotation helpers for hyperlink-ts log capture.
  *
- * Every captured {@link LogEntry} carries annotations identifying **where** it came from — the
- * **node** it ran on and the **resource** (a queue/process) that emitted it. Durable storage
- * (`NodeLogs.persistLayer` → {@link LogStore}) buckets by node and preserves the resource
- * annotations, so logs are queryable **by node** or **by resource**.
+ * Every captured {@link LogEntry} carries annotations keyed by {@link LogAnnotationKeys}. Values are
+ * either a **node log key** (`Node.Service.key`) or **lineage segment keys** (`Hyperlink.Service.key`).
+ *
+ * Full catalog: `docs/LOGS.md` — Annotation keys.
+ *
+ * Hyperlink kind (daemon vs queue vs …) is {@link Hyperlink.kindOf} on the tag — not an annotation.
  *
  * @module LogContext
  */
@@ -12,22 +14,35 @@
 import { Effect } from "effect";
 
 /**
- * Standard log annotation keys effect-pm captures into {@link LogEntry}. `node` identifies the node
- * (the durable log bucket); `processId` / `queueId` identify the resource that emitted the line.
+ * Standard **annotation key** names on {@link LogEntry.annotations}.
  *
+ * | Property | Annotation key (field name) | Value is |
+ * |----------|----------------------------|----------|
+ * | `node` | `"node"` | **node log key** (`Node.Service.key`) |
+ * | `lineage` | `"hyperlink-ts/lineage"` | JSON array of **lineage segment keys** |
+ * | `lineId` | `"hyperlink-ts/lineId"` | Stable id for one published relay line (memo / dedupe) |
+ *
+ * Package: `hyperlink-ts/LogContext` · Source: `src/LogContext.ts` · See `docs/LOGS.md`.
+ *
+ * @category utils
  * @public
  */
 export const LogAnnotationKeys = {
+  /** Annotation key whose value is the **node log key**. */
   node: "node",
-  processId: "processId",
-  queueId: "queueId",
+  /** Annotation key whose value is JSON **lineage segment keys**. */
+  lineage: "hyperlink-ts/lineage",
+  /** Annotation key whose value is the stable **line id** stamped at relay publish. */
+  lineId: "hyperlink-ts/lineId",
 } as const;
 
 /**
- * Annotate every log line emitted under `effect` with its **node** — the durable log bucket. Applied
- * once at a node's runtime root (e.g. by `NodeLogs.persistLayer(node)`), so every line, from any
- * resource or bare `Effect.log*`, carries the node.
+ * Annotate every log line with a **node log key** value under annotation key {@link LogAnnotationKeys.node}.
+ * Applied by node durable tails (`Node.logs` / `Hyperlink.store(Node)` in `apps/web/server.ts`).
  *
+ * @param node - **Node log key** value (`Node.Service.key`).
+ *
+ * @category utils
  * @public
  */
 export const withNodeLogAnnotations = <A, E, R>(
@@ -35,32 +50,6 @@ export const withNodeLogAnnotations = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> =>
   Effect.annotateLogs(effect, { [LogAnnotationKeys.node]: node });
-
-/**
- * Annotate logs emitted from a process supervisor fiber with its resource id.
- *
- * @public
- */
-export const withProcessLogAnnotations = <A, E, R>(
-  processId: string,
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  Effect.annotateLogs(effect, {
-    [LogAnnotationKeys.processId]: processId,
-  });
-
-/**
- * Annotate logs emitted from a queue worker fiber with its resource id.
- *
- * @public
- */
-export const withQueueLogAnnotations = <A, E, R>(
-  queueId: string,
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  Effect.annotateLogs(effect, {
-    [LogAnnotationKeys.queueId]: queueId,
-  });
 
 /**
  * Log annotation keys, aliased as `LogContext.keys` for discoverability alongside the

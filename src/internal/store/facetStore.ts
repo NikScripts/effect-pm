@@ -1,5 +1,5 @@
 /**
- * Shared registration helpers for resource-kind store facets (queue, process, …).
+ * Shared registration helpers for resource-kind store facets (queue, daemon, …).
  *
  * @module internal/store/facetStore
  * @internal
@@ -76,6 +76,8 @@ export function facetStoreRegistration(
   const contract =
     extended === undefined
       ? builtIn
-      : mergeStoreContracts(builtIn, extended, methods);
+      : methods === undefined
+        ? mergeStoreContracts(builtIn, extended)
+        : mergeStoreContracts(builtIn, extended, methods);
   return makeRegistration(tag, contract);
 }

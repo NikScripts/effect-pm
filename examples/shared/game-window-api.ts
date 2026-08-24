@@ -2,16 +2,16 @@
  * @module examples/shared/game-window-api
  *
  * **Test double** for “we polled an external **game schedule** API and learned when the match
- * is **live** vs **finished**”. Used by **`examples/scenarios/game-window-polling-with-process-group.ts`**.
+ * is **live** vs **finished**”. Shared by schedule / polling game-window demos.
  *
  * ### Scripted timeline (simulated ms, under **`TestClock`**)
  *
  * | Phase | Simulated delay (cumulative) | What happens to schedule state |
  * |-------|------------------------------|-------------------------------|
- * | Pre-game | **0 → 800** | no active schedule entry — no process ticks. |
- * | Kickoff | at **800** | entry opens — process may poll your `effect`. |
+ * | Pre-game | **0 → 800** | no active schedule entry — no daemon ticks. |
+ * | Kickoff | at **800** | entry opens — daemon may poll your `effect`. |
  * | Live window | **800 → 2000** | entry active — ticks run per **`Polling`**. |
- * | Full time | at **2000** | entry closes — ticks stop; driver stays alive until **`ProcessGroup.stop`**. |
+ * | Full time | at **2000** | entry closes — ticks stop; driver stays alive until **`DaemonGroup.stop`**. |
  *
  * ### Production swap-in
  *

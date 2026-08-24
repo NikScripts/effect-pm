@@ -10,7 +10,7 @@
 import type { Effect, Option } from "effect";
 
 /** Per-level occupancy; index `i` is level `i`. @internal */
-export type LevelSizes = ReadonlyArray<number>;
+export type LaneSizes = ReadonlyArray<number>;
 
 /**
  * N bounded FIFO lanes + opaque `poll`. The engine calls `offer(item, level)` and reads `sizes`.
@@ -18,12 +18,12 @@ export type LevelSizes = ReadonlyArray<number>;
  * @internal
  */
 export interface LaneStore<A> {
-  /** Enqueue into `level` (0 … levelCount − 1). May backpressure when bounded. */
+  /** Enqueue into `level` (0 … laneCount − 1). May backpressure when bounded. */
   readonly offer: (item: A, level: number) => Effect.Effect<void>;
   /** Non-blocking take; `none` when every level is empty. */
   readonly poll: Effect.Effect<Option.Option<A>>;
   readonly isEmpty: Effect.Effect<boolean>;
-  readonly sizes: Effect.Effect<LevelSizes>;
+  readonly sizes: Effect.Effect<LaneSizes>;
   /** Remove all items (level 0, then 1, …). */
   readonly drain: Effect.Effect<ReadonlyArray<A>>;
   readonly extractMatching: (

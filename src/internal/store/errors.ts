@@ -23,7 +23,12 @@ export class StoreShapeNotMaterialized extends Data.TaggedError("StoreShapeNotMa
   readonly operation: "append" | "read";
 }> {}
 
-/** Emitted on each append when {@link Store.changes} is subscribed. @public */
+/**
+ * Emitted on each append when {@link Store.changes} is subscribed.
+ *
+ * @category models
+ * @public
+ */
 export class StoreChangeEvent extends Data.TaggedClass("StoreChangeEvent")<{
   readonly scopeKey: string;
   readonly method: string;
@@ -38,6 +43,18 @@ export class StoreJournalEncodeError extends Data.TaggedError("StoreJournalEncod
 
 /** @internal */
 export class StoreJournalDecodeError extends Data.TaggedError("StoreJournalDecodeError")<{
+  readonly cause: unknown;
+  readonly detail?: string;
+}> {}
+
+/**
+ * A journal/IO **write** failure surfaced by the storage layer's append path — the categorized,
+ * catchable error that write methods honestly carry in their error channel. Wraps the underlying
+ * journal/IO write cause. An encode/serialization mismatch stays a defect (`orDie`); this is only the
+ * genuine write failure. {@link Store.catchWriteErrors} narrows it out (logs + swallows). @public
+ * @category errors
+ */
+export class StoreWriteError extends Data.TaggedError("StoreWriteError")<{
   readonly cause: unknown;
   readonly detail?: string;
 }> {}

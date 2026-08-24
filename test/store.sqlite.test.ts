@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, FileSystem, Path, Schema, Stream } from "effect";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
 const readingSchema = Schema.Struct({ value: Schema.Number });
@@ -16,10 +16,10 @@ class ThermoStore extends Store.Service<ThermoStore>("@test/ThermoStore")(
   Store.register("thermo", thermometerContract),
 ) {}
 
-const standaloneThermo = Store.store("solo", thermometerContract);
+const standaloneThermo = Store.scoped("solo", thermometerContract);
 
 class RetentionStore extends Store.Service<RetentionStore>("@test/Retention")(
-  Store.retention(2)(Store.register("thermo", thermometerContract)),
+  Store.register("thermo", thermometerContract).pipe(Store.retention(2)),
 ) {}
 
 describe("Store SQLite layer", () => {
@@ -27,7 +27,7 @@ describe("Store SQLite layer", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-store-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-store-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
@@ -36,14 +36,14 @@ describe("Store SQLite layer", () => {
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const handle = yield* ThermoStore.at("thermo");
+          const handle = yield* ThermoStore;
           yield* handle.readings.append({ value: 72 });
         }).pipe(Effect.provide(ThermoStore.layer({ filename }))),
       );
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const handle = yield* ThermoStore.at("thermo");
+          const handle = yield* ThermoStore;
           const rows = yield* handle.readings.read();
           expect(rows).toEqual([{ value: 72 }]);
         }).pipe(Effect.provide(ThermoStore.layer({ filename }))),
@@ -55,7 +55,7 @@ describe("Store SQLite layer", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-store-solo-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-store-solo-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
@@ -80,7 +80,7 @@ describe("Store SQLite layer", () => {
 
   it.effect("Store.changes emits append events", () =>
     Effect.gen(function* () {
-      const handle = yield* ThermoStore.at("thermo");
+      const handle = yield* ThermoStore;
       const events = yield* Store.changes("thermo");
       const fiber = yield* Effect.forkChild(
         events.pipe(Stream.take(2), Stream.runCollect),
@@ -98,7 +98,7 @@ describe("Store SQLite layer", () => {
 
   it.effect("retention trims oldest rows", () =>
     Effect.gen(function* () {
-      const handle = yield* RetentionStore.at("thermo");
+      const handle = yield* RetentionStore;
       yield* handle.readings.append({ value: 1 });
       yield* handle.readings.append({ value: 2 });
       yield* handle.readings.append({ value: 3 });
@@ -107,15 +107,15 @@ describe("Store SQLite layer", () => {
     }).pipe(Effect.provide(RetentionStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("Resource.store tag attachment works with sqlite layer", () =>
+  it.effect("Hyperlink.store tag attachment works with sqlite layer", () =>
     Effect.gen(function* () {
-      class Sensor extends Resource.Tag<Sensor>()("@test/Sensor", {
-        value: Resource.ref(Schema.Number),
-      }).pipe(Resource.store(thermometerContract)) {}
+      class Sensor extends Hyperlink.Service<Sensor>()("@test/Sensor", {
+        value: Hyperlink.ref(Schema.Number),
+      }).pipe(Hyperlink.withStore(thermometerContract)) {}
 
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-store-tag-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-store-tag-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
@@ -123,7 +123,7 @@ describe("Store SQLite layer", () => {
       const filename = path.join(dir, "tag.db");
 
       class AppStore extends Store.Service<AppStore>("@test/AppStore")(
-        Resource.store(Sensor, thermometerContract),
+        Store.scoped(Sensor, thermometerContract),
       ) {}
 
       yield* Effect.scoped(

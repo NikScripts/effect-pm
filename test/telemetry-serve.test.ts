@@ -3,13 +3,14 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Telemetry from "../src/Telemetry";
+import * as PmNode from "../src/Node";
 
 // Telemetry serves the whole per-process Metric registry. Emit a labeled counter, serve Telemetry over
-// http, read `snapshot` via Resource.client — the counter round-trips with its label + count.
+// http, read `snapshot` via Hyperlink.client — the counter round-trips with its label + count.
 
-class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
+class FleetTelemetry extends Telemetry.Service<FleetTelemetry>()() {}
 
 const emitProbe = Effect.sync(() =>
   Metric.update(
@@ -28,8 +29,10 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Node = Resource.httpServer([
-  Telemetry.serve(FleetTelemetry, { interval: Duration.millis(50) }),
+const Node = PmNode.httpServer([
+  Telemetry.serve(FleetTelemetry, { interval: Duration.millis(50) }).pipe(
+    Layer.provide(Telemetry.alone(FleetTelemetry)),
+  ),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("serves the Metric registry — a labeled counter round-trips via snapshot over RPC", () =>
@@ -45,14 +48,14 @@ it("serves the Metric registry — a labeled counter round-trips via snapshot ov
         return yield* t.snapshot;
       }).pipe(
         Effect.provide(
-          Resource.client(FleetTelemetry).pipe(Layer.provide(protocol(`${base}/rpc`))),
+          Hyperlink.client(FleetTelemetry).pipe(Layer.provide(protocol(`${base}/rpc`))),
         ),
         Effect.scoped,
       );
 
       const probe = snap.metrics.find((m) => m.id === "test_telemetry_total");
-      expect(probe?._tag).toBe("counter");
-      if (probe?._tag === "counter") {
+      expect(probe?._tag).toBe("Counter");
+      if (probe?._tag === "Counter") {
         expect(probe.count).toBe(3);
         expect(probe.labels.probe).toBe("roster");
       }
@@ -70,7 +73,11 @@ it("live streams sampled snapshots (in-process)", () =>
         expect(first.value.metrics.some((m) => m.id === "test_telemetry_total")).toBe(true);
       }
     }).pipe(
-      Effect.provide(Telemetry.layer(FleetTelemetry, { interval: Duration.millis(20) })),
+      Effect.provide(
+        Telemetry.layer(FleetTelemetry, { interval: Duration.millis(20) }).pipe(
+          Layer.provide(Telemetry.alone(FleetTelemetry)),
+        ),
+      ),
       Effect.scoped,
     ),
   ));

@@ -2,16 +2,16 @@
  * **HistoryStore** — a tiny, backend-agnostic append-log for stream history (metrics, logs, …).
  *
  * The toolkit's resource Tags expose **live** streams (`logs`, `metrics`, …). To read back what
- * *was* in those streams, a resource appends each element here (keyed by `${tag.key}/<stream>`), and
- * the matching `*History` query reads it back. Deliberately simpler than the `RuntimeStorage`
- * facet system: one keyed append-log with `append` + `read`, holding already-encoded JSON values so
- * a backend just persists/returns them.
+ * *was* in those streams, a HyperService appends each element here (keyed by `${tag.key}/<stream>`), and
+ * the matching `*History` query reads it back. Deliberately simpler than the Store bridge
+ * (`Daemon.store` / `WorkPool.store` / …): one keyed append-log with `append` + `read`,
+ * holding already-encoded JSON values so a backend just persists/returns them.
  *
  * - **`layerMemory`** — in-memory ring per stream (bounded by `capacity`). The default today.
  * - SQLite / Postgres backends land later behind the same interface (one append-only
- *   `(stream_id, ts, json)` table). See `docs/plans/18`… (history persistence plan).
+ *   `(stream_id, ts, json)` table). See `docs/plans/README.md` (Postgres backends).
  *
- * **Optional**: resources read it via `Effect.serviceOption(HistoryStore)`, so with no layer
+ * **Optional**: HyperServices read it via `Effect.serviceOption(HistoryStore)`, so with no layer
  * provided, `append` is a no-op and `*History` returns empty — you only pay for it when you opt in.
  *
  * @module HistoryStore
@@ -22,6 +22,7 @@ import { Clock, Context, DateTime, Effect, Layer } from "effect";
  * Filters for {@link HistoryStore.read} — newest `limit` entries within an optional `[since, until]`
  * window (by append time).
  *
+ * @category models
  * @public
  */
 export interface HistoryReadOptions {
@@ -34,6 +35,7 @@ export interface HistoryReadOptions {
  * The service shape: append an (already-encoded) entry to a stream, and read a stream back. Entries
  * are opaque (`unknown`) — callers encode/decode with their own schema; the store just persists.
  *
+ * @category models
  * @public
  */
 export interface HistoryStoreShape {
@@ -44,11 +46,16 @@ export interface HistoryStoreShape {
   ) => Effect.Effect<ReadonlyArray<unknown>>;
 }
 
-/** The {@link HistoryStore} tag. @public */
+/**
+ * The {@link HistoryStore} tag.
+ *
+ * @category context
+ * @public
+ */
 export class HistoryStoreTag extends Context.Service<
   HistoryStoreTag,
   HistoryStoreShape
->()("@nikscripts/effect-pm/HistoryStore/HistoryStoreTag") {}
+>()("hyperlink-ts/HistoryStore/HistoryStoreTag") {}
 
 /**
  * In-memory {@link HistoryStore}: a bounded ring per stream id (oldest dropped past `capacity`).
@@ -98,6 +105,7 @@ const layerMemory = (options?: {
  * History store — a keyed append-log for stream history. `yield* HistoryStore` for the service;
  * `HistoryStore.layerMemory()` to provide the in-memory backend.
  *
+ * @category context
  * @public
  */
 export const HistoryStore = Object.assign(HistoryStoreTag, {

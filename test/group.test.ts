@@ -4,20 +4,20 @@ import * as Group from "../src/Group";
 
 // minimal leaf tags — any Context tag works as a member.
 class Counter extends Context.Service<Counter, { readonly n: number }>()(
-  "@nikscripts/effect-pm/test/group.test/Counter",
+  "hyperlink-ts/test/group.test/Counter",
 ) {}
 class Jobs extends Context.Service<Jobs, { readonly run: () => void }>()(
-  "@nikscripts/effect-pm/test/group.test/Jobs",
+  "hyperlink-ts/test/group.test/Jobs",
 ) {}
 
-class Inner extends Group.Tag<Inner>(
-  "@nikscripts/effect-pm/test/group.test/Inner",
+class Inner extends Group.Service<Inner>(
+  "hyperlink-ts/test/group.test/Inner",
 )({
   Counter,
 }) {}
 
-class Outer extends Group.Tag<Outer>(
-  "@nikscripts/effect-pm/test/group.test/Outer",
+class Outer extends Group.Service<Outer>(
+  "hyperlink-ts/test/group.test/Outer",
 )({
   Jobs,
   Inner, // a child group — nesting is free
@@ -40,7 +40,7 @@ it("nests: reach a leaf through a child group, name preserved", () => {
 });
 
 it("the group is itself a real Context tag", () => {
-  expect(Outer.key).toBe("@nikscripts/effect-pm/test/group.test/Outer");
+  expect(Outer.key).toBe("hyperlink-ts/test/group.test/Outer");
   // built on Context.Service, so it carries the tag key — usable as a real tag
-  expect(Outer.key).toBe("@nikscripts/effect-pm/test/group.test/Outer");
+  expect(Outer.key).toBe("hyperlink-ts/test/group.test/Outer");
 });

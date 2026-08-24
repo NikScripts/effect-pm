@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "types": ["node", "react"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "../../test/view-jsx.test-d.tsx",
+    "../../test/view-jsx-radix.test.tsx",
+    "../../test/last-provide.test-d.ts",
+    "../../test/last-provide.test.ts",
+    "../../test/last-context-use.test-d.ts",
+    "../../test/last-router-context.test-d.ts",
+    "../../test/last-router-context.test.tsx",
+    "../../test/router-link-to.test-d.tsx",
+    "../../test/last-link-props.test-d.tsx",
+    "../../examples/last/router-context/**/*.ts",
+    "../../examples/last/router-context/**/*.tsx",
+    "../../test/view-service.test-d.ts",
+    "../../test/view-service-default.test-d.ts",
+    "../../test/view-service-default.test.ts",
+    "../../test/router-page-props.test-d.ts",
+    "../../test/page-make.test-d.ts",
+    "../../test/page-make.test.ts",
+    "../../test/route-from-effect.test-d.ts",
+    "../../test/route-from-effect.test.ts",
+    "../../test/route-from-page.test.ts",
+    "../../test/page-config-vite.test.ts"
+  ],
+  "exclude": ["node_modules"]
+}

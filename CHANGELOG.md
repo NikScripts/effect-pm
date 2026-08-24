@@ -1,4 +1,108 @@
-# @nikscripts/effect-pm
+# hyperlink-ts
+
+## 0.9.0-beta.0
+
+**The rebrand release.** `hyperlink-ts` continues the `@nikscripts/effect-pm` line: the 0.8 betas
+were effect-pm; the 0.9 betas are **Effect Hyperlink**. The web made documents
+location-transparent; Hyperlink does it for Services. This entry consolidates the ~200 changesets
+accumulated since 0.8.0-beta.28.
+
+### Major: package and primitive rename
+
+- npm name: `@nikscripts/effect-pm` → **`hyperlink-ts`** (unscoped). Import subpaths follow
+  (`hyperlink-ts/Hyperlink`, `hyperlink-ts/Node`, ...). Wire ids, `Symbol.for` keys, and Context
+  ids move from `@nikscripts/effect-pm/...` to `hyperlink-ts/...`.
+- The primitive `Resource` is now **`Hyperlink`**: module, namespace, and every foundation symbol
+  (`ResourceTag` → `HyperlinkTag`, `DuplicateResourceKey` → `DuplicateHyperlinkKey`, …). The
+  advanced-authoring bundle is **`Hyperlink.Driver`** (was `BuiltResource` / briefly
+  `BuiltHyperlink`); `ServedHyperlink*` is `@internal`.
+
+### Major: kinds renamed to generic nouns, variants folded
+
+- `QueueHyperlink` → **`WorkPool`** · `RunHyperlink` → **`Gate`** · `Process` → **`Daemon`**.
+  Gate wire helpers follow: `runGateStatus` / `runSpec` / `RunInstanceSpec` /
+  `RunGateStatus` / `RunGateHandle` → `gateStatus` / `gateSpec` / `GateInstanceSpec` /
+  `GateStatus` / `GateRunHandle`. `HttpClientRunGate` → **`HttpClientGate`**
+  (subpath too). `DaemonDefinition.process` → **`daemon`**. Gate store
+  state-change reasons are PascalCase discriminants (`Started`, `Waiting`,
+  `WaitInterrupted`, …) — not kebab/`gate.run.*` prefixes. Daemon handle
+  Removed unused `Daemon.type` discriminant (Effect uses `_tag` for ADTs; the handle is already `Daemon`).
+- `CustomQueueHyperlink` folds into **`WorkPool.priority(...)`** (peer constructor beside
+  `WorkPool.Tag`; `layer`/`serve`/`store`/`configure` dispatch on the tag; engine stays
+  tree-shakeable as `WorkPool.makePriority`). Subpath removed. Public wire helpers rename
+  with it: `customQueueStatus` / `customQueueSpec` / `CustomQueueTagConfig` / … →
+  `priorityStatus` / `prioritySpec` / `PriorityTagConfig` / ….
+- `HttpApiHyperlink` folds into **`Gate.httpApiClient(...)`** (+ `httpApiClientService`,
+  `httpApiClientLayer`, `acceptJson`, `instrumentEndpoints`). Subpath removed.
+- Priority-lane vocabulary unified to **lane**: `laneCount`, `namedLanes`, `add(item, lane?)`.
+- **One kind per resource (SSOT):** the short `"queue"` / `"process"` discriminator is gone.
+  Definitions and dashboard guards use the stamped kind (`WorkPool.kind` /
+  `Daemon.kind` / `Hyperlink.kindOf(tag)`).
+- **`BuiltHyperlink` → `Hyperlink.Driver`** (`driver` / `isDriver` / `driverSym`).
+  `ServedHyperlink` / `ServedHyperlinks` / `servedHyperlinksLayer` demoted to `@internal`.
+- **Node status/logs/ping live on the connected node handle** — `(yield* node).status` /
+  `.logs` / `.ping`. The `NodeStatus` module and `Node.status` namespace are **removed**.
+  Light types survive as `Node.Status` / `Node.ResourceReadiness` /
+  `Node.resourceReadiness`.
+
+### Nodes, transports, and loud failures
+
+- Two-stage tag factories: `Node.Tag<Self>()("name", target)` (and Lookup), eliminating
+  context-inference false positives structurally.
+- Multi-protocol nodes: http, WebSocket, unix socket, and named-pipe servers/dialers with
+  protocol-precise kinds.
+- **Client transport surface:** two families — `Hyperlink.connect(tag, protocol)` (bring your
+  own wire) and `Hyperlink.http` / `ws` / `unix` / `nPipe(node)` (batteries). **`clientHttp`
+  removed** — migrate to `connect(tag, protocolHttp(target))`. Bare-port dials resolve via
+  `Hyperlink.clientHost` (`HYPERLINK_CLIENT_HOST`, default `localhost`).
+- Reserved wire ids drop the old `@pm/…` prefix: node-status is
+  `hyperlink-ts/node-status` (was `@pm/node-status`); ephemeral verify/lookup probe node keys
+  use `hyperlink-ts/verify/…` and `hyperlink-ts/lookup-*/…`.
+- Transport wiring fails **loud and typed** (`ProtocolUnanswered`, `UnaddressedNode`,
+  contract-hash verification, deep `verifyConnection`); silent-wiring paths removed.
+- Per-resource serving with isolated deps on one `/rpc`; listen/local catalogs; RPC transport is
+  an injected dependency (`layerProtocol`, `wsServer`).
+
+### Lookup and fleet
+
+- `Identity.claim` (first-wins, dead-incumbent replacement via node-handle ping),
+  `Directory.advertise`/`resolve`/`nodesServing` (`IncumbentAlive` guard), and placement
+  **Advice** (`advise`/`preferred`/`clearAdvice`).
+- Peers model (`Hyperlink.nodes([...])`) for multi-node placement; `FleetHealth`, `ShardMap`,
+  and fleet `Telemetry` surfaces.
+
+### WorkPool, Daemon, Polling
+
+- WorkPool: refill (`onStart`/`onDrained`/dependency-aware `load`), rate limiting, lane take
+  algorithms, presence-driven durability, three-tier full-capture store, handle error inference.
+- Daemon: execution store integration, live event streams, remote-proof events, typed control
+  verbs (`wake`, `resetCadence`).
+- Polling namespace: `spaced`/`jittered`/`backoff`/`accelerating`/`dynamic`/`adaptive`/`cron`
+  presets plus `wakeOn(stream)`; internal tag with `Polling.layer`/`Polling.current`.
+
+### Stores, logs, storage
+
+- `Store.Storage` public API (`layerDefaultMemory`, `withDefault`, `withStorage`); store
+  transforms (`mapEffects`, `catchWriteErrors` + `StoreWriteError`); journal codecs via
+  `Schema.toCodecJson`.
+- Durable `HostLogs` by host/resource with cursors; `LogContext` lineage; SQLite and Redis
+  runtime storage (Prisma removed).
+
+### Observability and UI
+
+- Custom metrics served from the Metric registry; per-type dashboard widgets (browser + Ink TUI
+  over one data layer); `/cli`, `/tui`, `/web` subpath exports.
+- **Web dashboard naming:** `RunTag` / `isRunTag` / `useRunBundle` / `runBundle` →
+  `GateTag` / `isGateTag` / `useGateBundle` / `gateBundle`; `processLeaves` → `daemonLeaves`;
+  `CustomQueue*` / `useCustomQueueBundle` / `isCustomQueueTag` / `customQueueBundle` →
+  `Priority*` / `usePriorityBundle` / `isPriorityTag` / `priorityBundle` (matches
+  `WorkPool.priority`).
+
+### Docs
+
+- Documentation site (hyperlink.cool): compiler-accurate API reference with type-on-hover
+  previews and in-code API links, full-text search, llms.txt, releases page, standards corpus —
+  with every code sample typechecked against this release's source.
 
 ## 0.8.0-beta.28
 
@@ -32,7 +136,7 @@
   namespace (`import * as Name`), members are flat top-level exports, and partial imports tree-shake.
 
   Now converted: **`Logs`**, **`Query`**, **`LogContext`**, **`LogEntry`**, **`NodeLogs`**, **`RunResource`**,
-  **`HttpApiResource`**, **`HttpClientRunGate`**, **`ResourceConfigure`**, and **`ProcessStorage`**. All documented
+  **`HttpApiResource`**, **`HttpClientGate`**, **`ResourceConfigure`**, and **`ProcessStorage`**. All documented
   members are preserved — the flat root re-exports (`And`, `captureLoggerLayer`, `LogAnnotationKeys`, `acceptJson`,
   `configureLayer`, …) and the namespace members (`Query.And`, `Logs.captureLoggerLayer`, `LogEntry.Schema`,
   `NodeLogs.layer`, `RunResource.Tag`, `HttpApiResource.Service`, `ResourceConfigure.tagKey`, …) are the same
@@ -46,7 +150,7 @@
 
   **Migration.** Direct subpath **value** imports of the converted namespace objects change form:
   `import { NodeLogs } from ".../NodeLogs"` → `import * as NodeLogs from ".../NodeLogs"` (and likewise
-  `ProcessStorage`, `RunResource`, `HttpApiResource`, `HttpClientRunGate`, `ResourceConfigure`, `Logs`, `Query`,
+  `ProcessStorage`, `RunResource`, `HttpApiResource`, `HttpClientGate`, `ResourceConfigure`, `Logs`, `Query`,
   `LogContext`, `LogEntry`). The barrel forms (`import { NodeLogs } from "@nikscripts/effect-pm"`, …) are
   unchanged.
 
@@ -1270,7 +1374,7 @@ undefined>` overrides per host (env ports, tunnels, Effect `Config`), falling ba
 
   The multi-group CLI now checks target contract capabilities before issuing remote status/control requests, so unsupported process and queue commands fail locally before HTTP.
 
-  Adds the first runtime state/fact vocabulary for `RunResource`. Originally landed as a generic `RuntimeObserver` + `RuntimeFact` model; it has since been re-shaped into a per-domain **`RunResourceStore`** storage facet (`@nikscripts/effect-pm/store/RunResource`) — see the separate `process-store-runtime-facet` changeset for the breaking shape. `RunResource` publishes `run-resource.run.started` / `run-resource.run.completed` / `run-resource.run.failed` facts plus `RunResourceState` transitions through `RunResourceStore.recordRunStarted` / `.recordRunCompleted` / `.recordRunFailed` / `.recordStateChange` static optional emitters, which no-op when the facet layer is absent and persist as `run-resource.fact.recorded` / `run-resource.state.changed` analytics events when composed. The Prisma codec supports those event types.
+  Adds the first runtime state/fact vocabulary for `RunResource`. Originally landed as a generic `RuntimeObserver` + `RuntimeFact` model; it has since been re-shaped into a per-domain **`RunResourceStore`** storage facet (`@nikscripts/effect-pm/store/RunResource`) — see the separate `process-store-runtime-facet` changeset for the breaking shape. `RunResource` publishes `Started` / `Completed` / `Failed` facts plus `RunResourceState` transitions through `RunResourceStore.recordRunStarted` / `.recordRunCompleted` / `.recordRunFailed` / `.recordStateChange` static optional emitters, which no-op when the facet layer is absent and persist as `run-resource.fact.recorded` / `run-resource.state.changed` analytics events when composed. The Prisma codec supports those event types.
 
   In-process listeners are implemented by providing a custom service typed as `RunResourceStore.Type` via `Effect.provideService` / `Layer.succeed` — there is no `RuntimeObserver.layerListeners` helper.
 
@@ -1310,5 +1414,5 @@ undefined>` overrides per host (env ports, tunnels, Effect `Config`), falling ba
 - **Breaking — effect-first process runtime:** `Process.make` is centered on **`effect`**, with optional **`polling`** (`Polling.spaced`, `Polling.acceleratingScoped`, …) and **`schedule`** (`ProcessSchedule.alwaysArmed`, `ProcessSchedule.cronMatch`, `ProcessSchedule.fromArmedRef`, …) as **layers**. Compose at `make`, via **`Process.providePolling`** / **`Process.provideSchedule`**, or when providing **`process.effect`** at fork time.
 - **`Polling` / `ProcessSchedule`:** context services and preset layers; **`ProcessDetails`** / **`ProcessGroup`** status expose **`armed`**, **`nextPollCadence`**, and schedule transition hints where available.
 - **Supervisor:** **`start` / `startAll`** attaches schedule drivers; **disarm** pauses scheduled ticks while the fiber **waits** (hint-based or fallback idle sleep, **`Clock`**-aligned); **`cronMatch`** sampling uses the same **`Clock`**.
-- **Resource modules:** `QueueResource`, `RunResource`, `HttpClientRunGate`, and `HttpApiResource` use the current class/service patterns documented in **`docs/RESOURCE-API.md`**.
+- **Resource modules:** `QueueResource`, `RunResource`, `HttpClientGate`, and `HttpApiResource` use the current class/service patterns documented in **`docs/RESOURCE-API.md`**.
 - **Docs & examples:** **`docs/PROCESS-API.md`**, **`docs/RESOURCE-API.md`**, **`examples/queue-resource.ts`**, and the examples index describe the current beta surface.

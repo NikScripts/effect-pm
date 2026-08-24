@@ -1,7 +1,7 @@
 /**
  * @module examples/shared/sports-score-feed
  *
- * Test double for a scores HTTP API — used by forms/polling/* sports demos.
+ * Test double for a scores HTTP API — used by examples/polling/* sports demos.
  */
 
 import { Duration, Effect, Ref } from "effect";

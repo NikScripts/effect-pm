@@ -1,48 +1,15 @@
 ---
-description: Effect-true module layout — filenames, namespaces, and the internal split
-alwaysApply: true
+description: Module layout + public/internal — pointer to standards SSOT
+globs: "{src,packages/last-ts/src,examples,test}/**/*.{ts,tsx}"
+alwaysApply: false
 ---
 
-# Module layout (Effect-true)
+# Module layout
 
-Canonical precedent: the vendored `repos/effect/packages/effect` (and `repos/effect/packages/rpc`).
-Match it. When unsure, open the analogous Effect module and copy its shape.
+SSOT: [`docs/standards/modules-and-boundaries.md`](../../docs/standards/modules-and-boundaries.md).
+Match vendored Effect (`repos/effect/packages/effect`).
 
-## The module is the file is the namespace
-
-- One public module = **one `PascalCase.ts` in a role folder** (usually `src/`). The file **is** the
-  namespace, consumed as `import * as Name from "@nikscripts/effect-pm/Name"`.
-- Members are **flat top-level** `export const` / `export function` / `export type`.
-- **Never an object-as-namespace for the public surface** — no `export const Name = { ... }`.
-  (Effect has no `export const Effect = {}`; `Effect.ts` is flat `export const succeed`, etc.)
-- Associated types attach **in the same file** via `export declare namespace Name { ... }`
-  (see `repos/effect/packages/effect/src/Layer.ts`).
-
-## Filenames match their module
-
-- Filename === the namespace / class / type it exports. No orphan names that export nothing of that name.
-- **Banned for public modules:** `*Contract`, `*Namespace`, and object-engine files. Name by role/noun,
-  like Effect's `RpcServer` / `RpcClient` / `RpcGroup` — a monorepo-wide search of Effect finds zero
-  `*Contract` files.
-
-## Heavy / private impl → `src/internal/<camelCase>.ts` (name mirror)
-
-- The public `Foo.ts` is a thin re-export shell over a name-mirrored internal impl:
-  `import * as internal from "./internal/foo"` (Effect: `Cache.ts` ↔ `internal/cache.ts`).
-- Internal modules are camelCase, get **no subpath**, and are **never imported by apps**.
-
-## Subpaths never point into `internal/`
-
-- `@nikscripts/effect-pm/Name` resolves to the public `src/Name.ts` (surfaced via the barrel
-  `export * as Name from "./Name"`). It must **not** resolve to `src/internal/*Namespace.ts`.
-- Barrel `src/index.ts`: one `export * as Name from "./Name"` per module.
-
-## Exceptions (already ruled — do not "fix")
-
-- **Storage facets** keep their own convention (see `public-vs-internal.mdc`): a camelCase file
-  (`src/store/queueResource.ts`) under a PascalCase subpath (`store/QueueResource`).
-
-## Concrete
-
-- ✅ `src/QueueResource.ts` (flat namespace: `Tag`, `layer`, `serve`, `make`, …) + `src/internal/queueResource.ts` (engine impl).
-- ❌ `src/QueueContract.ts` (orphan name) **+** `src/QueueResource.ts` exporting `export const QueueResource = { … }` (object engine) **+** the `./QueueResource` subpath resolving to `src/internal/queueResourceNamespace.ts`.
+- One public module = one `PascalCase.ts`, flat exports (`import * as Name`).
+- No object-as-namespace public surface. No `*Contract` / `*Namespace` public files.
+- Heavy impl → `src/internal/<camelCase>.ts` (name-mirrored); no app imports; no subpath into `internal/`.
+- Public = apps import; `internal/` = package-only. Storage facets (if any) → `src/store/` + `store/<Domain>` subpath.

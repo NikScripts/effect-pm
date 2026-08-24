@@ -1,9 +1,18 @@
 /**
- * Telemetry — serve a node's whole Effect `Metric` registry as a Resource, for **custom** in-app use
- * (dashboards, TUIs, fleet pages, a `pm metrics` command). The thin counterpart to OTEL export: same
+ * Telemetry — serve a node's whole Effect `Metric` registry as a Hyperlink, for **custom** in-app use
+ * (dashboards, TUIs, fleet pages, metrics CLIs). The thin counterpart to OTEL export: same
  * source (the per-node `Metric` registry), different sink. OTEL is the professional path — wire
  * `@effect/opentelemetry` and point OTLP at Sentry / Grafana / anything; Telemetry is for building
- * something custom without external infra. See `docs/guides/telemetry.md`.
+ * something custom without external infra.
+ *
+ * ## Fleet glass
+ *
+ * Leaf fields (`snapshot` / `live`) read **this** node's registry. Fleet fields
+ * (`inFlightByNode` / `fleetInFlight`) fold peers' leaf snapshots via {@link Hyperlink.peers} —
+ * so a meshed pack gets one glass for the stadium board. Discharge the mesh with
+ * {@link Hyperlink.peersLayer} (or {@link alone} for a single node with no peers).
+ *
+ * See `docs/guides/telemetry.md`.
  *
  * @module Telemetry
  */
@@ -18,110 +27,113 @@ import {
   Scope,
   Stream,
 } from "effect";
+import { combineByNode, combineQuery, combineSum } from "./MultiNode";
+import * as Hyperlink from "./Hyperlink";
 import {
-  Tag as resourceTag,
+  Service as resourceTag,
   layer as resourceLayer,
   serve as resourceServe,
   serveRemote as resourceServeRemote,
   effect,
+  fleet,
   stream,
   type NodeBoundTag,
-  type NodeKey,
-  type ResourceTag,
-} from "./Resource";
+  type PeersId,
+  type HyperlinkTag,
+  type SelfNodeId,
+} from "./Hyperlink";
+import type { NodeKey } from "./Node";
+import * as Node from "./Node";
 
 // ============================================================================
-// Public types (explicit interfaces — the schema below is checked against them)
+// Wire schema — the served contract, shared with the dashboard/TUI. Each datum is one
+// `Schema.TaggedClass`: value and type under a single name, so there is no interface /
+// schema pair to keep in sync (Types & Naming → *Prefer a class schema*).
 // ============================================================================
 
-/** A metric's label set (from Effect `Metric` attributes). @public */
+/**
+ * A metric's label set (from Effect `Metric` attributes).
+ *
+ * @category models
+ * @public
+ */
 export type MetricLabels = Readonly<Record<string, string>>;
-
-/** A counter reading. @public */
-export interface CounterDatum {
-  readonly _tag: "counter";
-  readonly id: string;
-  readonly labels: MetricLabels;
-  readonly count: number;
-}
-
-/** A gauge reading. @public */
-export interface GaugeDatum {
-  readonly _tag: "gauge";
-  readonly id: string;
-  readonly labels: MetricLabels;
-  readonly value: number;
-}
-
-/** One cumulative histogram bucket: observations `<= le`. @public */
-export interface HistogramBucket {
-  readonly le: number;
-  readonly count: number;
-}
-
-/** A histogram reading (cumulative buckets). @public */
-export interface HistogramDatum {
-  readonly _tag: "histogram";
-  readonly id: string;
-  readonly labels: MetricLabels;
-  readonly buckets: ReadonlyArray<HistogramBucket>;
-  readonly count: number;
-  readonly sum: number;
-}
-
-/** One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public */
-export type MetricDatum = CounterDatum | GaugeDatum | HistogramDatum;
-
-/** A node's whole `Metric` registry, point-in-time. @public */
-export interface MetricsSnapshot {
-  readonly ts: number;
-  readonly metrics: ReadonlyArray<MetricDatum>;
-}
-
-// ============================================================================
-// Wire schema (THE contract — shared with the dashboard/TUI). The `Schema.Codec<T>`
-// annotations fail to compile if the schema and the public interfaces above ever drift.
-// ============================================================================
-
 const metricLabels = Schema.Record(Schema.String, Schema.String);
 
-const counterDatum = Schema.TaggedStruct("counter", {
+/**
+ * A counter reading.
+ *
+ * @category models
+ * @public
+ */
+export class CounterDatum extends Schema.TaggedClass<CounterDatum>()("Counter", {
   id: Schema.String,
   labels: metricLabels,
   count: Schema.Number,
-});
+}) {}
 
-const gaugeDatum = Schema.TaggedStruct("gauge", {
+/**
+ * A gauge reading.
+ *
+ * @category models
+ * @public
+ */
+export class GaugeDatum extends Schema.TaggedClass<GaugeDatum>()("Gauge", {
   id: Schema.String,
   labels: metricLabels,
   value: Schema.Number,
-});
+}) {}
 
-const histogramBucket = Schema.Struct({
+/**
+ * One cumulative histogram bucket: observations `<= le`.
+ *
+ * @category models
+ * @public
+ */
+export class HistogramBucket extends Schema.Class<HistogramBucket>("HistogramBucket")({
   le: Schema.Number,
   count: Schema.Number,
-});
+}) {}
 
-const histogramDatum = Schema.TaggedStruct("histogram", {
+/**
+ * A histogram reading (cumulative buckets).
+ *
+ * @category models
+ * @public
+ */
+export class HistogramDatum extends Schema.TaggedClass<HistogramDatum>()("Histogram", {
   id: Schema.String,
   labels: metricLabels,
-  buckets: Schema.Array(histogramBucket),
+  buckets: Schema.Array(HistogramBucket),
   count: Schema.Number,
   sum: Schema.Number,
-});
+}) {}
 
-/** Schema for {@link MetricDatum}. @public */
-export const metricDatum: Schema.Codec<MetricDatum> = Schema.Union([
-  counterDatum,
-  gaugeDatum,
-  histogramDatum,
-]);
+/**
+ * One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const metricDatum = Schema.Union([CounterDatum, GaugeDatum, HistogramDatum]);
+/**
+ * The type of a single {@link metricDatum}.
+ *
+ * @category models
+ * @public
+ */
+export type MetricDatum = typeof metricDatum.Type;
 
-/** Schema for {@link MetricsSnapshot} — the served wire envelope. @public */
-export const metricsSnapshot: Schema.Codec<MetricsSnapshot> = Schema.Struct({
+/**
+ * A node's whole `Metric` registry, point-in-time — the served wire envelope.
+ *
+ * @category models
+ * @public
+ */
+export class MetricsSnapshot extends Schema.Class<MetricsSnapshot>("MetricsSnapshot")({
   ts: Schema.Number,
   metrics: Schema.Array(metricDatum),
-});
+}) {}
 
 // ============================================================================
 // Encode: Effect `Metric.snapshot` → the wire envelope
@@ -137,10 +149,8 @@ const labelsOf = (attributes: MetricLabels | undefined): MetricLabels =>
   attributes ?? {};
 
 /** One raw `[boundary, count]` histogram bucket → the wire shape. @internal */
-const toBucket = ([le, count]: readonly [number, number]): HistogramBucket => ({
-  le,
-  count,
-});
+const toBucket = ([le, count]: readonly [number, number]): HistogramBucket =>
+  HistogramBucket.make({ le, count });
 
 /**
  * Encode one registry metric → zero-or-one {@link MetricDatum} — `Frequency`/`Summary` encode to none
@@ -153,19 +163,18 @@ const encodeDatum = (s: MetricSnapshotElem): ReadonlyArray<MetricDatum> => {
   const labels = labelsOf(s.attributes);
   switch (s.type) {
     case "Counter":
-      return [{ _tag: "counter", id, labels, count: Number(s.state.count) }];
+      return [CounterDatum.make({ id, labels, count: Number(s.state.count) })];
     case "Gauge":
-      return [{ _tag: "gauge", id, labels, value: Number(s.state.value) }];
+      return [GaugeDatum.make({ id, labels, value: Number(s.state.value) })];
     case "Histogram":
       return [
-        {
-          _tag: "histogram",
+        HistogramDatum.make({
           id,
           labels,
           buckets: s.state.buckets.map(toBucket),
           count: s.state.count,
           sum: s.state.sum,
-        },
+        }),
       ];
     default:
       return [];
@@ -176,45 +185,96 @@ const encodeDatum = (s: MetricSnapshotElem): ReadonlyArray<MetricDatum> => {
 const encodeSnapshot = (
   raw: ReadonlyArray<MetricSnapshotElem>,
   ts: number,
-): MetricsSnapshot => ({ ts, metrics: raw.flatMap(encodeDatum) });
+): MetricsSnapshot => MetricsSnapshot.make({ ts, metrics: raw.flatMap(encodeDatum) });
 
 /**
  * The current registry snapshot, encoded — the **single source** of "take a snapshot" (the served
- * `snapshot` query and the `live` sampler both use it). Usable locally, without the resource.
+ * `snapshot` query and the `live` sampler both use it). Usable locally, without the HyperService.
  *
+ * @category getters
  * @public
  */
-export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.map(
-  Effect.all([Clock.currentTimeMillis, Metric.snapshot]),
-  ([ts, raw]) => encodeSnapshot(raw, ts),
-);
+export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.all([
+  Clock.currentTimeMillis,
+  Metric.snapshot,
+]).pipe(Effect.map(([ts, raw]) => encodeSnapshot(raw, ts)));
 
 // ============================================================================
 // Contract (Tag)
 // ============================================================================
 
+/**
+ * Gauge id folded by {@link inFlightOf} / fleet fields — queue engines emit this.
+ *
+ * @category utils
+ * @public
+ */
+export const inFlightMetricId = "queue_in_flight";
+
+/**
+ * Read {@link inFlightMetricId} from a snapshot (missing ⇒ `0`). Used by fleet folds and demos.
+ *
+ * @category getters
+ * @public
+ */
+export const inFlightOf = (snap: MetricsSnapshot): number => {
+  const hit = snap.metrics.find(
+    (m): m is GaugeDatum => m._tag === "Gauge" && m.id === inFlightMetricId,
+  );
+  return hit?.value ?? 0;
+};
+
+const byNodeSchema = Schema.Record(Schema.String, Schema.Number);
+
 const telemetrySpec = {
-  snapshot: effect(metricsSnapshot).annotate({
+  snapshot: effect(MetricsSnapshot).annotate({
     description: "Point-in-time snapshot of this node's whole Metric registry.",
   }),
-  live: stream(metricsSnapshot).annotate({
+  live: stream(MetricsSnapshot).annotate({
     description: "Periodic push (~1s) of this node's Metric registry.",
+  }),
+  inFlightByNode: effect(byNodeSchema).pipe(fleet).annotate({
+    description:
+      "`queue_in_flight` gauge per node — peers' leaf snapshots + this node's own.",
+  }),
+  fleetInFlight: effect(Schema.Number).pipe(fleet).annotate({
+    description: "Sum of `queue_in_flight` across this node and its peers.",
   }),
 };
 
 /** @internal */
 export type TelemetrySpec = typeof telemetrySpec;
 
-/** This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`). @public */
-export const kind = "@nikscripts/effect-pm/Telemetry";
+/**
+ * This contract's canonical kind (stamped on every tag; read via `Hyperlink.kindOf`).
+ *
+ * @category utils
+ * @public
+ */
+export const kind = "hyperlink-ts/Telemetry";
 
-/** A Telemetry instance tag. @public */
-export type TelemetryTag<Self> = ResourceTag<Self, TelemetrySpec>;
+/**
+ * A Telemetry instance tag.
+ *
+ * @category models
+ * @public
+ */
+export type TelemetryTag<Self> = HyperlinkTag<Self, TelemetrySpec>;
 
-/** A node-bound {@link TelemetryTag} — served + reached on that node. @public */
+/**
+ * A node-bound {@link TelemetryTag} — served + reached on that node.
+ *
+ * @category models
+ * @public
+ */
 export type TelemetryNodeTag<Self, HSelf> = NodeBoundTag<Self, TelemetrySpec, HSelf>;
 
-/** Tag-construction options for {@link Tag}. @public */
+/**
+ * Tag-construction options for {@link Tag}.
+ *
+ * @category models
+ * @public
+ */
 export interface TelemetryConstructOptions<HSelf = never> {
   readonly node?: NodeKey<HSelf>;
   readonly description?: string;
@@ -225,13 +285,14 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
   node === undefined ? defaultKey : `${node.key}/${defaultKey}`;
 
 /**
- * Declare a Telemetry tag: `class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}` (nodeless
- * — the dashboard reaches each node via `Resource.client(FleetTelemetry, node)`), or
+ * Declare a Telemetry tag: `class FleetTelemetry extends Telemetry.Service<FleetTelemetry>()() {}` (nodeless
+ * — the dashboard reaches each node via `Hyperlink.client(FleetTelemetry, node)`), or
  * `…Tag<FleetTelemetry>()({ node: MiniNode })` to bind + serve it on a specific node.
  *
+ * @category constructors
  * @public
  */
-export const Tag = <Self>() => {
+export const Service = <Self>() => {
   function build(): TelemetryTag<Self>;
   function build<HSelf>(options: {
     readonly node: NodeKey<HSelf>;
@@ -260,7 +321,12 @@ export const Tag = <Self>() => {
 // Engine (sampler + layer + serve/serveRemote)
 // ============================================================================
 
-/** Options for {@link layer} / {@link serve} / {@link serveRemote}. @public */
+/**
+ * Options for {@link layer} / {@link serve} / {@link serveRemote}.
+ *
+ * @category models
+ * @public
+ */
 export interface TelemetryOptions {
   /** Live-stream sampling cadence. @default 1 second */
   readonly interval?: Duration.Duration;
@@ -270,6 +336,36 @@ export interface TelemetryOptions {
 const defaultInterval = Duration.seconds(1);
 /** `live` buffer depth — sliding, so a slow subscriber drops old frames instead of backpressuring. @internal */
 const liveBufferSize = 8;
+
+/**
+ * Identity node for a **non-meshed** Telemetry instance (no peers). Used by {@link alone}.
+ *
+ * @internal
+ */
+class TelemetryAloneNode extends Node.Service<TelemetryAloneNode>()(
+  "hyperlink-ts/Telemetry/alone",
+) {}
+
+/**
+ * Discharge the mesh with **no peers** — this node's registry alone. Pair with {@link layer} /
+ * {@link serve} when Telemetry is not distributed:
+ *
+ * ```ts
+ * Telemetry.layer(FleetTelemetry).pipe(Layer.provide(Telemetry.alone(FleetTelemetry)))
+ * ```
+ *
+ * For a fleet, provide {@link Hyperlink.peersLayer} instead (bundled selfNode + peers).
+ *
+ * @category layers & serving
+ * @public
+ */
+export const alone = <Self>(
+  tag: TelemetryTag<Self>,
+): Layer.Layer<PeersId<Self> | SelfNodeId<Self>> =>
+  Layer.merge(
+    Hyperlink.peersFrom(tag, {}),
+    Hyperlink.selfNodeLayer(tag, TelemetryAloneNode),
+  );
 
 /** The sampling fiber body: publish {@link snapshotNow} every `interval`, forever. @internal */
 const sampleLoop = (
@@ -283,64 +379,107 @@ const sampleLoop = (
     ),
   );
 
-/** The served impl: `snapshot` (fresh sample on demand) + `live` (the sampled stream). @internal */
-const buildImpl = (
+/**
+ * The served impl: leaf `snapshot`/`live` plus fleet folds over peers' leaf snapshots.
+ * Resolves {@link Hyperlink.peers} / {@link Hyperlink.selfNode} once; members close over them.
+ *
+ * @internal
+ */
+const buildImpl = <Self>(
+  tag: TelemetryTag<Self>,
   options?: TelemetryOptions,
 ): Effect.Effect<
   {
     readonly snapshot: Effect.Effect<MetricsSnapshot>;
     readonly live: Stream.Stream<MetricsSnapshot>;
+    readonly inFlightByNode: Effect.Effect<Readonly<Record<string, number>>>;
+    readonly fleetInFlight: Effect.Effect<number>;
   },
   never,
-  Scope.Scope
+  Scope.Scope | PeersId<Self> | SelfNodeId<Self>
 > =>
   Effect.gen(function* () {
     const hub = yield* PubSub.sliding<MetricsSnapshot>(liveBufferSize);
     yield* Effect.forkScoped(sampleLoop(hub, options?.interval ?? defaultInterval));
+    const peers = yield* Hyperlink.peers(tag);
+    const self = yield* Hyperlink.selfNode(tag);
+    const ownInFlight = snapshotNow.pipe(Effect.map(inFlightOf));
     return {
       snapshot: snapshotNow,
       live: Stream.fromPubSub(hub),
+      inFlightByNode: Effect.gen(function* () {
+        const byNode = yield* combineQuery(
+          peers,
+          (peer) => peer.snapshot.pipe(Effect.map(inFlightOf)),
+          combineByNode,
+        );
+        const own = yield* ownInFlight;
+        return { ...byNode, [self]: own };
+      }),
+      fleetInFlight: Effect.gen(function* () {
+        const others = yield* combineQuery(
+          peers,
+          (peer) => peer.snapshot.pipe(Effect.map(inFlightOf)),
+          combineSum,
+        );
+        return others + (yield* ownInFlight);
+      }),
     };
   });
 
 /**
- * Local layer for a Telemetry tag — forks one sampling fiber into scope and wires `snapshot`/`live`.
+ * Local layer for a Telemetry tag — forks one sampling fiber and wires leaf + fleet fields.
+ * Requires the mesh capability ({@link alone} or {@link Hyperlink.peersLayer}).
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <Self>(
   tag: TelemetryTag<Self>,
   options?: TelemetryOptions,
-): Layer.Layer<Self, never, Scope.Scope> =>
-  Layer.unwrap(
-    Effect.map(buildImpl(options), (impl) => resourceLayer(tag, impl)),
+): Layer.Layer<
+  Self | Hyperlink.Local<Self>,
+  never,
+  PeersId<Self> | SelfNodeId<Self>
+> =>
+  buildImpl(tag, options).pipe(
+    Effect.map((impl) => resourceLayer(tag, impl)),
+    Layer.unwrap,
   );
 
 /**
  * Serve this Telemetry resource **remotely (served-only)** — the counterpart to
- * {@link Resource.serveRemote}. Mounts the `snapshot`/`live` RPC handlers and registers into
- * {@link Resource.servedResourcesLayer} **without** granting the local instance. For a pure
- * gateway/edge; use {@link serve} when the serving node also reads telemetry in-process.
+ * {@link Hyperlink.serveRemote}. Mounts leaf + fleet RPC handlers **without** granting the local
+ * instance. Requires the mesh capability ({@link alone} or {@link Hyperlink.peersLayer}).
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemote = <Self>(
   tag: TelemetryTag<Self>,
   options?: TelemetryOptions,
-) =>
-  Layer.unwrap(
-    Effect.map(buildImpl(options), (impl) => resourceServeRemote(tag, impl)),
+): Layer.Layer<never, never, PeersId<Self> | SelfNodeId<Self>> =>
+  buildImpl(tag, options).pipe(
+    Effect.map((impl) => resourceServeRemote(tag, impl)),
+    Layer.unwrap,
   );
 
 /**
- * Serve this Telemetry resource **and** grant its local instance from **one** materialization — the
- * counterpart to {@link Resource.serve}. Forks one sampling fiber, mounts the `snapshot`/`live` RPC
- * handlers, and grants `Self | Local<Self>` so co-located code can `yield* Tag`. Reach it
- * remotely with `Resource.client`; a served-**only** edge uses {@link serveRemote}.
+ * Serve this Telemetry resource **and** grant its local instance from **one** materialization —
+ * counterpart to {@link Hyperlink.serve}. Forks one sampling fiber, mounts leaf + fleet handlers,
+ * and grants `Self | Local<Self>`. Requires the mesh capability ({@link alone} or
+ * {@link Hyperlink.peersLayer}):
  *
+ * ```ts
+ * Telemetry.serve(FleetMetrics).pipe(
+ *   Layer.provide(Hyperlink.peersLayer(FleetMetrics, DropletEast)),
+ * )
+ * ```
+ *
+ * @category layers & serving
  * @public
  */
 export const serve = <Self>(
   tag: TelemetryTag<Self>,
   options?: TelemetryOptions,
-) => resourceServe(tag, buildImpl(options));
+) => resourceServe(tag, buildImpl(tag, options));

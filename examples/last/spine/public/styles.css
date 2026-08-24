@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light;
+  --ink: #14201a;
+  --muted: #5a6b5e;
+  --panel: #f4f7f4;
+  --line: #d5ddd6;
+  --accent: #1f7a4c;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  min-height: 100vh;
+}
+
+.nav {
+  padding: 1.25rem 1rem;
+  border-right: 1px solid var(--line);
+  background: #fff;
+}
+
+.nav .brand {
+  display: block;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+  margin-bottom: 1rem;
+}
+
+.nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.nav li {
+  margin: 0.35rem 0;
+}
+
+.nav a {
+  text-decoration: none;
+}
+
+.main {
+  padding: 2rem 2.5rem;
+  max-width: 40rem;
+}
+
+.main h1 {
+  margin-top: 0;
+}
+
+.main p {
+  color: var(--muted);
+  line-height: 1.5;
+}

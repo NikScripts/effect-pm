@@ -1,12 +1,12 @@
-import { DateTime, Effect, Layer, Schema, Stream } from "effect";
+import { DateTime, Effect, Layer, Schema, Stream, SubscriptionRef } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src";
-import * as Resource from "../src/Resource";
-import { groupOf } from "../src/Resource";
-import type { QueueEntry } from "../src/QueueResource";
+import { WorkPool } from "../src";
+import * as Hyperlink from "../src/Hyperlink";
+import { groupOf } from "../src/Hyperlink";
+import type { QueueEntry } from "../src/WorkPool";
 
 // The handoff path: a full QueueEntry (item + priority + attempts + timestamps) handed to a
 // remote queue's `enqueue` over a REAL http transport. This exercises the actual serialization
@@ -16,36 +16,47 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", NumberItem) {}
+class HttpQueue extends WorkPool.Service<HttpQueue>()("queue-http/Q", { payload: NumberItem }) {}
 
 // last entries the server received on `enqueue`, after crossing the wire and decoding.
 const received: Array<QueueEntry<NumberItem>> = [];
 
-// ref-field impls are Subscribables (a static one for this stub: current + a single-emit changes).
-const sub = <A>(v: A) => ({ get: Effect.succeed(v), changes: Stream.make(v) });
+// ref-field impls are Subscribables backed by a SubscriptionRef (matches Hyperlink.subscribable).
+const initialStatus = {
+  sizes: { high: 0, normal: 0, low: 0 },
+  paused: false,
+  inFlight: 0,
+  completed: 0,
+};
+const statusRef = Effect.runSync(SubscriptionRef.make(initialStatus));
+const statusSub = Hyperlink.subscribable(statusRef);
 
 const stub = {
-  size: sub(0),
-  isEmpty: sub(true),
+  size: Hyperlink.mapSubscribable(
+    statusSub,
+    (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
+  ),
+  isEmpty: Hyperlink.mapSubscribable(
+    statusSub,
+    (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
+  ),
   start: Effect.void,
   pause: Effect.void,
   resume: Effect.void,
-  shutdown: Effect.void,
+  stop: Effect.void,
   clear: Effect.succeed(0),
-  status: sub({
-    sizes: { high: 0, normal: 0, low: 0 },
-    paused: false,
-    inFlight: 0,
-    completed: 0,
-    phase: "running" as const,
-  }),
+  status: statusSub,
+  lifecycle: Hyperlink.mapSubscribable(statusSub, () => ({
+    _tag: "Running" as const,
+  })),
+  lifecycleEvents: Stream.empty,
   metrics: {
-    live: Stream.empty,
-    history: () => Effect.succeed([]),
+    stream: Stream.empty,
+    query: () => Effect.succeed([]),
   },
   logs: {
-    live: Stream.empty,
-    history: () => Effect.succeed([]),
+    stream: Stream.empty,
+    query: () => Effect.succeed([]),
   },
   add: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   prioritize: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
@@ -66,13 +77,13 @@ const HttpQueueServer = HttpRouter.serve(
     group: groupOf(HttpQueue),
     path: "/rpc",
     protocol: "http",
-  }).pipe(Layer.provide(Resource.serveRemote(HttpQueue, stub))),
+  }).pipe(Layer.provide(Hyperlink.serveRemote(HttpQueue, stub))),
 ).pipe(
   Layer.provideMerge(RpcSerialization.layerNdjson),
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
@@ -107,7 +118,7 @@ it("enqueue round-trips a full entry (item + metadata) over real http", () => {
       expect(DateTime.toEpochMillis(got!.timestamps.enqueuedAt)).toBe(0);
     }).pipe(
       Effect.provide(
-        Resource.client(HttpQueue).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(HttpQueue).pipe(Layer.provide(httpProtocol(port))),
       ),
       Effect.scoped,
     );

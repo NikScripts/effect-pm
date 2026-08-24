@@ -3,26 +3,26 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { HistoryStore, QueueResource } from "../src";
-import type { QueueLayerConfig } from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import { HistoryStore, WorkPool } from "../src";
+import type { QueueLayerConfig } from "../src/WorkPool";
+import * as Hyperlink from "../src/Hyperlink";
+import * as Node from "../src/Node";
 
-// The full remote path: a REAL toolkit QueueResource engine served over http via
-// `httpServer([QueueResource.serve(...)])`, driven by `Resource.client` over the wire. The same `yield* Tag`
+// The full remote path: a REAL toolkit WorkPool engine served over http via
+// `httpServer([WorkPool.serveMemory(...)])`, driven by `Hyperlink.client` over the wire. The same `yield* Tag`
 // surface a local consumer uses — only the provided layer differs. This proves "remote queue
-// usage, all pieces together": control (add/pause), reads (completed/statusNow), the rich-entry
+// usage, all pieces together": control (add/pause), reads (completed/status.get), the rich-entry
 // handoff (release), and a live stream (status) all crossing real RPC.
 const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class RemoteQueue extends QueueResource.Tag<RemoteQueue>()(
-  "queue-remote/Q",
-  NumberItem,
-) {}
+class RemoteQueue extends WorkPool.Service<RemoteQueue>()("queue-remote/Q", {
+  payload: NumberItem,
+}) {}
 
 // client transport: http + ndjson (matches the server's default serialization).
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
@@ -30,13 +30,15 @@ const clientHttp = (port: number) =>
 
 // run `use` against a real engine served over http with the given worker config.
 const withServer = <A, E>(
-  config: QueueLayerConfig<NumberItem, never, never>,
+  config: QueueLayerConfig<NumberItem, void, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
+  options?: { readonly deferStart?: boolean },
 ) => {
-  const server = Resource.httpServer([
-    QueueResource.serve(RemoteQueue, config),
-  ]).pipe(
-    // server-side history backend (only used when the config enables captureLogs)
+  const serve = options?.deferStart === true
+    ? WorkPool.serveMemory(RemoteQueue, config).pipe(Hyperlink.deferStart)
+    : WorkPool.serveMemory(RemoteQueue, config);
+  const server = Node.httpServer([serve]).pipe(
+    // server-side history backend for metrics backfill
     Layer.provide(HistoryStore.layerMemory()),
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
@@ -47,14 +49,14 @@ const withServer = <A, E>(
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
       Effect.provide(
-        Resource.client(RemoteQueue).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(RemoteQueue).pipe(Layer.provide(httpProtocol(port))),
       ),
       Effect.scoped,
     );
   }).pipe(Effect.provide(server), Effect.scoped);
 };
 
-it("add (single + batch) over http → real engine processes → completed/statusNow round-trip", () =>
+it("add (single + batch) over http → real engine processes → completed/status.get round-trip", () =>
   Effect.runPromise(
     withServer({ effect: (_item) => Effect.void, concurrency: 2 }, (_port) =>
       Effect.gen(function* () {
@@ -72,16 +74,15 @@ it("add (single + batch) over http → real engine processes → completed/statu
         const snap = Option.getOrThrow(drained);
         expect(snap.completed).toBe(3);
         expect(snap.sizes).toEqual({ high: 0, normal: 0, low: 0 });
-        expect(snap.phase).toBe("running");
+        expect((yield* queue.lifecycle.get)._tag).toBe("Running");
       }),
     )));
 
-it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () =>
+it("metricsHistory crosses http (the dashboard's backfill path)", () =>
   Effect.runPromise(
     withServer(
       {
         effect: (item) => Effect.logInfo(`processed ${item.n}`),
-        captureLogs: true,
         concurrency: 1,
       },
       (_port) =>
@@ -94,27 +95,15 @@ it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () 
               (s) => s.completed >= 2,
             ),
           );
-          // history is captured server-side, then read back over RPC
-          yield* Effect.gen(function* () {
-            while ((yield* queue.logs.history({})).length === 0) {
-              yield* Effect.sleep(Duration.millis(10));
-            }
-          }).pipe(Effect.timeout(Duration.seconds(2)));
-
-          const logs = yield* queue.logs.history({ limit: 50 });
-          expect(logs.length).toBeGreaterThan(0);
-          // decoded log entries survive the wire (level preserved)
-          expect(typeof logs[0]?.level).toBe("string");
-          // metricsHistory also serializes over RPC (array, possibly empty between windows)
-          const metrics = yield* queue.metrics.history({});
+          const metrics = yield* queue.metrics.query({});
           expect(Array.isArray(metrics)).toBe(true);
         }),
     )));
 
 it("release handoff round-trips full entries (item + metadata) over http", () =>
-  // autoStart:false → no workers, so added items stay PENDING for release to export.
+  // deferStart → no workers, so added items stay PENDING for release to export.
   Effect.runPromise(
-    withServer({ effect: (_item) => Effect.void, autoStart: false }, (_port) =>
+    withServer({ effect: (_item) => Effect.void }, (_port) =>
       Effect.gen(function* () {
         const queue = yield* RemoteQueue;
         yield* queue.add([{ n: 10 }, { n: 11 }]);
@@ -129,27 +118,33 @@ it("release handoff round-trips full entries (item + metadata) over http", () =>
           released.every((e) => e.timestamps.enqueuedAt !== undefined),
         ).toBe(true);
       }),
-    )));
+      { deferStart: true },
+    ),
+  ));
 
 it("the status stream flows over http from the real engine", () =>
   Effect.runPromise(
-    withServer({ effect: (_item) => Effect.void, autoStart: false }, (_port) =>
-      Effect.gen(function* () {
-        const queue = yield* RemoteQueue;
-        const collected = yield* Effect.forkChild(
-          Stream.runCollect(
-            Stream.take(
-              Stream.filter(
-                queue.status.changes,
-                (s) => s.sizes.normal >= 2,
+    withServer(
+      { effect: (_item) => Effect.void },
+      (_port) =>
+        Effect.gen(function* () {
+          const queue = yield* RemoteQueue;
+          const collected = yield* Effect.forkChild(
+            Stream.runCollect(
+              Stream.take(
+                Stream.filter(
+                  queue.status.changes,
+                  (s) => s.sizes.normal >= 2,
+                ),
+                1,
               ),
-              1,
             ),
-          ),
-        );
-        yield* Effect.sleep(Duration.millis(20));
-        yield* queue.add([{ n: 1 }, { n: 2 }]); // no workers → stay pending → normal:2
-        const snap = Array.from(yield* Fiber.join(collected))[0];
-        expect(snap?.sizes.normal).toBeGreaterThanOrEqual(2);
-      }),
-    )));
+          );
+          yield* Effect.sleep(Duration.millis(20));
+          yield* queue.add([{ n: 1 }, { n: 2 }]); // no workers → stay pending → normal:2
+          const snap = Array.from(yield* Fiber.join(collected))[0];
+          expect(snap?.sizes.normal).toBeGreaterThanOrEqual(2);
+        }),
+      { deferStart: true },
+    ),
+  ));

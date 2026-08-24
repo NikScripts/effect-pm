@@ -1,0 +1,147 @@
+import { Effect, Layer, Schema } from "effect";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
+import { NodeHttpServer } from "@effect/platform-node";
+import { expect, it } from "vitest";
+import * as Hyperlink from "../src/Hyperlink";
+import { NodeStatusTag, httpClient as nodeStatusHttpClient } from "../src/internal/nodeStatus";
+import * as Node from "../src/Node";
+
+// A resource carries its own readiness derivation (here a bare Hyperlink.Service opts in via
+// `withReadiness`). When it reports "not ready", the node's `/health` returns 503 and `NodeStatus`
+// reads `degraded` with the per-resource detail — the same aggregate, two faces (SSOT).
+class Warming extends Hyperlink.Service<Warming>()("readiness/Warming", {
+  ping: Hyperlink.effect(Schema.String),
+}).pipe(
+  Hyperlink.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
+) {}
+
+const Server = Node.httpServer([
+  Hyperlink.serve(Warming, { ping: Effect.succeed("pong") }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+
+const withPort = <A, E, R>(
+  use: (port: number) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R | HttpServer.HttpServer> =>
+  Effect.gen(function* () {
+    const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
+    return yield* use(addr._tag === "TcpAddress" ? addr.port : 0);
+  });
+
+it("a not-ready resource flips /health to 503 (degraded) with its detail", () =>
+  Effect.runPromise(
+    withPort((port) =>
+      Effect.gen(function* () {
+        const client = yield* HttpClient.HttpClient;
+        const res = yield* client.get(`http://127.0.0.1:${port}/health`);
+        expect(res.status).toBe(503);
+        const body = yield* res.text;
+        expect(body).toContain('"status":"degraded"');
+        expect(body).toContain('"ready":false');
+        expect(body).toContain("warming up");
+      }).pipe(Effect.provide(FetchHttpClient.layer), Effect.scoped),
+    ).pipe(Effect.provide(Server), Effect.scoped),
+  ));
+
+it("NodeStatus reports the same per-resource readiness (degraded board)", () =>
+  Effect.runPromise(
+    withPort((port) =>
+      Effect.gen(function* () {
+        const node = yield* NodeStatusTag;
+        const snap = yield* node.status.get;
+        expect(snap.status).toBe("degraded");
+        expect(snap.services.length).toBe(1);
+        expect(snap.services[0]?.ready).toBe(false);
+        expect(snap.services[0]?.detail).toBe("warming up");
+        expect(snap.services[0]?.key).toBe("readiness/Warming");
+      }).pipe(
+        Effect.provide(nodeStatusHttpClient(`http://127.0.0.1:${port}/rpc`)),
+        Effect.scoped,
+      ),
+    ).pipe(Effect.provide(Server), Effect.scoped),
+  ));
+
+// ── readiness composition: a resource whose readiness depends on another resource ───────────────
+// The DB is a proper resource with its own readiness; a worker extends its base "running" check to
+// also require the DB (via `readinessOf` + `allReady`), reusing — not redefining — both checks.
+class Database extends Hyperlink.Service<Database>()("dep/Database", {
+  ping: Hyperlink.effect(Schema.Boolean),
+}).pipe(
+  Hyperlink.withReadiness((svc) =>
+    Effect.map(svc.ping, (ok) => (ok ? { ready: true } : { ready: false, detail: "disconnected" })),
+  ),
+) {}
+
+class Worker extends Hyperlink.Service<Worker>()("dep/Worker", {
+  running: Hyperlink.effect(Schema.Boolean),
+}).pipe(
+  // a "factory" base check: ready iff running
+  Hyperlink.withReadiness((svc) =>
+    Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
+  ),
+  // a consumer extends it: still running AND the Database dependency is ready
+  Hyperlink.withReadiness((_svc, base) =>
+    Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]),
+  ),
+) {}
+
+const checkWorker = (dbOk: boolean, running: boolean) =>
+  Effect.gen(function* () {
+    const worker = yield* Worker;
+    return yield* Hyperlink.readinessCheck(Worker, worker);
+  }).pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        Hyperlink.layer(Database, { ping: Effect.succeed(dbOk) }),
+        Hyperlink.layer(Worker, { running: Effect.succeed(running) }),
+      ),
+    ),
+  );
+
+it("ready when the worker's own check and its DB dependency are both ready", () =>
+  Effect.runPromise(checkWorker(true, true)).then((r) => expect(r).toEqual({ ready: true })));
+
+it("not ready (with the dependency's detail) when the DB is down", () =>
+  Effect.runPromise(checkWorker(false, true)).then((r) =>
+    expect(r).toEqual({ ready: false, detail: "disconnected" })));
+
+it("the factory/base check still applies — a stopped worker is not ready even if the DB is up", () =>
+  Effect.runPromise(checkWorker(true, false)).then((r) =>
+    expect(r).toEqual({ ready: false, detail: "stopped" })));
+
+// Regression: a node-bound tag must be able to extend readiness via `.pipe`. Data-last duals
+// constrain `T` with a shallow `PipeableTag` brand (spec symbol only) so stock tsc does not expand
+// `ServiceOf<S, Self>` on the still-declaring class (TS2589). See `resource-withreadiness-pipe.test-d.ts`.
+class DepNode extends Node.Service<DepNode>()("dep/node") {}
+class NodeWorker extends Hyperlink.Service<NodeWorker>()(
+  "dep/NodeWorker",
+  { running: Hyperlink.effect(Schema.Boolean) },
+  { node: DepNode },
+).pipe(
+  Hyperlink.withReadiness((svc) =>
+    Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
+  ),
+) {}
+
+it("a node-bound tag can extend readiness via .pipe (regression)", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const w = yield* NodeWorker;
+      return yield* Hyperlink.readinessCheck(NodeWorker, w);
+    }).pipe(Effect.provide(Hyperlink.layer(NodeWorker, { running: Effect.succeed(false) }))),
+  ).then((r) => expect(r).toEqual({ ready: false, detail: "stopped" })));
+
+// Regression: data-first `withReadiness(tag, fn)` accepts a fully-defined node-bound CLASS (a
+// `typeof X` constructor). The data-first overloads are inferred (like `client`/`layer`), so the class
+// matches and its node is preserved in the return.
+class DataFirstWorker extends Hyperlink.Service<DataFirstWorker>()(
+  "dep/DataFirstWorker",
+  { running: Hyperlink.effect(Schema.Boolean) },
+  { node: DepNode },
+) {}
+
+it("data-first withReadiness accepts a node-bound class (regression)", () => {
+  const tag = Hyperlink.withReadiness(DataFirstWorker, (svc) =>
+    Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
+  );
+  expect(tag).toBe(DataFirstWorker);
+});

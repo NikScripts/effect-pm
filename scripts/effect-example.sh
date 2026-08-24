@@ -48,9 +48,9 @@ fi
 
 # window 1: the two servers, side by side
 tmux new-session -d -s "$SESSION" -n servers -c "$ROOT"
-tmux send-keys -t "$SESSION:servers" "pnpm run example:mini-server" C-m
+tmux send-keys -t "$SESSION:servers" "pnpm run example:apps-dashboard-mini-server" C-m
 tmux split-window -t "$SESSION:servers" -c "$ROOT"
-tmux send-keys -t "$SESSION:servers" "pnpm run example:queue-server" C-m
+tmux send-keys -t "$SESSION:servers" "pnpm run example:apps-dashboard-queue-server" C-m
 tmux select-layout -t "$SESSION:servers" even-vertical
 
 # window 2: the TUI — command ready, you press Enter once the servers are up
@@ -59,7 +59,7 @@ tmux send-keys -t "$SESSION:tui" "pnpm run example:dashboard"
 
 # window 3: the web UI — same, command ready to launch
 tmux new-window -t "$SESSION" -n web -c "$ROOT"
-tmux send-keys -t "$SESSION:web" "pnpm run example:web-dashboard"
+tmux send-keys -t "$SESSION:web" "pnpm run example:apps-dashboard"
 
 # land on the TUI window *within the detached session* (does not affect your client)
 tmux select-window -t "$SESSION:tui"

@@ -1,0 +1,261 @@
+import { Effect, Layer, Schema, Stream } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
+import * as Hyperlink from "../src/Hyperlink";
+import type { ServiceOf } from "../src/Hyperlink";
+import * as Node from "../src/Node";
+
+// ── Slice 1: spec → service-interface inference ──
+// (No `satisfies Spec`: it contextually widens each method's error channel to `unknown`.
+// `ServiceOf<typeof _spec>` already enforces `_spec extends Spec` without widening.)
+const _spec = {
+  current: Hyperlink.effect(Schema.Number), // no payload → property, success = number
+  reset: Hyperlink.effect(Schema.Void), // void command → Effect property
+  add: Hyperlink.effectFn({ id: Schema.String }, Schema.Void, Schema.String), // payload → method, error channel
+};
+
+type S = ServiceOf<typeof _spec>;
+declare const s: S;
+
+const _current: Effect.Effect<number, never> = s.current;
+void _current;
+const _reset: Effect.Effect<void, never> = s.reset;
+void _reset;
+const _add: (payload: { readonly id: string }) => Effect.Effect<void, string> = s.add;
+void _add({ id: "x" });
+
+// @ts-expect-error a no-payload method is a property, not callable
+void s.current();
+
+// ── stream methods surface as `Stream`, not `Effect` ──
+const _streamSpec = {
+  changes: Hyperlink.stream(Schema.Number), // no payload → Stream property
+  tail: Hyperlink.stream(Schema.String, { payload: { since: Schema.Number } }), // payload → (p) => Stream
+};
+type StreamSvc = ServiceOf<typeof _streamSpec>;
+declare const ss: StreamSvc;
+
+const _changes: Stream.Stream<number, never> = ss.changes;
+void _changes;
+const _tail: Stream.Stream<string, never> = ss.tail({ since: 0 });
+void _tail;
+// @ts-expect-error a stream member is not an Effect
+const _notEffect: Effect.Effect<number> = ss.changes;
+void _notEffect;
+
+// ── Hyperlink.Hyperlink — `yield* Tag` like Effect.Effect ──
+class CounterForHyperlinkType extends Hyperlink.Service<CounterForHyperlinkType>()("Counter", {
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
+  current: Hyperlink.effect(Schema.Number),
+}) {}
+
+const counterSpec = {
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
+  current: Hyperlink.effect(Schema.Number),
+} as const;
+
+type CounterShape = Hyperlink.Shape<CounterForHyperlinkType>;
+type CounterResource = Hyperlink.Hyperlink<typeof counterSpec, never, never, CounterForHyperlinkType>;
+type CounterInferred = Hyperlink.Of<CounterForHyperlinkType>;
+
+declare const counterShape: CounterShape;
+declare const _counterResource: CounterResource;
+declare const _counterInferred: CounterInferred;
+void counterShape;
+void _counterResource;
+void _counterInferred;
+
+const _counterResourceUse = Effect.gen(function* () {
+  const c: Hyperlink.Shape<CounterForHyperlinkType> = yield* CounterForHyperlinkType;
+  yield* c.increment({ by: 1 });
+  return yield* c.current;
+});
+void _counterResourceUse;
+
+// Tag is assignable to Hyperlink.Of<typeof Tag> (Context.Service is an Effect).
+const _tagIsResource: CounterInferred = CounterForHyperlinkType;
+void _tagIsResource;
+
+// ── Slice 2: Tag + `yield*` + local layer ──
+class Counter extends Hyperlink.Service<Counter>()("Counter", {
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
+  current: Hyperlink.effect(Schema.Number),
+}) {}
+
+// `yield* Tag` yields the inferred service; requirement is the Tag itself
+const _use: Effect.Effect<number, never, Counter> = Effect.gen(function* () {
+  const c = yield* Counter;
+  yield* c.increment({ by: 1 });
+  yield* c.reset;
+  return yield* c.current;
+});
+void _use;
+
+// the local layer accepts a typed implementation of the inferred service
+const _layer: Layer.Layer<Counter> = Hyperlink.layer(Counter, {
+  increment: ({ by: _by }) => Effect.void,
+  reset: Effect.void,
+  current: Effect.succeed(0),
+});
+void _layer;
+
+// ── two solo tags with the same Spec shape ──
+const tickSpec = {
+  tick: Hyperlink.effect(Schema.Void),
+  count: Hyperlink.effect(Schema.Number),
+};
+class TickA extends Hyperlink.Service<TickA>()("test/TickA", tickSpec) {}
+class TickB extends Hyperlink.Service<TickB>()("test/TickB", tickSpec) {}
+
+const _factoryA: Effect.Effect<number, never, TickA> = Effect.gen(function* () {
+  const a = yield* TickA;
+  yield* a.tick;
+  return yield* a.count;
+});
+void _factoryA;
+const _factoryB: Effect.Effect<void, never, TickB> = Effect.flatMap(
+  TickB,
+  (b) => b.tick,
+);
+void _factoryB;
+
+// ── remote path: the client layer's only requirement is the transport `Protocol` ──
+// (Locks the precise-group typing: a regression that re-leaked `any` into `R` would
+// make this program's `R` non-`never` and fail to satisfy `runPromise`.)
+class Remote extends Hyperlink.Service<Remote>()("test/Remote", {
+  ping: Hyperlink.effect(Schema.String),
+  shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),
+}) {}
+
+declare const protocolLayer: Layer.Layer<RpcClient.Protocol>;
+const _remoteRun: Promise<string> = Effect.runPromise(
+  Effect.gen(function* () {
+    const r = yield* Remote;
+    return yield* r.ping;
+  }).pipe(
+    Effect.provide(Hyperlink.client(Remote).pipe(Layer.provide(protocolLayer))),
+  ),
+);
+void _remoteRun;
+
+// ── local-only methods: a non-serializable member gated by Local ──
+// A method that returns a function can't cross RPC. Declared with Hyperlink.local, it
+// surfaces as `Effect<T, never, Local<Box>>` — callable only when the LOCAL
+// layer (which grants the capability) is provided, a compile error under the client.
+class Box extends Hyperlink.Service<Box>()("test/Box", {
+  read: Hyperlink.effect(Schema.Number),
+  onChange:
+    Hyperlink.local<(cb: (n: number) => void) => Effect.Effect<void>>(),
+}) {}
+
+const boxImpl = {
+  read: Effect.succeed(0),
+  onChange: (_cb: (n: number) => void) => Effect.void,
+};
+
+// a program that uses the local-only member
+const useLocal = Effect.gen(function* () {
+  const b = yield* Box;
+  const subscribe = yield* b.onChange; // requires Local<Box>
+  yield* subscribe(() => {});
+});
+
+// LOCAL layer grants the capability → resolves to R = never, runs.
+const _localOk: Promise<void> = Effect.runPromise(
+  useLocal.pipe(Effect.provide(Hyperlink.layer(Box, boxImpl))),
+);
+void _localOk;
+
+// CLIENT layer never grants Local → Local<Box> stays unsatisfied.
+// Negative test: the missing context IS the point, so both the TS error and the LSP
+// missing-context diagnostic on `runPromise` are expected and intentionally suppressed.
+const localViaClient = useLocal.pipe(
+  Effect.provide(Hyperlink.client(Box).pipe(Layer.provide(protocolLayer))),
+);
+// Region toggle (not -next-line): the `@ts-expect-error` must sit directly above the code, so the
+// effect directive can't also be adjacent — a region off/restore covers the statement regardless.
+// @effect-diagnostics missingEffectContext:off
+// @ts-expect-error — onChange is local-only; Local<Box> unsatisfied via the client.
+const _localViaClient: Promise<void> = Effect.runPromise(localViaClient);
+// @effect-diagnostics missingEffectContext:error
+void _localViaClient;
+
+// the WIRE method is fine through the client (no capability needed).
+const _wireViaClient: Promise<number> = Effect.runPromise(
+  Effect.flatMap(Box, (b) => b.read).pipe(
+    Effect.provide(Hyperlink.client(Box).pipe(Layer.provide(protocolLayer))),
+  ),
+);
+void _wireViaClient;
+
+// ── solo clients: each tag is its own RpcGroup; client requires ambient Protocol ──
+const daemonControlSpec = {
+  start: Hyperlink.effect(Schema.Void),
+  drop: Hyperlink.effect(Schema.Void),
+};
+class P1 extends Hyperlink.Service<P1>()("@app/p1", daemonControlSpec) {}
+class P2 extends Hyperlink.Service<P2>()("@app/p2", daemonControlSpec) {}
+
+const _daemonClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
+  Layer.mergeAll(Hyperlink.client(P1), Hyperlink.client(P2));
+void _daemonClients;
+
+// ── node in the tag: ship only the tag; the client resolves where to connect ──
+// Bare bound node → client still requires the node (+ explicit protocol via connect).
+class EdgeNode extends Node.Service<EdgeNode>()("test/edge") {}
+class Hosted extends Hyperlink.Service<Hosted>()("test/Hosted",
+  { ping: Hyperlink.effect(Schema.String) },
+  { node: EdgeNode },
+) {}
+
+const _nodeedClient: Layer.Layer<Hosted, never, EdgeNode> =
+  Hyperlink.client(Hosted);
+void _nodeedClient;
+
+const _nodeLive: Layer.Layer<EdgeNode> = Node.connect(EdgeNode, protocolLayer);
+void _nodeLive;
+
+const _nodeedRun: Promise<string> = Effect.runPromise(
+  Effect.flatMap(Hosted, (h) => h.ping).pipe(
+    Effect.provide(
+      Hyperlink.client(Hosted).pipe(
+        Layer.provide(Node.connect(EdgeNode, protocolLayer)),
+      ),
+    ),
+  ),
+);
+void _nodeedRun;
+
+// Addressed bound node → client(Tag) auto-connects (fully wired).
+class WireNode extends Node.Service<WireNode>()("test/wire", {
+  path: "/tmp/test-wire.sock",
+}) {}
+class HostedWire extends Hyperlink.Service<HostedWire>()(
+  "test/HostedWire",
+  { ping: Hyperlink.effect(Schema.String) },
+  { node: WireNode },
+) {}
+const _hostedWire: Layer.Layer<HostedWire, Hyperlink.ClientVerifyError> =
+  Hyperlink.client(HostedWire);
+void _hostedWire;
+
+// nodeless tag: client still takes the ambient Protocol (additive, non-breaking).
+const _nodelessClient: Layer.Layer<Counter, never, RpcClient.Protocol> =
+  Hyperlink.client(Counter);
+void _nodelessClient;
+
+// ── solo tag with a node: client resolves transport from the tag ──
+class HP1 extends Hyperlink.Service<HP1>()(
+  "@app/hp1",
+  { start: Hyperlink.effect(Schema.Void) },
+  { node: EdgeNode },
+) {}
+
+const _hp1Client: Layer.Layer<HP1, never, EdgeNode> = Hyperlink.client(HP1);
+void _hp1Client;
+
+const _p1Client: Layer.Layer<P1, never, RpcClient.Protocol> =
+  Hyperlink.client(P1);
+void _p1Client;

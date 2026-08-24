@@ -1,8 +1,13 @@
 import { Effect, Schema } from "effect";
-import * as QueueResource from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import * as WorkPool from "../src/WorkPool";
+import * as Gate from "../src/Gate";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
-import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
+import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/workPoolStoreSpec";
+import {
+  builtInGateStoreContract,
+  gateFactSchemaForTag,
+} from "../src/internal/store/gateStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
 
@@ -23,17 +28,19 @@ void _readingOnlyHandle.readings.read();
 
 const readingOnlyContract = Store.contract({ readings: readingSchema });
 
-class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer", {
-  temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.store(thermometerContract)) {}
+class LabThermometer extends Hyperlink.Service<LabThermometer>()("@app/LabThermometer", {
+  temperature: Hyperlink.ref(Schema.Number),
+}).pipe(Hyperlink.withStore(thermometerContract)) {}
 
-class Mail extends Resource.Tag<Mail>()("@app/Mail", {
-  send: Resource.effectFn(Schema.Void),
+class Mail extends Hyperlink.Service<Mail>()("@app/Mail", {
+  send: Hyperlink.effect(Schema.Void),
 }) {}
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", jobSchema) {}
+class MailQueue extends WorkPool.Service<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
+
+class FetchGate extends Gate.Service<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
 const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
   Store.extend({ campaignAudit: Schema.Struct({ campaignId: Schema.String }) }),
@@ -41,8 +48,8 @@ const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
 type MailQueueHandle = Store.HandleOf<typeof mailQueueContract>;
 
 declare const _queueHandle: MailQueueHandle;
-void _queueHandle.record({ _tag: "Start", queueId: MailQueue.key });
-void _queueHandle.record({ _tag: "Cleared", queueId: MailQueue.key, count: 3 });
+void _queueHandle.record({ _tag: "Start", key: MailQueue.key });
+void _queueHandle.record({ _tag: "Cleared", key: MailQueue.key, count: 3 });
 void _queueHandle.events();
 
 type QueueEvent = QueueEventOf<typeof MailQueue>;
@@ -57,20 +64,67 @@ type QueueEventsResult = ReturnType<MailQueueHandle["events"]> extends Effect.Ef
 
 void ({} as QueueEventsResult satisfies ReadonlyArray<QueueEvent>);
 
+const gateContract = builtInGateStoreContract(FetchGate);
+type GateStoreHandle = Store.HandleOf<typeof gateContract>;
+
+declare const _gateHandle: GateStoreHandle;
+void _gateHandle.record({
+  id: "run-1/started",
+  resourceId: FetchGate.key,
+  runId: "run-1",
+  _tag: "Started",
+  occurredAt: 1,
+  concurrency: 2,
+});
+void _gateHandle.facts();
+void _gateHandle.recordStateChange({
+  id: "state-1",
+  resourceId: FetchGate.key,
+  changedAt: 2,
+  reason: "Started",
+  previous: null,
+  current: {
+    resourceId: FetchGate.key,
+    observedAt: 2,
+    configVersion: 1,
+    concurrency: 2,
+    waiting: 0,
+    inFlight: 1,
+    completed: 0,
+    failed: 0,
+    interrupted: 0,
+    totalDurationMs: 0,
+  },
+});
+void _gateHandle.stateHistory();
+
+type GateFactsResult = ReturnType<GateStoreHandle["facts"]> extends Effect.Effect<
+  infer A,
+  infer _E,
+  infer _R
+>
+  ? A
+  : never;
+
+const fetchGateFactSchema = gateFactSchemaForTag(FetchGate);
+type FetchGateGateFact = Schema.Schema.Type<typeof fetchGateFactSchema>;
+
+void ({} as GateFactsResult satisfies ReadonlyArray<FetchGateGateFact>);
+
 type _QueueReadPayload = Parameters<MailQueueHandle["events"]>[0];
 void ({} as _QueueReadPayload satisfies { readonly limit?: number } | undefined);
 
 type DropletRegs = RegsOfStoreInput<
   [
-    ReturnType<typeof Resource.store<typeof Mail, typeof thermometerContract>>,
-    ReturnType<typeof Resource.store<"custom-store", typeof thermometerContract>>,
+    ReturnType<typeof Store.scoped<typeof Mail, typeof thermometerContract>>,
+    ReturnType<typeof Store.scoped<"custom-store", typeof thermometerContract>>,
     ReturnType<typeof Store.register<typeof MailQueue, typeof mailQueueContract>>,
   ]
 >;
 type QueueAtHandle = StoreHandleAtKey<DropletRegs, typeof MailQueue>;
 
 declare const _queueAtHandle: QueueAtHandle;
-void _queueAtHandle.record({ _tag: "Start", queueId: MailQueue.key });
+void _queueAtHandle.record({ _tag: "Start", key: MailQueue.key });
 void _queueAtHandle.events();
 
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
@@ -78,7 +132,7 @@ const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 type FacetQueueRegs = RegsOfStoreInput<
   [
     ReturnType<
-      typeof QueueResource.store<
+      typeof WorkPool.store<
         typeof MailQueue,
         { readonly campaignAudit: typeof campaignAuditSchema }
       >
@@ -89,8 +143,8 @@ type FacetQueueAtHandle = StoreHandleAtKey<FacetQueueRegs, typeof MailQueue>;
 
 // `record` accepts the shared QueueEvent union (the item is typed through its entry-bearing variants).
 declare const _facetRecord: FacetQueueAtHandle["record"];
-void _facetRecord({ _tag: "Start", queueId: "q" });
-void _facetRecord({ _tag: "Cleared", queueId: "q", count: 0 });
+void _facetRecord({ _tag: "Start", key: "q" });
+void _facetRecord({ _tag: "Cleared", key: "q", count: 0 });
 
 type FacetCampaignAuditRow = Parameters<FacetQueueAtHandle["campaignAudit"]["append"]>[0] extends infer R
   ? R extends ReadonlyArray<unknown>
@@ -100,7 +154,7 @@ type FacetCampaignAuditRow = Parameters<FacetQueueAtHandle["campaignAudit"]["app
 void ({} as FacetCampaignAuditRow satisfies { readonly campaignId: string });
 
 type NamedInput = {
-  temp: ReturnType<typeof Resource.store<typeof LabThermometer, typeof thermometerContract>>;
+  temp: ReturnType<typeof Store.scoped<typeof LabThermometer, typeof thermometerContract>>;
   custom: typeof readingOnlyContract;
 };
 type NamedRegsDirect = RegsOfStoreInput<NamedInput>;
@@ -110,14 +164,14 @@ declare const _customDirect: CustomHandleDirect;
 void _customDirect.readings.read();
 
 const NamedStoreBase = Store.Service<NamedStore>("@repo/app/NamedStore")({
-  temp: Resource.store(LabThermometer, thermometerContract),
+  temp: Store.scoped(LabThermometer, thermometerContract),
   custom: readingOnlyContract,
 });
 class NamedStore extends NamedStoreBase {}
 
 class DropletStore extends Store.Service<DropletStore>("@repo/app/Store")(
-  Resource.store(Mail, thermometerContract),
-  Resource.store("custom-store", thermometerContract),
+  Store.scoped(Mail, thermometerContract),
+  Store.scoped("custom-store", thermometerContract),
   Store.register(MailQueue, mailQueueContract),
 ) {}
 
@@ -129,7 +183,7 @@ void Effect.gen(function* () {
   const tagStore = yield* LabThermometer.store;
   yield* mail.readings.append({ value: 1 });
   yield* custom.listReadings();
-  yield* queue.record({ _tag: "Start", queueId: MailQueue.key });
+  yield* queue.record({ _tag: "Start", key: MailQueue.key });
   return { stores, mail, custom, queue, tagStore };
 });
 
@@ -153,13 +207,16 @@ void pipedStore.shapes.readings;
 void pipedStore.shapes.audit;
 
 const _shapedContract = Store.contract({
-  readings: Store.shape(readingSchema, Schema.Struct({ limit: Schema.optional(Schema.Number) })),
+  readings: Store.shape(readingSchema),
 });
 type ShapedHandle = Store.HandleOf<typeof _shapedContract>;
 
 declare const _shaped: ShapedHandle;
 void _shaped.readings.read({ limit: 5 });
+void _shaped.readings.read({ where: { value: { gte: 1 } } });
 void _shaped.readings.read();
+// @ts-expect-error — unknown where field
+void _shaped.readings.read({ where: { nope: 1 } });
 
 void Effect.gen(function* () {
   const queue = yield* DropletStore.at(MailQueue);
@@ -205,3 +262,38 @@ type ThermometerReadings = ThermometerHandle["readings"];
 declare const _thermReadings: ThermometerReadings;
 void _thermReadings.read();
 void _thermReadings.append({ value: 1 });
+
+// Store.extend — tier-2 engine writes merge onto tier-1 custom methods
+const runEngineContract = Store.extend(
+  (handles) => ({
+    started: (row: {
+      readonly id: string;
+      readonly resourceId: string;
+      readonly runId: string;
+      readonly occurredAt: number;
+      readonly concurrency: number;
+    }) => handles.fact.append({ _tag: "Started", ...row }),
+  }),
+  gateContract,
+);
+
+type RunEngineHandle = Store.HandleOf<typeof runEngineContract>;
+declare const _runEngineHandle: RunEngineHandle;
+void _runEngineHandle.facts();
+void _runEngineHandle.started({
+  id: "run-2/started",
+  resourceId: FetchGate.key,
+  runId: "run-2",
+  occurredAt: 3,
+  concurrency: 1,
+});
+
+type RunEngineEffects = Store.StoreEffectsOf<typeof runEngineContract>;
+declare const _runEngineEffects: RunEngineEffects;
+void _runEngineEffects.started({
+  id: "run-3/started",
+  resourceId: FetchGate.key,
+  runId: "run-3",
+  occurredAt: 4,
+  concurrency: 1,
+});

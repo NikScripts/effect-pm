@@ -1,20 +1,28 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Ref } from "effect";
-import * as QueueResource from "../src/QueueResource";
+import * as WorkPool from "../src/WorkPool";
 
 const waitUntil = (predicate: Effect.Effect<boolean>) =>
   Effect.gen(function* () {
     while (!(yield* predicate)) yield* Effect.sleep(Duration.millis(10));
   }).pipe(Effect.timeout(Duration.seconds(2)));
 
-describe("QueueResource refill", () => {
+describe("WorkPool refill", () => {
   it.live("refill.onStart bootstraps the queue from a source", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<number>>([]);
-      yield* QueueResource.make({
+      yield* WorkPool.make({
         name: "refill-start",
         effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
-        refill: { onStart: true, load: (q) => q.add([1, 2, 3]) },
+        refill: {
+          onStart: true,
+          load: (q) => {
+            const enqueue = q.add as (
+              items: ReadonlyArray<number>,
+            ) => Effect.Effect<void, never, never>;
+            return enqueue([1, 2, 3]);
+          },
+        },
         concurrency: 2,
       });
       yield* waitUntil(Effect.map(Ref.get(processed), (p) => p.length >= 3));
@@ -26,7 +34,7 @@ describe("QueueResource refill", () => {
     Effect.gen(function* () {
       const source = yield* Ref.make<Array<number>>([2, 3]); // refilled one-per-drain
       const processed = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueResource.make({
+      const queue = yield* WorkPool.make({
         name: "refill-drain",
         effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
         refill: {
@@ -36,8 +44,12 @@ describe("QueueResource refill", () => {
               const remaining = yield* Ref.get(source);
               if (remaining.length === 0) return;
               const [head, ...tail] = remaining;
+              if (head === undefined) return;
               yield* Ref.set(source, tail);
-              yield* q.add([head]);
+              const enqueue = q.add as (
+                items: ReadonlyArray<number>,
+              ) => Effect.Effect<void, never, never>;
+              yield* enqueue([head]);
             }),
         },
         concurrency: 1,

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#0f1419"/>
+  <rect x="0" y="0" width="1200" height="630" fill="url(#g)"/>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1a2740"/>
+      <stop offset="1" stop-color="#0f1419"/>
+    </linearGradient>
+  </defs>
+  <text x="96" y="290" fill="#f4f7fb" font-family="ui-sans-serif, system-ui, sans-serif" font-size="96" font-weight="700" letter-spacing="-2">Hyperlink</text>
+  <text x="96" y="370" fill="#8fa3c1" font-family="ui-sans-serif, system-ui, sans-serif" font-size="42">for Effect</text>
+  <text x="96" y="480" fill="#6b8fd4" font-family="ui-monospace, Menlo, monospace" font-size="28">yield* everywhere</text>
+</svg>

@@ -1,0 +1,14 @@
+---
+description: Effect-native style — platform services, no raw Node in Effect code
+globs: "{src,packages/last-ts/src,test,examples,dev}/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Effect style
+
+SSOT: [`docs/standards/effect-style.md`](../../docs/standards/effect-style.md).
+
+- Prefer `effect` / `effect/unstable/*`; use platform/node services, not raw `node:*`.
+- Isolate unavoidable Node primitives behind small Effect-returning helpers.
+- Wire errors: `Data.TaggedError` / Schema — never extend native `Error`.
+- Read pinned Effect source before guessing APIs.

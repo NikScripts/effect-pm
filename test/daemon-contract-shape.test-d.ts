@@ -1,0 +1,119 @@
+/**
+ * Type-level proof that the composed `Daemon` contract resolves in `extends … .pipe(...)`
+ * position and surfaces the right service shape for each variant: base, value-returning
+ * (`result`), inline-scheduled (gains the `schedule` verb group), and externally-gated
+ * (gains no schedule verbs). Typecheck-only.
+ */
+import { Effect, Option, Schema, DateTime } from "effect";
+import * as Daemon from "../src/Daemon";
+import * as Hyperlink from "../src/Hyperlink";
+
+declare const startAt: Date;
+declare const stopAt: Date;
+
+const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
+
+// base — observation + lifecycle only
+class Health extends Daemon.Service<Health>()("shape/Health") {}
+
+// value-returning — gains a reactive `result` via positional success
+class Prices extends Daemon.Service<Prices>()("shape/Prices", { success: Price }) {}
+
+class PricedErr extends Daemon.Service<PricedErr>()("shape/PricedErr", {
+  success: Price,
+  error: Schema.TaggedStruct("FetchError", { status: Schema.Number }),
+}) {}
+
+// error stamp surfaces on manual `run` RPC when stamped (see daemon-run-rpc.test.ts)
+void Daemon.errorOf(PricedErr);
+
+// owns an inline schedule — gains the `schedule` verb group (id optional on windows)
+class Matches extends Daemon.Service<Matches>()("shape/Matches").pipe(
+  Daemon.schedule([
+    Daemon.window(startAt, stopAt),
+    Daemon.window("sun-slate", startAt, stopAt),
+    Daemon.at(startAt),
+  ]),
+) {}
+
+// standalone schedule resource + a daemon gated by it (no schedule verbs on the daemon)
+class SeasonSchedule extends Daemon.Schedule<SeasonSchedule>()("shape/SeasonSchedule") {}
+class Ingest extends Daemon.Service<Ingest>()("shape/Ingest").pipe(
+  Daemon.schedule(SeasonSchedule),
+) {}
+
+void Effect.gen(function* () {
+  const h = yield* Health;
+  const _status: typeof Daemon.daemonStatus.Type = yield* h.status.get;
+  yield* h.start;
+  yield* h.run;
+  const _logExport = yield* Hyperlink.logs(Health);
+  const _logHistory: ReadonlyArray<typeof Daemon.daemonLogEntry.Type> = yield* _logExport.query({});
+  void _status;
+  void _logHistory;
+});
+
+void Effect.gen(function* () {
+  const p = yield* Prices;
+  const latest: Option.Option<typeof Price.Type> = yield* p.result.get;
+  void latest;
+});
+
+void Effect.gen(function* () {
+  const m = yield* Matches;
+  const entries: ReadonlyArray<typeof Daemon.daemonScheduleEntry.Type> =
+    yield* m.schedule.entries.get;
+  yield* m.schedule.add(entries[0]!);
+  yield* m.schedule.clear;
+  void entries;
+});
+
+void Effect.gen(function* () {
+  const s = yield* SeasonSchedule;
+  yield* s.add({
+    id: "x",
+    startAt: DateTime.makeUnsafe(startAt.getTime()),
+    stopAt: DateTime.makeUnsafe(stopAt.getTime()),
+  });
+  const one: Option.Option<typeof Daemon.daemonScheduleEntry.Type> = yield* s.get({ id: "x" });
+  void one;
+});
+
+void Effect.gen(function* () {
+  const i = yield* Ingest;
+  yield* i.start;
+  // Externally-gated: `schedule` is not the verb group (no `.entries`).
+  type ScheduleProp = NonNullable<(typeof i)["schedule"]>;
+  type HasEntriesGroup = ScheduleProp extends { readonly entries: unknown }
+    ? true
+    : false;
+  const _noScheduleVerbs: HasEntriesGroup = false;
+  void _noScheduleVerbs;
+});
+
+void Effect.gen(function* () {
+  const pe = yield* PricedErr;
+  const _pricedRun: Effect.Effect<
+    typeof Price.Type,
+    { readonly _tag: "FetchError"; readonly status: number }
+  > = pe.run;
+  void _pricedRun;
+});
+
+// The runtime layers pin the tag to the base spec; a composed tag (`+ result` / `+ schedule`) must
+// still be accepted, and each grants its own `Self` so `yield* Tag` keeps the composed surface.
+const _baseLocal = Daemon.layerMemory(Health, { effect: Effect.void });
+const _resultServe = Daemon.serveMemory(Prices, {
+  effect: Effect.succeed({ symbol: "AAPL", usd: 1 }),
+});
+const _scheduleServeRemote = Daemon.serveRemoteMemory(Matches, { effect: Effect.void });
+const _scheduleResLocal = Daemon.scheduleLayer(SeasonSchedule);
+const _scheduleResServe = Daemon.scheduleServe(SeasonSchedule, {
+  initial: [Daemon.window("wk1", startAt, stopAt)],
+});
+
+void _baseLocal;
+void _resultServe;
+void _scheduleServeRemote;
+void _scheduleResLocal;
+void _scheduleResServe;

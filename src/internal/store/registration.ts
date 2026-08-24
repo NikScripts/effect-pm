@@ -5,6 +5,7 @@
  * @internal
  */
 
+import { Pipeable } from "effect";
 import type { StoreLogLevel } from "./types";
 import {
   contractSpec,
@@ -16,25 +17,37 @@ import {
 import type { StoreSpec, AsStoreSpec } from "./spec";
 import { isStoreSpec } from "./spec";
 
-export const storeRegSym = Symbol.for("@nikscripts/effect-pm/Store/registration");
+export const storeRegSym = Symbol.for("hyperlink-ts/Store/registration");
 
-/** Minimal tag shape for scope keys — avoids importing {@link Resource}. @internal */
+/** Minimal tag shape for scope keys — avoids importing {@link Hyperlink}. @internal */
 export interface StoreScopeTag {
   readonly key: string;
 }
+
+/**
+ * How durable log tails match relay lines for this registration.
+ * - `"resource"` (default) — {@link LogEntry.hasKey}(scopeKey)
+ * - `"node"` — match all (node-wide journal)
+ *
+ * @internal
+ */
+export type StoreJournalKind = "hyperlink" | "node";
 
 /** @internal */
 export interface StoreRegistration<
   K extends string = string,
   S extends StoreSpec = StoreSpec,
-> {
+> extends Pipeable.Pipeable {
   readonly [storeRegSym]: typeof storeRegSym;
   readonly scopeKey: K;
   readonly spec: S;
   readonly contract?: StoreContractValue;
   readonly tag?: StoreScopeTag;
   readonly logLevel?: StoreLogLevel;
+  /** Live relay gate for {@link Hyperlink.logs} stream (optional). */
+  readonly streamLevel?: StoreLogLevel;
   readonly maxRows?: number;
+  readonly journal?: StoreJournalKind;
 }
 
 /** @internal */
@@ -86,7 +99,7 @@ export type RegisteredWithContract<
   Tag extends StoreScopeTag | undefined = undefined,
 > = Omit<StoreRegistration<K, S>, "contract" | "tag"> & {
   readonly contract: C;
-} & (Tag extends undefined ? {} : { readonly tag: Tag });
+} & (Tag extends undefined ? unknown : { readonly tag: Tag });
 
 /** Tag type carried on a registration, if any. @internal */
 export type RegTag<R> = R extends { readonly tag?: infer T extends StoreScopeTag } ? T : undefined;
@@ -110,7 +123,7 @@ export const makeRegistration = <
     isStoreContractValue(spec) || isStoreShapeMap(spec)
       ? toStoreContract(spec as StoreContractValue | StoreContractValue["shapes"])
       : undefined;
-  return {
+  return Object.assign(Object.create(Pipeable.Prototype), {
     [storeRegSym]: storeRegSym,
     scopeKey,
     spec: (contract !== undefined ? contractSpec(contract) : spec) as Input extends StoreContractValue
@@ -118,7 +131,7 @@ export const makeRegistration = <
       : AsStoreSpec<Input>,
     ...(contract !== undefined ? { contract } : {}),
     ...(typeof scope === "string" ? {} : { tag: scope }),
-  } as unknown as Input extends StoreContractValue
+  }) as unknown as Input extends StoreContractValue
     ? Scope extends StoreScopeTag
       ? RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input, Scope>
       : RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input>
@@ -155,13 +168,25 @@ export type TagForKey<
 export const withRegistrationLogLevel = <R extends StoreRegistrationAny>(
   registration: R,
   logLevel: StoreLogLevel,
-): R => Object.assign({}, registration, { logLevel });
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { logLevel });
+
+/** @internal */
+export const withRegistrationStreamLevel = <R extends StoreRegistrationAny>(
+  registration: R,
+  streamLevel: StoreLogLevel,
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { streamLevel });
+
+/** @internal */
+export const withRegistrationJournal = <R extends StoreRegistrationAny>(
+  registration: R,
+  journal: StoreJournalKind,
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { journal });
 
 /** @internal */
 export const withRegistrationRetention = <R extends StoreRegistrationAny>(
   registration: R,
   maxRows: number,
-): R => Object.assign({}, registration, { maxRows });
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { maxRows });
 
 /** @internal */
 export const isRegistrationPipeTarget = (

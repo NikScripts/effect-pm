@@ -3,7 +3,7 @@
  * one append-only `(stream_id, ts, json)` table, so `*History` reads survive a restart. Append/read
  * are best-effort (the shape has no error channel): a backend failure is logged, not thrown.
  *
- * Off the core entry — import from `@nikscripts/effect-pm/storage/sqlite`.
+ * Off the core entry — import from `hyperlink-ts/storage/sqlite`.
  *
  * @module storage/sqlite/historyStore
  */

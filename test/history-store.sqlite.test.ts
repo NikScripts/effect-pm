@@ -1,8 +1,7 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Duration, Effect, Layer, Schema, Scope } from "effect";
+import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
-import { HistoryStore, QueueResource } from "../src";
 import { SQLiteHistoryStore } from "../src/storage/sqlite";
 
 const withSql = <A, E>(
@@ -57,35 +56,4 @@ describe("SQLiteHistoryStore", () => {
     ),
   );
 
-  it.live("queue logHistory reads back through the SQLite HistoryStore", () =>
-    withSql((sql) =>
-      Effect.gen(function* () {
-        const storeLayer = Layer.effect(
-          HistoryStore,
-          SQLiteHistoryStore.fromSqlClient(sql).pipe(Effect.orDie),
-        );
-        const NumberItem = Schema.Struct({ n: Schema.Number });
-        class SQ extends QueueResource.Tag<SQ>()("sqlite-history/Q", NumberItem) {}
-
-        yield* Effect.gen(function* () {
-          const queue = yield* SQ;
-          yield* queue.add([{ n: 1 }, { n: 2 }]);
-          yield* Effect.gen(function* () {
-            while ((yield* queue.logs.history({})).length === 0) {
-              yield* Effect.sleep(Duration.millis(10));
-            }
-          }).pipe(Effect.timeout(Duration.seconds(2)));
-          expect((yield* queue.logs.history({ limit: 50 })).length).toBeGreaterThan(0);
-        }).pipe(
-          Effect.provide(
-            QueueResource.layer(SQ, {
-              effect: (item) => Effect.logInfo(`processed ${item.n}`),
-              captureLogs: true,
-            }).pipe(Layer.provide(storeLayer)),
-          ),
-          Effect.scoped,
-        );
-      }),
-    ),
-  );
 });

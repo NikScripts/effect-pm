@@ -18,7 +18,8 @@ import {
 import { isStoreSpec, type StoreSpec } from "./spec";
 import { StoreDuplicateScopeKey } from "./errors";
 
-export const storeStandaloneSym = Symbol.for("@nikscripts/effect-pm/Store/standalone");
+export const storeStandaloneSym = Symbol.for("hyperlink-ts/Store/standalone");
+export const storeSingleSym = Symbol.for("hyperlink-ts/Store/single");
 
 /** @internal */
 export interface NormalizedStoreRegistration<
@@ -32,7 +33,9 @@ export interface NormalizedStoreRegistration<
   readonly contract?: StoreContractValue;
   readonly tag?: StoreRegistrationAny["tag"];
   readonly logLevel?: StoreRegistrationAny["logLevel"];
+  readonly streamLevel?: StoreRegistrationAny["streamLevel"];
   readonly maxRows?: number;
+  readonly journal?: StoreRegistrationAny["journal"];
 }
 
 /** @internal */
@@ -93,7 +96,9 @@ const fromRegistration = (
   contract: registration.contract,
   tag: registration.tag,
   logLevel: registration.logLevel,
+  streamLevel: registration.streamLevel,
   maxRows: registration.maxRows,
+  journal: registration.journal,
 });
 
 /** @internal */
@@ -182,4 +187,15 @@ export const normalizeStoreRegistrations = (
   }
 
   return { registrations, named: false };
+};
+
+/** True when {@link Store.Service} input is a bare single registration (not `[]` or `{}`). @internal */
+export const isSingleStoreServiceInput = (input: unknown): boolean => {
+  if (Array.isArray(input)) {
+    return false;
+  }
+  if (isNamedRecord(input)) {
+    return false;
+  }
+  return isStoreRegistration(input) || isStandaloneStoreClass(input);
 };

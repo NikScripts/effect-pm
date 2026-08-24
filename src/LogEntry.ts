@@ -1,5 +1,7 @@
 import { Cause, Effect, Schema } from "effect";
+import type { Predicate } from "effect";
 import type { LogLevel } from "effect/LogLevel";
+import { LogAnnotationKeys } from "./LogContext";
 
 const logLevelSchema = Schema.Literals([
   "All",
@@ -15,6 +17,7 @@ const logLevelSchema = Schema.Literals([
 /**
  * Serializable log event captured from an Effect {@link Logger} invocation.
  *
+ * @category models
  * @public
  */
 export interface LogEntry {
@@ -27,6 +30,7 @@ export interface LogEntry {
 }
 
 /**
+ * @category wire schemas
  * @public
  */
 export const LogEntrySchema = Schema.Struct({
@@ -41,6 +45,7 @@ export const LogEntrySchema = Schema.Struct({
 const LogEntryNdjson = Schema.fromJsonString(LogEntrySchema);
 
 /**
+ * @category wire schemas
  * @public
  */
 export const encodeLogEntryNdjson = (
@@ -49,6 +54,7 @@ export const encodeLogEntryNdjson = (
   Schema.encodeEffect(LogEntryNdjson)(entry);
 
 /**
+ * @category wire schemas
  * @public
  */
 export const decodeLogEntryNdjson = (
@@ -87,6 +93,7 @@ const encodeMessage = (message: unknown): string => {
 /**
  * Build a {@link LogEntry} from runtime logger options and fiber log context.
  *
+ * @category wire schemas
  * @public
  */
 export const logEntryFromLoggerOptions = (options: {
@@ -112,8 +119,67 @@ export const logEntryFromLoggerOptions = (options: {
   spans: options.spans.map(([label]) => label),
 });
 
+const parseLineageJson = (raw: string | undefined): ReadonlyArray<string> => {
+  if (raw === undefined) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
+      return parsed;
+    }
+  } catch {
+    // ignore malformed lineage
+  }
+  return [];
+};
+
 /**
- * NDJSON log entry wire format for process-manager capture — the `LogEntry.Schema` /
+ * Decode **lineage segment keys** from a captured entry's annotations.
+ *
+ * Reads annotation key {@link LogAnnotationKeys.lineage} only (JSON array of `Tag.key` segments).
+ *
+ * @category getters
+ * @public
+ */
+export const lineage = (entry: LogEntry): ReadonlyArray<string> =>
+  parseLineageJson(entry.annotations[LogAnnotationKeys.lineage]);
+
+/**
+ * `true` when the **lineage segment key** appears anywhere in {@link lineage}.
+ *
+ * @param key - Usually a **hyperlink key** (`Tag.key`, e.g. `wnba/LiveScorePoller` in `apps/web/hub.ts`).
+ *
+ * @category guards
+ * @public
+ */
+export const hasKey = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
+  lineage(entry).includes(key);
+
+/**
+ * `true` when `lineage[0]` equals the **lineage segment key** (usually the **node log key**).
+ *
+ * @param key - **Node log key** (`Node.key`, e.g. `wnba/live` from `LiveNode.key`).
+ *
+ * @category guards
+ * @public
+ */
+export const atRoot = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
+  lineage(entry)[0] === key;
+
+/**
+ * `true` when the last lineage segment equals the **lineage segment key** (usually the **hyperlink key**).
+ *
+ * @param key - **Hyperlink key** (`Tag.key`, e.g. `wnba/LiveScorePoller`).
+ *
+ * @category guards
+ * @public
+ */
+export const atLeaf = (key: string): Predicate.Predicate<LogEntry> => (entry) => {
+  const segments = lineage(entry);
+  return segments[segments.length - 1] === key;
+};
+
+/**
+ * NDJSON log entry wire format for hyperlink-ts capture — the `LogEntry.Schema` /
  * `LogEntry.encode` / `LogEntry.decode` / `LogEntry.fromLoggerOptions` namespace members,
  * exposed as flat aliases so `import * as LogEntry` and the root re-exports stay identical.
  *

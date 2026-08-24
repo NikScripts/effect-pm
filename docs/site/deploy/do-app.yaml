@@ -1,0 +1,31 @@
+# DigitalOcean App Platform spec for the docs site — deploy the prebuilt IMAGE, never build on DO
+# (a fresh builder has no hover cache: that's a 1.5h gen-hovers run per deploy).
+#
+#   doctl apps create --spec docs/site/deploy/do-app.yaml     (first time)
+#   doctl apps update <app-id> --spec docs/site/deploy/do-app.yaml
+#
+# Put Cloudflare in front (DNS proxy): edge brotli + caching for /search/*, /assets/*, and the
+# static pages; the origin then mostly serves the SSR'd dep API pages.
+name: hyperlink-docs
+region: nyc
+domains:
+  # Brand host — host-gate serves coming-soon only (see publicHostGate middleware).
+  - domain: hyperlink.cool
+    type: PRIMARY
+  - domain: www.hyperlink.cool
+    type: ALIAS
+  # Docs demo / feedback — full site. DNS: CNAME → <app>.ondigitalocean.app (CF proxied).
+  - domain: dev.hyperlink.cool
+    type: ALIAS
+services:
+  - name: web
+    image:
+      registry_type: DOCR
+      repository: hyperlink-docs
+      tag: latest
+    http_port: 8080
+    # 1GB OOMs under Effect API SSR (hover sidecars) — heap ~538MB then crash loop / CF 504.
+    instance_size_slug: basic-s
+    instance_count: 1
+    health_check:
+      http_path: /healthz

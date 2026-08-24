@@ -1,0 +1,177 @@
+import { Effect, Exit, Layer } from "effect";
+import { describe, expect, it } from "@effect/vitest";
+import { combineByNode, combineByNodeExit, combineQuery } from "../src/MultiNode";
+import * as FleetHealth from "../src/FleetHealth";
+import * as Hyperlink from "../src/Hyperlink";
+import * as Node from "../src/Node";
+
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+
+describe("MultiNode.combineByNode vs combineByNodeExit", () => {
+  it.effect("combineByNodeExit keeps every peer; combineByNode drops failures", () =>
+    Effect.gen(function* () {
+      const peers = {
+        west: { local: Effect.succeed(1) },
+        gone: { local: Effect.die("down") },
+      };
+      const exits = yield* combineQuery(peers, (p) => p.local, combineByNodeExit);
+      expect(Exit.isSuccess(exits.west!)).toBe(true);
+      expect(Exit.isFailure(exits.gone!)).toBe(true);
+      expect(Object.keys(exits).sort()).toEqual(["gone", "west"]);
+
+      const survivors = yield* combineQuery(peers, (p) => p.local, combineByNode);
+      expect(survivors).toEqual({ west: 1 });
+      expect("gone" in survivors).toBe(false);
+    }),
+  );
+});
+
+describe("FleetHealth.rollup", () => {
+  const ok = FleetHealth.Reachable.make({ status: "ok", services: [] });
+  const degraded = FleetHealth.Reachable.make({ status: "degraded", services: [] });
+  const down = FleetHealth.Unreachable.make({});
+
+  it("ok when every row is Reachable + ok", () => {
+    expect(FleetHealth.rollup({ a: ok, b: ok })).toBe("ok");
+  });
+
+  it("degraded when any Reachable is degraded and none Unreachable", () => {
+    expect(FleetHealth.rollup({ a: ok, b: degraded })).toBe("degraded");
+  });
+
+  it("partial wins over degraded when any Unreachable", () => {
+    expect(FleetHealth.rollup({ a: degraded, b: down })).toBe("partial");
+    expect(FleetHealth.rollup({ a: ok, b: down })).toBe("partial");
+  });
+});
+
+describe("FleetHealth", () => {
+  class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
+    Hyperlink.nodes([DropletEast, DropletWest]),
+  ) {}
+
+  const peerLocal = (status: "ok" | "degraded", ready: boolean) => ({
+    local: Effect.succeed(
+      FleetHealth.LocalHealth.make({
+        status,
+        services: [{ key: "app/Jobs", kind: "hyperlink-ts/WorkPool", ready }],
+      }),
+    ),
+  });
+
+  it.effect("default readiness ⇒ empty services / ok", () => {
+    const live = FleetHealth.layer(MeshHealth).pipe(
+      Layer.provide(FleetHealth.alone(MeshHealth)),
+    );
+    return Effect.gen(function* () {
+      const glass = yield* MeshHealth;
+      const local = yield* glass.local;
+      expect(local.status).toBe("ok");
+      expect(local.services).toEqual([]);
+      expect(yield* glass.status).toBe("ok");
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("alone mesh: leaf ok + trivial fleet fold", () => {
+    const readiness = Effect.succeed([
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
+    ]);
+    const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
+      Layer.provide(FleetHealth.alone(MeshHealth)),
+    );
+    return Effect.gen(function* () {
+      const glass = yield* MeshHealth;
+      const local = yield* glass.local;
+      expect(local.status).toBe("ok");
+      expect(local.services).toHaveLength(1);
+      expect(yield* glass.status).toBe("ok");
+      const byNode = yield* glass.byNode;
+      expect(Object.keys(byNode)).toEqual(["hyperlink-ts/FleetHealth/alone"]);
+      expect(byNode["hyperlink-ts/FleetHealth/alone"]?._tag).toBe("Reachable");
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("leaf degraded when any readiness row is not ready", () => {
+    const readiness = Effect.succeed([
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
+      { key: "app/Jobs", kind: "hyperlink-ts/WorkPool", ready: false },
+    ]);
+    const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
+      Layer.provide(FleetHealth.alone(MeshHealth)),
+    );
+    return Effect.gen(function* () {
+      const glass = yield* MeshHealth;
+      const local = yield* glass.local;
+      expect(local.status).toBe("degraded");
+      expect(local.services.map((r) => r.key)).toEqual(["app/Cache", "app/Jobs"]);
+      // alone ⇒ only self, so fleet status mirrors leaf degraded
+      expect(yield* glass.status).toBe("degraded");
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("peers fold Reachable rows + rollup degraded", () => {
+    const readiness = Effect.succeed([
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
+    ]);
+    const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
+      Layer.provide(
+        Hyperlink.peersFrom(MeshHealth, {
+          [DropletWest.key]: peerLocal("degraded", false),
+        }),
+      ),
+      Layer.provide(Hyperlink.selfNodeLayer(MeshHealth, DropletEast)),
+    );
+    return Effect.gen(function* () {
+      const glass = yield* MeshHealth;
+      const byNode = yield* glass.byNode;
+      expect(byNode[DropletEast.key]?._tag).toBe("Reachable");
+      const west = byNode[DropletWest.key];
+      expect(west?._tag).toBe("Reachable");
+      if (west !== undefined && west._tag === "Reachable") {
+        expect(west.status).toBe("degraded");
+      }
+      expect(yield* glass.status).toBe("degraded");
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("peer defect ⇒ Unreachable and status partial", () => {
+    const readiness = Effect.succeed([
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
+    ]);
+    // Defect (die) keeps `local`'s error channel `never` while Exit is still Failure — Effect-true.
+    const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
+      Layer.provide(
+        Hyperlink.peersFrom(MeshHealth, {
+          [DropletWest.key]: { local: Effect.die("timeout") },
+        }),
+      ),
+      Layer.provide(Hyperlink.selfNodeLayer(MeshHealth, DropletEast)),
+    );
+    return Effect.gen(function* () {
+      const glass = yield* MeshHealth;
+      const byNode = yield* glass.byNode;
+      expect(byNode[DropletWest.key]?._tag).toBe("Unreachable");
+      expect(byNode[DropletEast.key]?._tag).toBe("Reachable");
+      expect(Object.keys(byNode).sort()).toEqual(
+        [DropletEast.key, DropletWest.key].sort(),
+      );
+      expect(yield* glass.status).toBe("partial");
+      expect(FleetHealth.rollup(byNode)).toBe("partial");
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("kind is stamped on the tag", () =>
+    Effect.sync(() => {
+      expect(Hyperlink.kindOf(MeshHealth)).toBe(FleetHealth.kind);
+      expect(FleetHealth.kind).toBe("hyperlink-ts/FleetHealth");
+    }),
+  );
+
+  it("Tag()() is unbound; Tag()({ node }) stamps the droplet", () => {
+    // MeshHealth is `Tag()()` (default key already claimed) — still unbound after distributed.
+    expect(Hyperlink.nodeOf(MeshHealth)).toBeUndefined();
+    class BoundGlass extends FleetHealth.Service<BoundGlass>()({ node: DropletEast }) {}
+    expect(Hyperlink.nodeOf(BoundGlass)).toBe(DropletEast);
+  });
+});

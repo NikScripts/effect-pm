@@ -1,0 +1,131 @@
+/**
+ * Stable wire-contract fingerprint for F4 {@link ContractMismatch} — derived from a tag's
+ * wireKey, kind, and flat wire Spec (schemas via AST structure). Same Spec ⇒ same hash on
+ * client and server; schema / method drift ⇒ mismatch.
+ *
+ * @module internal/contractHash
+ * @internal
+ */
+import { Hash, Predicate, Schema } from "effect";
+import type { AnyMethod, FlatSpec } from "../Hyperlink";
+
+const LocalMethodTypeId = "~hyperlink-ts/Hyperlink/LocalMethod";
+const DefaultMethodTypeId = "~hyperlink-ts/Hyperlink/DefaultMethod";
+const DeprecatedMethodTypeId = "~hyperlink-ts/Hyperlink/DeprecatedMethod";
+const MethodTypeId = "~hyperlink-ts/Hyperlink/Method";
+
+/** Strip annotation / encoding noise so two equivalent schemas fingerprint the same. @internal */
+export const fingerprintAst = (ast: unknown): unknown => {
+  const seen = new WeakSet<object>();
+  const walk = (node: unknown): unknown => {
+    if (node === null || typeof node !== "object") {
+      return node;
+    }
+    if (seen.has(node)) {
+      return "[Cycle]";
+    }
+    seen.add(node);
+    if (Array.isArray(node)) {
+      return node.map(walk);
+    }
+    const record = node as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(record).sort()) {
+      if (
+        key === "annotations" ||
+        key === "encoding" ||
+        key === "encodingChecks" ||
+        key === "checks" ||
+        key === "context" ||
+        key.startsWith("~")
+      ) {
+        continue;
+      }
+      out[key] = walk(record[key]);
+    }
+    return out;
+  };
+  return walk(ast);
+};
+
+const fingerprintSchema = (schema: Schema.Top): unknown =>
+  fingerprintAst(schema.ast);
+
+/** Payload may be a Schema, Struct.Fields, or absent. */
+const fingerprintPayload = (
+  payload: Schema.Struct.Fields | Schema.Top | undefined,
+): unknown => {
+  if (payload === undefined) {
+    return null;
+  }
+  if (Schema.isSchema(payload)) {
+    return fingerprintSchema(payload);
+  }
+  const fields: Record<string, unknown> = {};
+  for (const key of Object.keys(payload).sort()) {
+    const field = payload[key];
+    if (Schema.isSchema(field)) {
+      fields[key] = fingerprintSchema(field);
+    }
+  }
+  return { fields };
+};
+
+const isWireMethod = (m: FlatSpec[string]): m is AnyMethod =>
+  Predicate.hasProperty(m, MethodTypeId) &&
+  !Predicate.hasProperty(m, LocalMethodTypeId) &&
+  !Predicate.hasProperty(m, DefaultMethodTypeId);
+
+/** Unwrap {@link DeprecatedMethod} wrapper → inner Method for fingerprinting. */
+const wireLeaf = (m: FlatSpec[string] | undefined): AnyMethod | undefined => {
+  if (m === undefined) return undefined;
+  if (Predicate.hasProperty(m, DeprecatedMethodTypeId)) {
+    const inner = (m as { readonly method: unknown }).method;
+    return isWireMethod(inner as FlatSpec[string])
+      ? (inner as AnyMethod)
+      : undefined;
+  }
+  return isWireMethod(m) ? m : undefined;
+};
+
+/**
+ * Canonical wire descriptor for a flat Spec — sorted method keys, wire-only members.
+ * {@link DeprecatedMethod} wrappers fingerprint like their inner Method (skew-stable).
+ *
+ * @internal
+ */
+export const contractDescriptor = (
+  wireKey: string,
+  kind: string,
+  spec: FlatSpec,
+): unknown => {
+  const methods: Record<string, unknown> = {};
+  for (const key of Object.keys(spec).sort()) {
+    const m = wireLeaf(spec[key]);
+    if (m === undefined) {
+      continue;
+    }
+    methods[key] = {
+      kind: m.kind,
+      stream: m.stream,
+      payload: fingerprintPayload(m.payload),
+      success: fingerprintSchema(m.success),
+      error: fingerprintSchema(m.error),
+    };
+  }
+  return { v: 1, wireKey, kind, methods };
+};
+
+/**
+ * Compact hex fingerprint of a HyperService wire contract.
+ *
+ * @internal
+ */
+export const hashContract = (
+  wireKey: string,
+  kind: string,
+  spec: FlatSpec,
+): string => {
+  const canonical = JSON.stringify(contractDescriptor(wireKey, kind, spec));
+  return (Hash.hash(canonical) >>> 0).toString(16).padStart(8, "0");
+};

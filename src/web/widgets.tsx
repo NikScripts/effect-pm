@@ -2,11 +2,10 @@
  * @module web/widgets
  *
  * Hand-crafted, per-type dashboard widgets — the building blocks the `<Dashboard>` and its
- * mobile/desktop views compose. Each is driven by a **tag** (its bundle comes from
- * `useQueueBundle` / `useProcessBundle` over the context runtime); the tree is a `Group.Tag`
+ * mobile/desktop views compose. Each is driven by a **tag** (observe via
+ * `Observe.use(tag, *View.pack)` / `NodeView.use` under RuntimeProvider); the tree is a `Group.Service`
  * walked with `Group.members` / `Group.isGroup`.
  *
- * @since 1.0.0
  */
 import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -18,7 +17,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Cause, DateTime } from "effect";
+import { Cause, DateTime, HashMap, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import * as Group from "../Group";
@@ -27,33 +26,58 @@ import {
   type ApiPoint,
   type ApiTag,
   type CommandAtom,
+  type PriorityTag,
+  type FleetHealthTag,
+  type TelemetryTag,
+  type ShardMapTag,
+  type GateTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
-  type ProcessBundle,
-  type ProcessTag,
+  type DaemonBundle,
+  type DaemonTag,
   type QueueBundle,
   type QueueTag,
   type ScheduleEntry,
   type NodeRef,
   nodesOf,
-  kindOf,
   leafTags,
   queueLeaves,
-  resourceNodeRef,
+  serviceNodeRef,
   tagWireKey,
-} from "./data";
-import type { ApiUsageMetrics } from "../ApiUsageSchema";
-import type { Status as NodeStatusValue } from "../NodeStatus";
-import { useApiBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
+} from "../ui/data";
+import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
+import * as View from "../ui/View";
+import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
+import type { NodeReport } from "../FleetHealth";
+import type { MetricDatum } from "../Telemetry";
+import {
+  isLeafTag,
+  widgetFor,
+  type LeafTag,
+  type WidgetRegistry,
+} from "../ui/widgetRegistry";
+import { type Widget, type WidgetProps, useWidgets } from "./widget-registry";
+import type { ApiUsageMetrics } from "../ApiUsageSchema";
+import type { Status as NodeStatusValue } from "../Node";
+import * as Observe from "../Observe";
+import * as WorkPoolView from "../ui/WorkPoolView";
+import * as PriorityView from "../ui/PriorityView";
+import * as DaemonView from "../ui/DaemonView";
+import * as ApiMetricsView from "../ui/ApiMetricsView";
+import * as GateView from "../ui/GateView";
+import * as FleetHealthView from "../ui/FleetHealthView";
+import * as TelemetryView from "../ui/TelemetryView";
+import * as ShardMapView from "../ui/ShardMapView";
+import * as NodeView from "../ui/NodeView";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
-import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "./now";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { cn } from "./cn";
+import * as Views from "../ui/Views";
 import {
   Dialog,
   DialogClose,
@@ -64,9 +88,9 @@ import {
   DialogTitle,
 } from "./components/ui/dialog";
 
-/** Last path segment of a tag/group id. @since 1.0.0 */
+/** Last path segment of a tag/group id. */
 export const displayName = (key: string): string => key.split("/").pop() ?? key;
-/** Format milliseconds as seconds. @since 1.0.0 */
+/** Format milliseconds as seconds. */
 export const fmtMs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 /** A short label for an AsyncResult, for debug logging. */
@@ -79,16 +103,16 @@ const asyncTag = (r: AsyncResult.AsyncResult<unknown, unknown>): string =>
         ? "Waiting"
         : "Initial";
 
-/** Phase → label + colour. @since 1.0.0 */
+/** Phase → label + colour. */
 export const STATUS: Record<string, { label: string; color: string }> = {
+  idle: { label: "idle", color: "#94a3b8" },
   running: { label: "running", color: "#22c55e" },
   paused: { label: "paused", color: "#eab308" },
   draining: { label: "draining", color: "#06b6d4" },
   off: { label: "off", color: "#ef4444" },
 };
-/** Resolve the status key from phase + paused. @since 1.0.0 */
-export const statusKey = (phase: string, paused: boolean): string =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+/** Resolve the status key from {@link Lifecycle.State} `_tag`. */
+export const statusKey = (lifecycleTag: string): string => lifecycleTag.toLowerCase();
 
 const PRIO = { high: "#ef4444", normal: "#94a3b8", low: "#3b82f6" } as const;
 const LEVEL: Record<string, string> = {
@@ -98,10 +122,28 @@ const LEVEL: Record<string, string> = {
   Fatal: "#ef4444",
 };
 
-/** A coloured status pill. @since 1.0.0 */
-export const StatusBadge = (props: { readonly phase: string; readonly paused: boolean }): React.ReactElement => {
-  const s = STATUS[statusKey(props.phase, props.paused)] ?? STATUS.running!;
+/** A coloured status pill. */
+export const StatusBadge = (props: { readonly lifecycleTag: string }): React.ReactElement => {
+  const s = STATUS[statusKey(props.lifecycleTag)] ?? STATUS.running!;
   return <Badge color={s.color}>{s.label}</Badge>;
+};
+
+/** Running / stopped pill for a daemon — from its live `supervising` flag. Shared by the daemon
+ *  card and its detail header. @public */
+export const DaemonStatusBadge = (props: { readonly supervising: boolean | undefined }): React.ReactElement => (
+  <Badge color={props.supervising === true ? "#22c55e" : "#94a3b8"}>
+    {props.supervising === true ? "running" : "stopped"}
+  </Badge>
+);
+
+/** Health pill for an API-metrics HyperService — green / amber / red by error rate ({@link apiHealth}).
+ *  Shared by the API card and its detail header. @public */
+export const ApiStatusBadge = (props: {
+  readonly requests: number;
+  readonly errors: number;
+}): React.ReactElement => {
+  const health = apiHealth(props.requests, props.errors);
+  return <Badge color={health.color}>{health.label}</Badge>;
 };
 
 const Bar = (props: { readonly value: number; readonly max: number; readonly color: string }): React.ReactElement => (
@@ -121,35 +163,62 @@ const PrioRow = (props: { readonly p: keyof typeof PRIO; readonly count: number;
   </div>
 );
 
-/** A queue as a grid card. Reads its own status straight from the tag. @since 1.0.0 */
+/** Shared class for a drillable card — button when activatable, div when View parent owns open. */
+const DRILL_CARD =
+  "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none";
+
+/** Button when `onOpen` is set; presentational `div` when parent (View Cell) owns activation. */
+const DrillRoot = (props: {
+  readonly onOpen?: () => void;
+  readonly className: string;
+  readonly style?: React.CSSProperties;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  if (props.onOpen === undefined) {
+    return (
+      <div style={props.style} className={props.className}>
+        {props.children}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={props.onOpen} style={props.style} className={props.className}>
+      {props.children}
+    </button>
+  );
+};
+
+/** A queue as a grid card. Reads its own status straight from the tag. */
 export const QueueCard = (props: {
   readonly tag: QueueTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
   readonly selected?: boolean;
-  readonly onOpen: (tag: QueueTag) => void;
+  /** When omitted, renders presentational chrome (View kit / parent owns activation). */
+  readonly onOpen?: (tag: QueueTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(useQueueBundle(props.tag).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const pack = Observe.use(props.tag, WorkPoolView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
+  const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
-  return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
-      style={vt}
-      className={cn(
-        // flex-col so the content stays top-aligned when the grid stretches the card to the row
-        // height — a bare <button> vertically centres its content in the slack.
-        "flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
-        props.selected === true && "border-primary",
-      )}
-    >
+  const className = cn(
+    // flex-col so the content stays top-aligned when the grid stretches the card to the row
+    // height — a bare <button> vertically centres its content in the slack.
+    "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+    props.selected === true && "border-primary",
+  );
+  const body = (
+    <>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
-        <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
+        <StatusBadge lifecycleTag={lifecycleTag} />
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
         <span>pending <strong className="text-foreground">{pending}</strong></span>
@@ -160,15 +229,144 @@ export const QueueCard = (props: {
         <PrioRow p="normal" count={sizes.normal} max={max} />
         <PrioRow p="low" count={sizes.low} max={max} />
       </div>
+      <DegradedOverlay tag={props.tag} />
+    </>
+  );
+  if (props.onOpen === undefined) {
+    return (
+      <div style={vt} className={className}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => props.onOpen?.(props.tag)}
+      style={vt}
+      className={className}
+    >
+      {body}
     </button>
   );
 };
 
+/**
+ * WorkPool detail panel (stats / chart / controls) — nav chrome stays with the parent
+ * (View W9 / Dashboard shell).
+ *
+ * @public
+ */
+export const QueueDetailPanel = (props: {
+  readonly tag: QueueTag;
+}): React.ReactElement => {
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
+  const lifecycleR = useAtomValue(bundle.lifecycle);
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
+  return (
+    <>
+      <div className="flex justify-end">
+        <StatusBadge lifecycleTag={lifecycleTag} />
+      </div>
+      <HyperlinkReadinessBanner tag={props.tag} />
+      <QueueStats bundle={bundle} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 sm:flex-1">
+          <div className="overflow-hidden rounded-xl border bg-card p-3">
+            <MetricChart bundle={bundle} />
+          </div>
+        </div>
+        <QueueControls bundle={bundle} />
+      </div>
+    </>
+  );
+};
+
+/** One named lane as a labelled bar — the `WorkPool.priority` counterpart to `PrioRow` (fixed high/normal/low);
+ *  lanes are arbitrary, so the label is the lane name. */
+const LaneRow = (props: {
+  readonly lane: string;
+  readonly count: number;
+  readonly max: number;
+}): React.ReactElement => (
+  <div className="flex items-center gap-2 text-xs">
+    <span className="w-16 shrink-0 truncate text-muted-foreground">{props.lane}</span>
+    <Bar value={props.count} max={props.max} color="#3b82f6" />
+    <span className="w-8 shrink-0 text-right">{props.count}</span>
+  </div>
+);
+
+/** `WorkPool.priority` phase colours (running / draining / off) — its phase set differs from a queue's. */
+const PRIORITY_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
+
+/**
+ * A `WorkPool.priority` queue as a grid card — the {@link QueueCard} sibling: same pending / done /
+ * phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar each instead of
+ * the fixed high/normal/low priorities. @public
+ */
+export const PriorityCard = (props: {
+  readonly tag: PriorityTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+  readonly selected?: boolean;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: PriorityTag) => void;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const pack = Observe.use(props.tag, PriorityView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
+  const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
+  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
+  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
+  const max = Math.max(1, ...lanes.map(([, n]) => n));
+  return (
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      style={vt}
+      className={cn(
+        DRILL_CARD,
+        props.selected === true && "border-primary",
+      )}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <Badge color={PRIORITY_PHASE[statusKey(lifecycleTag)] ?? "#22c55e"}>
+          {statusKey(lifecycleTag)}
+        </Badge>
+      </div>
+      <div className="mb-2 flex justify-between text-xs text-muted-foreground">
+        <span>pending <strong className="text-foreground">{pending}</strong></span>
+        <span>{s?.completed ?? 0} done</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {lanes.length === 0 ? (
+          <div className="text-xs text-muted-foreground">no lanes</div>
+        ) : (
+          lanes.slice(0, 5).map(([lane, count]) => <LaneRow key={lane} lane={lane} count={count} max={max} />)
+        )}
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </DrillRoot>
+  );
+};
+
 const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): React.ReactElement => {
-  const r = useAtomValue(useQueueBundle(props.tag).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const sk = statusKey(s?.phase ?? "running", s?.paused ?? false);
-  const pending = s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
+  const pack = Observe.use(props.tag, WorkPoolView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
+  const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
+  const sk = statusKey(lifecycleTag);
+  const pending =
+    s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span className="size-2 shrink-0 rounded-full" style={{ background: STATUS[sk]?.color }} />
@@ -178,12 +376,30 @@ const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): Re
   );
 };
 
-/** A subgroup as a grid widget — tap opens it as its own page (drill-down). @since 1.0.0 */
+/** Invisible: reads ONE node's node status and reports how many of the group's leaves **on that
+ *  node** are degraded, so {@link GroupCard} can sum them for its aggregate badge. A child-level hook
+ *  (not a `.map` over the node list) keeps a constant hook order if a group ever gains/loses a node —
+ *  the same Rules-of-Hooks pattern {@link HealthBoard} uses. */
+const NodeDegradedProbe = (props: {
+  readonly node: NodeRef;
+  readonly leafKeys: ReadonlySet<string>;
+  readonly onCount: (id: string, count: number) => void;
+}): null => {
+  const r = useAtomValue(NodeView.use(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const count = (s?.services ?? []).filter((x) => !x.ready && props.leafKeys.has(x.key)).length;
+  const { onCount, node } = props;
+  React.useEffect(() => onCount(node.id, count), [onCount, node.id, count]);
+  return null;
+};
+
+/** A subgroup as a grid widget — tap opens it as its own page (drill-down). */
 export const GroupCard = (props: {
   readonly node: GroupNode;
   /** Display name — the member key under which the parent group holds this subgroup. */
   readonly name: string;
-  readonly onOpen: (g: GroupNode) => void;
+  /** Open through the owning shell's Group navigation. */
+  readonly onOpen?: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
   const members = Object.values(Group.members(props.node));
@@ -191,16 +407,51 @@ export const GroupCard = (props: {
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
   // The display name of a member is the key it sits under in this node — map member identity → key.
   const nameOf = new Map<unknown, string>(Object.entries(Group.members(props.node)).map(([k, m]) => [m, k]));
+  // Aggregate readiness across the group's leaves — which may span several nodes. Each node reports its
+  // degraded-leaf count up (via a hidden probe); the badge shows the total, only when non-zero.
+  const nodes = nodesOf(props.node);
+  const leafKeys = React.useMemo(
+    () => new Set(leafTags(props.node).map(tagWireKey).filter((k): k is string => k !== undefined)),
+    [props.node],
+  );
+  const [counts, setCounts] = React.useState<ReadonlyMap<string, number>>(() => new Map());
+  const report = React.useCallback((id: string, count: number): void => {
+    setCounts((prev) => {
+      if (prev.get(id) === count) return prev;
+      const next = new Map(prev);
+      next.set(id, count);
+      return next;
+    });
+  }, []);
+  const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
+  const open = (): void => props.onOpen?.(props.node);
   return (
     <button
       type="button"
-      onClick={() => props.onOpen(props.node)}
+      onClick={open}
       style={vt}
-      className="flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
+      className="relative flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
+      {nodes.map((node) => (
+        <NodeDegradedProbe key={node.id} node={node} leafKeys={leafKeys} onCount={report} />
+      ))}
+      {degraded > 0 ? (
+        <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-amber-500" />
+      ) : null}
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate text-[#06b6d4]">▸ {props.name}</strong>
-        <span className="text-xs text-muted-foreground">{leafTags(props.node).length} resources</span>
+        <strong className="min-w-0 flex-1 truncate text-[#06b6d4]">▸ {props.name}</strong>
+        {degraded > 0 ? (
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-medium text-amber-50"
+            style={{ backgroundColor: "rgba(146,64,14,0.95)" }}
+          >
+            {degraded} of {leafTags(props.node).length} degraded
+          </span>
+        ) : (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {leafTags(props.node).length} services
+          </span>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         {leaves.map((tag) => <MemberRow key={tag.key} tag={tag} name={nameOf.get(tag) ?? displayName(tag.key)} />)}
@@ -213,29 +464,95 @@ export const GroupCard = (props: {
   );
 };
 
-/** Dispatch a group member to its card (group / queue / process / api). @since 1.0.0 */
+/** Dispatch a group member to its card (group / WorkPool / Daemon / api). */
 export const Cell = (props: {
   readonly member: unknown;
   /** Display name — the member key under which the current group holds this member. */
   readonly name: string;
-  readonly onOpenLeaf: (tag: QueueTag | ProcessTag | ApiTag) => void;
+  readonly onOpenLeaf: (tag: LeafTag) => void;
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
-  if (Group.isGroup(props.member)) {
-    return <GroupCard node={props.member as GroupNode} name={props.name} onOpen={props.onOpenGroup} />;
+  const registry = useWidgets();
+  const isGroup = Group.isGroup(props.member);
+  const leaf = isLeafTag(props.member) ? props.member : null;
+  const viewTag = isGroup ? props.member : leaf;
+  const hasViewCard = Views.useHasMatch(viewTag, Views.ViewKind.Card());
+  const Match = Views.useMatch();
+  // Group + leaf share kit Card when a Group family skin is on the layer (lock B).
+  if (hasViewCard && viewTag !== null) {
+    return (
+      <button
+        type="button"
+        className="contents text-left"
+        onClick={() => {
+          if (isGroup) props.onOpenGroup(props.member);
+          else if (leaf !== null) props.onOpenLeaf(leaf);
+        }}
+      >
+        <Match.Card tag={viewTag} name={props.name} />
+      </button>
+    );
   }
-  const kind = kindOf(props.member);
-  if (kind === "api") {
-    return <ApiCard tag={props.member as ApiTag} name={props.name} onOpen={props.onOpenLeaf} />;
+  if (isGroup) {
+    return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
   }
-  return kind === "process" ? (
-    <ProcessCard tag={props.member as ProcessTag} name={props.name} onOpen={props.onOpenLeaf} />
-  ) : (
-    <QueueCard tag={props.member as QueueTag} name={props.name} onOpen={props.onOpenLeaf} />
+  // A non-group member is a HyperService tag; resolve its widget by key → kind → fallback.
+  if (leaf === null) return <></>;
+  const Widget = widgetFor(registry, leaf.key, hyperlinkKindOf(leaf) ?? hyperlinkKind);
+  return <Widget tag={leaf} name={props.name} onOpen={props.onOpenLeaf} />;
+};
+
+const DegradedOverlayInner = (props: {
+  readonly tag: unknown;
+  readonly node: NodeRef;
+}): React.ReactElement | null => {
+  const r = useAtomValue(NodeView.use(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const stale = useStale(s?.uptimeMillis);
+  // Node stopped responding: dim the frozen card + say so. Priority over "degraded" — once the stream
+  // is dead, the last readiness is itself stale, so "not responding" is the honest signal.
+  if (stale) {
+    return (
+      <>
+        <div className="pointer-events-none absolute inset-0 rounded-xl bg-background/55 ring-1 ring-slate-500" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-xl bg-slate-700/95 px-2 py-1 text-[0.72rem] font-medium text-slate-100">
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-slate-300" />
+          <span className="min-w-0 flex-1 truncate">not responding — showing last update</span>
+        </div>
+      </>
+    );
+  }
+  const readiness = s?.services.find((x) => x.key === tagWireKey(props.tag));
+  if (readiness === undefined || readiness.ready) return null; // ready / still loading → no overlay
+  return (
+    <>
+      {/* amber ring on the whole card — scannable across the grid, no layout shift */}
+      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-amber-500" />
+      {/* the root cause, as a strip over the card's bottom edge */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-xl px-2 py-1 text-[0.72rem] font-medium text-amber-50"
+        style={{ backgroundColor: "rgba(146, 64, 14, 0.95)" }}
+      >
+        <span className="shrink-0">⚠ degraded</span>
+        {readiness.detail !== undefined ? (
+          <span className="min-w-0 flex-1 truncate">— {readiness.detail}</span>
+        ) : null}
+      </div>
+    </>
   );
 };
 
-/** A labelled stat card. @since 1.0.0 */
+/** The card **problem overlay**, read from the HyperService's node node status (SSOT): a slate dim +
+ *  "not responding" when the node's heartbeat stalls (its data is frozen), else an amber ring +
+ *  "degraded — <cause>" when the HyperService isn't ready. Absolute (no layout shift), works for every
+ *  card type; nothing while live-and-ready, loading, or nodeless. @public */
+export const DegradedOverlay = (props: { readonly tag: unknown }): React.ReactElement | null => {
+  const node = serviceNodeRef(props.tag);
+  if (node === undefined) return null;
+  return <DegradedOverlayInner tag={props.tag} node={node} />;
+};
+
+/** A labelled stat card. */
 export const Stat = (props: { readonly label: string; readonly value: string }): React.ReactElement => (
   <Card className="flex-1">
     <CardContent className="p-3">
@@ -245,13 +562,13 @@ export const Stat = (props: { readonly label: string; readonly value: string }):
   </Card>
 );
 
-/** Stat cards from the live status + metrics. @since 1.0.0 */
+/** Stat cards from the live status + metrics. */
 export const QueueStats = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
   React.useEffect(() => dlog("status", asyncTag(statusR), "· metrics", asyncTag(metricsR)), [statusR, metricsR]);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   return (
     <div className="flex flex-wrap gap-2">
@@ -265,9 +582,9 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
 };
 
 const METRICS = {
-  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const },
-  latency: { label: "latency (s)", color: "#eab308", source: "history" as const },
-  pending: { label: "pending", color: "#3b82f6", source: "trend" as const },
+  throughput: { label: "throughput /s", color: "#22c55e", source: "History" as const },
+  latency: { label: "latency (s)", color: "#eab308", source: "History" as const },
+  pending: { label: "pending", color: "#3b82f6", source: "Trend" as const },
 };
 type MetricKey = keyof typeof METRICS;
 
@@ -299,8 +616,13 @@ const availableWindows = (spanMs: number, hasData: boolean): ReadonlyArray<Windo
 };
 
 /** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
- *  history-backed series — a compact toggle that cycles the time window (1m→15m→1h). @since 1.0.0 */
-export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
+ *  history-backed series — a compact toggle that cycles the time window (1m→15m→1h). */
+export const MetricChart = (props: {
+  readonly bundle: {
+    readonly history: QueueBundle["history"];
+    readonly trend: QueueBundle["trend"];
+  };
+}): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
   // Selection is kept by duration (not index) so it survives as more windows unlock with data.
   const [windowMs, setWindowMs] = React.useState<number>(WINDOWS[0].ms);
@@ -317,7 +639,7 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   const win = windows.find((w) => w.ms === windowMs) ?? windows[windows.length - 1] ?? WINDOWS[0];
   const cutoff = win.ms === ALL_MS ? Number.NEGATIVE_INFINITY : now() - win.ms;
   const data =
-    def.source === "trend"
+    def.source === "Trend"
       ? trend.map((v, i) => ({ i, value: v }))
       : history
           .filter((p) => p.t >= cutoff)
@@ -336,7 +658,7 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
             </option>
           ))}
         </select>
-        {def.source === "history" ? (
+        {def.source === "History" ? (
           // Compact time-window control: tap to cycle through the windows the data reaches.
           // Cheaper on width than a second dropdown, which matters on a phone.
           <button
@@ -384,7 +706,7 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   );
 };
 
-/** A modal confirmation dialog — for destructive / guarded actions. @since 1.0.0 */
+/** A modal confirmation dialog — for destructive / guarded actions. */
 export const ConfirmDialog = (props: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -421,7 +743,7 @@ export const ConfirmDialog = (props: {
 
 /** A control button whose icon stays constant — the command's round-trip shows as motion /
  *  colour, never an icon swap: pulse while in-flight, a green ring on success, red on failure.
- *  `confirm` opens a modal dialog before firing; `disabled` for the lock. @since 1.0.0 */
+ *  `confirm` opens a modal dialog before firing; `disabled` for the lock. */
 export const ActionButton = (props: {
   readonly atom: CommandAtom;
   readonly label: string;
@@ -445,7 +767,6 @@ export const ActionButton = (props: {
     if (wasPending.current && AsyncResult.isSuccess(r)) {
       wasPending.current = false;
       setFlash(true);
-      // @effect-diagnostics-next-line globalTimers:off
       const t = setTimeout(() => setFlash(false), 1200);
       return () => clearTimeout(t);
     }
@@ -472,7 +793,7 @@ export const ActionButton = (props: {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={`${props.label.charAt(0).toUpperCase()}${props.label.slice(1)}?`}
-        description={`Are you sure you want to ${props.label} this resource?`}
+        description={`Are you sure you want to ${props.label} this HyperService?`}
         confirmLabel={props.label}
         destructive={props.destructive}
         onConfirm={trigger}
@@ -513,7 +834,7 @@ export const ActionButton = (props: {
 };
 
 /** Lock toggle for a control row — guards against accidental taps. Locking is immediate;
- *  unlocking opens a confirm dialog so the guard isn't fat-fingered off. @since 1.0.0 */
+ *  unlocking opens a confirm dialog so the guard isn't fat-fingered off. */
 export const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => void }): React.ReactElement => {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const onClick = (): void => {
@@ -540,7 +861,7 @@ export const LockToggle = (props: { readonly locked: boolean; readonly onToggle:
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Unlock controls?"
-        description="This enables the actuating controls (pause, clear, shutdown). Re-lock when you're done."
+        description="This enables the actuating controls (pause, clear, stop). Re-lock when you're done."
         confirmLabel="Unlock"
         onConfirm={props.onToggle}
       />
@@ -549,10 +870,10 @@ export const LockToggle = (props: { readonly locked: boolean; readonly onToggle:
 };
 
 /** Queue controls: icon buttons, pause/resume folded into one toggle on the live `paused`
- *  state, a lock (locked by default), and confirm on the destructive actions. @since 1.0.0 */
+ *  state, a lock (locked by default), and confirm on the destructive actions. */
 export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   const paused = s?.paused === true;
   const [locked, setLocked] = React.useState(true);
   return (
@@ -563,74 +884,114 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
         <ActionButton atom={props.bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
       )}
       <ActionButton atom={props.bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
-      <ActionButton atom={props.bundle.shutdown} label="shutdown" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
+      <ActionButton atom={props.bundle.stop} label="stop" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
       <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
     </div>
   );
 };
 
-/** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. @since 1.0.0 */
+/** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. */
+/** Effect log levels, low→high — for the min-level filter. Unknown levels rank as `info`. */
+const LEVEL_RANK: Record<string, number> = { trace: 0, debug: 1, info: 2, warn: 3, warning: 3, error: 4, fatal: 5 };
+const levelRank = (level: string): number => LEVEL_RANK[level.toLowerCase()] ?? 2;
+const MIN_LEVELS = ["All", "info", "warn", "error"] as const;
+
 export const LogStream = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
   readonly className?: string;
 }): React.ReactElement => {
   const r = useAtomValue(props.bundle.logs);
   React.useEffect(() => dlog("logs", asyncTag(r)), [r]);
-  const logs: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
+  const all: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
+  // client-side filter: substring match on the message + a minimum level
+  const [query, setQuery] = React.useState("");
+  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("All");
+  const needle = query.trim().toLowerCase();
+  const floor = min === "All" ? 0 : levelRank(min);
+  const logs = all.filter(
+    (l) => levelRank(l.level) >= floor && (needle === "" || l.message.toLowerCase().includes(needle)),
+  );
+  const filtered = needle !== "" || min !== "All";
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
     if (el !== null) el.scrollTop = el.scrollHeight;
   }, [logs.length]);
   return (
-    <div ref={ref} className={cn("overflow-auto text-xs", props.className)}>
-      {logs.map((l) => (
-        <div key={l.id} className="flex gap-2 px-2 py-0.5">
-          <span className="w-16 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
-          <span className="w-11 shrink-0 truncate" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
-          <span className="break-all">{l.message}</span>
-        </div>
-      ))}
+    <div className={cn("flex flex-col text-xs", props.className)}>
+      <div className="flex items-center gap-2 border-b px-2 py-1">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="filter logs…"
+          className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs outline-none placeholder:text-muted-foreground"
+        />
+        <select
+          value={min}
+          onChange={(e) => setMin(e.target.value as (typeof MIN_LEVELS)[number])}
+          className="shrink-0 rounded border bg-transparent px-1 py-0.5 text-xs"
+          aria-label="minimum log level"
+        >
+          {MIN_LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>{lvl === "All" ? "all levels" : `${lvl}+`}</option>
+          ))}
+        </select>
+        {filtered ? (
+          <span className="shrink-0 tabular-nums text-muted-foreground">{logs.length}/{all.length}</span>
+        ) : null}
+      </div>
+      <div ref={ref} className="min-h-0 flex-1 overflow-auto py-1">
+        {logs.length === 0 ? (
+          <div className="px-2 py-1 text-muted-foreground">{all.length === 0 ? "no logs yet" : "no lines match"}</div>
+        ) : (
+          logs.map((l) => (
+            <div key={l.id} className="flex gap-2 px-2 py-0.5">
+              <span className="w-16 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
+              <span className="w-11 shrink-0 truncate" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
+              <span className="break-all">{l.message}</span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };
 
-// ── process widgets ──────────────────────────────────────────────────────────
+// ── daemon widgets ──────────────────────────────────────────────────────────
 
-/** A process as a grid card — supervision state + active instances. @since 1.0.0 */
-export const ProcessCard = (props: {
-  readonly tag: ProcessTag;
+/** A daemon as a grid card — supervision state + active instances. */
+export const DaemonCard = (props: {
+  readonly tag: DaemonTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (t: ProcessTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (t: DaemonTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(useProcessBundle(props.tag).status);
+  const r = useAtomValue(Observe.use(props.tag, DaemonView.pack).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
       style={vt}
-      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+      className={DRILL_CARD}
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
-          {s?.supervising === true ? "running" : "stopped"}
-        </Badge>
+        <DaemonStatusBadge supervising={s?.supervising} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>{s?.armed === true ? "armed" : "disarmed"}</span>
         <span><strong className="text-foreground">{s?.activeInstances ?? 0}</strong> active</span>
       </div>
-    </button>
+      <DegradedOverlay tag={props.tag} />
+    </DrillRoot>
   );
 };
 
-/** Stat cards from a process's live status. @since 1.0.0 */
-export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+/** Stat cards from a daemon's live status. */
+export const DaemonStats = (props: { readonly bundle: DaemonBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
@@ -642,11 +1003,11 @@ export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.R
   );
 };
 
-/** Process controls: icon buttons, start/stop folded into one toggle on the live `supervising`
+/** Daemon controls: icon buttons, start/stop folded into one toggle on the live `supervising`
  *  state, a lock, and confirm on stop. The lock is hoisted (one lock guards both these controls
- *  and the {@link ScheduleEditor}), so the caller owns `locked` / `onToggleLock`. @since 1.0.0 */
-export const ProcessControls = (props: {
-  readonly bundle: ProcessBundle;
+ *  and the {@link ScheduleEditor}), so the caller owns `locked` / `onToggleLock`. */
+export const DaemonControls = (props: {
+  readonly bundle: DaemonBundle;
   readonly locked: boolean;
   readonly onToggleLock: () => void;
 }): React.ReactElement => {
@@ -654,7 +1015,7 @@ export const ProcessControls = (props: {
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const up = s?.supervising === true;
   const locked = props.locked;
-  // A process has no chart to sit beside, so its controls stay a horizontal row at every width
+  // A daemon has no chart to sit beside, so its controls stay a horizontal row at every width
   // (only the queue controls go vertical, to flank the graph).
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
@@ -663,7 +1024,7 @@ export const ProcessControls = (props: {
       ) : (
         <ActionButton atom={props.bundle.start} label="start" icon={<Play className="size-4" />} disabled={locked} />
       )}
-      <ActionButton atom={props.bundle.runImmediately} label="run now" icon={<RotateCw className="size-4" />} disabled={locked} />
+      <ActionButton atom={props.bundle.run} label="run now" icon={<RotateCw className="size-4" />} disabled={locked} />
       <LockToggle locked={locked} onToggle={props.onToggleLock} />
     </div>
   );
@@ -694,7 +1055,7 @@ const ScheduleRow = (props: { readonly entry: ScheduleEntry }): React.ReactEleme
 );
 
 /** The popup to add **or edit** one run window — start (required) + optional stop. When `initial`
- *  is given it's an edit (fields pre-filled, `onDelete` shown); otherwise it adds. @since 1.0.0 */
+ *  is given it's an edit (fields pre-filled, `onDelete` shown); otherwise it adds. */
 export const WindowDialog = (props: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -732,7 +1093,7 @@ export const WindowDialog = (props: {
       <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{editing ? "Edit run window" : "Add run window"}</DialogTitle>
-          <DialogDescription>The process is armed while now is inside a window.</DialogDescription>
+          <DialogDescription>The daemon is armed while now is inside a window.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-1">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -780,15 +1141,15 @@ export const WindowDialog = (props: {
   );
 };
 
-/** View + edit a process's schedule (the run windows that arm it). Reads the current entries, then
- *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** process lock (`locked`), so
+/** View + edit a daemon's schedule (the run windows that arm it). Reads the current entries, then
+ *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** daemon lock (`locked`), so
  *  one lock guards both the controls and the schedule. Edits apply optimistically (the schedule is
- *  read once on open); adding a window is a popup. @since 1.0.0 */
-/** The shared edit state for a process schedule — the current entries plus add/remove/clear, applied
+ *  read once on open); adding a window is a popup. */
+/** The shared edit state for a daemon schedule — the current entries plus add/remove/clear, applied
  *  optimistically (the schedule reads once on open). Used by both the inline {@link ScheduleEditor}
- *  and the fullscreen week view. @since 1.0.0 */
+ *  and the fullscreen week view. */
 export const useScheduleEdit = (
-  bundle: ProcessBundle,
+  bundle: DaemonBundle,
 ): {
   readonly list: ReadonlyArray<ScheduleEntry>;
   readonly addEntry: (entry: ScheduleEntry) => void;
@@ -826,7 +1187,7 @@ const DAY_MS = 86_400_000;
 
 /** A weekly calendar grid of the run windows — 7 day columns × 24 hours, each window drawn as a
  *  block at its real position, with a "now" line. Multi-day windows are clipped per day; open-ended
- *  windows fill to the end of each day from their start. @since 1.0.0 */
+ *  windows fill to the end of each day from their start. */
 export const WeekSchedule = (props: {
   readonly entries: ReadonlyArray<ScheduleEntry>;
   readonly weekStart: number;
@@ -900,11 +1261,11 @@ export const WeekSchedule = (props: {
   );
 };
 
-/** A read-only summary of a process's schedule (the run windows that arm it) — the count, the list,
+/** A read-only summary of a daemon's schedule (the run windows that arm it) — the count, the list,
  *  and an expand button to the fullscreen week view, which is where editing (add / remove / clear)
- *  happens. @since 1.0.0 */
+ *  happens. */
 export const ScheduleEditor = (props: {
-  readonly bundle: ProcessBundle;
+  readonly bundle: DaemonBundle;
   readonly onOpenFull?: () => void;
 }): React.ReactElement => {
   const r = useAtomValue(props.bundle.schedule);
@@ -927,7 +1288,7 @@ export const ScheduleEditor = (props: {
       </div>
 
       {list.length === 0 ? (
-        <div className="text-xs text-muted-foreground">No run windows — the process is disarmed.</div>
+        <div className="text-xs text-muted-foreground">No run windows — the daemon is disarmed.</div>
       ) : (
         <ul className="flex flex-col gap-1">
           {list.map((entry, i) => (
@@ -942,7 +1303,7 @@ export const ScheduleEditor = (props: {
 // ── api widgets ───────────────────────────────────────────────────────────────
 
 /** Error-rate → health label + colour (green / amber / red). Shared by the API card badge and
- *  {@link ApiStats}. @since 1.0.0 */
+ *  {@link ApiStats}. */
 export const apiHealth = (requests: number, errors: number): { readonly label: string; readonly color: string } => {
   const rate = requests > 0 ? errors / requests : 0;
   if (rate >= 0.1) return { label: "errors", color: "#ef4444" };
@@ -967,16 +1328,234 @@ const Sparkline = (props: { readonly points: ReadonlyArray<number>; readonly col
   );
 };
 
-/** A reusable iOS-home-screen-style **paged card**: horizontal scroll-snap track + dot indicators.
- *  Presentational. Tap fires `onOpen` (a swipe scrolls instead and the click is suppressed); the
- *  root is a `div role="button"` so a horizontal scroller can nest cleanly. @since 1.0.0 */
-export const PagedCard = (props: {
-  readonly pages: ReadonlyArray<React.ReactNode>;
-  readonly onOpen?: () => void;
-  readonly style?: React.CSSProperties;
-}): React.ReactElement => {
+/**
+ * One measured block in an **auto-paginated** {@link Deck}. The deck measures each section and packs
+ * them into as many pages as the viewport needs — a section that won't fit starts the next page, and
+ * everything that fits stays on one (no dots). @public
+ */
+export interface DeckSection {
+  /** Stable identity — used as the React key and to detect content changes for re-measuring. */
+  readonly key: string;
+  /** The block. **Fixed** sections (default) are rendered twice — once hidden to measure — so keep
+   *  content side-effect-free (no mount effects); prefer reading atoms in the parent and passing
+   *  plain JSX. Mark live/hook-heavy blocks (charts, logs) `grow` so they're measured as a spacer. */
+  readonly content: React.ReactNode;
+  /** Flex to fill the leftover height on its page (charts, logs, long lists). A grow section is
+   *  packed by {@link minHeight} and stretched beyond it; its content is never measured. */
+  readonly grow?: boolean;
+  /** Packing height for a `grow` section (default 160). The height it claims before stretching. */
+  readonly minHeight?: number;
+}
+
+const DECK_GAP = 12; // px — matches the `gap-3` between sections
+const DECK_GROW_MIN = 160; // default packing height for a grow section
+const DECK_DOTS = 20; // px reserved for the dot gutter (kept constant so packing doesn't oscillate)
+
+/** Greedily pack section heights into pages that each fit `avail`, returning groups of indices. A
+ *  section taller than a page still gets its own page (it scrolls within). */
+const packSections = (
+  heights: ReadonlyArray<number>,
+  avail: number,
+): ReadonlyArray<ReadonlyArray<number>> => {
+  const pages: Array<Array<number>> = [];
+  let cur: Array<number> = [];
+  let used = 0;
+  heights.forEach((h, i) => {
+    const next = cur.length === 0 ? h : used + DECK_GAP + h;
+    if (cur.length > 0 && next > avail) {
+      pages.push(cur);
+      cur = [i];
+      used = h;
+    } else {
+      cur.push(i);
+      used = next;
+    }
+  });
+  if (cur.length > 0) pages.push(cur);
+  return pages.length > 0 ? pages : [[]];
+};
+
+/** Track the active page (nearest child by scroll offset) and expose a smooth `scrollTo`. */
+const useDeckScroll = (): {
+  readonly ref: React.RefObject<HTMLDivElement | null>;
+  readonly active: number;
+  readonly onScroll: () => void;
+  readonly scrollTo: (i: number) => void;
+} => {
   const ref = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState(0);
+  const onScroll = React.useCallback((): void => {
+    const el = ref.current;
+    if (el === null) return;
+    // nearest page by element offset — robust to the inter-page gap (clientWidth math isn't).
+    let best = 0;
+    let bestD = Infinity;
+    Array.from(el.children).forEach((c, i) => {
+      if (c instanceof HTMLElement) {
+        const d = Math.abs(c.offsetLeft - el.scrollLeft);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+    });
+    setActive(best);
+  }, []);
+  const scrollTo = React.useCallback((i: number): void => {
+    const el = ref.current;
+    const child = el?.children[i];
+    if (el !== null && child instanceof HTMLElement) {
+      el.scrollTo({ left: child.offsetLeft, behavior: "smooth" });
+    }
+  }, []);
+  return { ref, active, onScroll, scrollTo };
+};
+
+/** The dot row — one filled dot per page, tap to jump. Hidden for a single page. */
+const DeckDots = (props: {
+  readonly count: number;
+  readonly active: number;
+  readonly onDot: (i: number) => void;
+  readonly className?: string;
+}): React.ReactElement | null =>
+  props.count > 1 ? (
+    <div className={cn("flex justify-center gap-1", props.className)}>
+      {Array.from({ length: props.count }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onDot(i);
+          }}
+          className={cn("size-1.5 rounded-full transition-colors", i === props.active ? "bg-foreground" : "bg-muted-foreground/40")}
+          aria-label={`page ${i + 1}`}
+        />
+      ))}
+    </div>
+  ) : null;
+
+/**
+ * A swipeable **deck** of pages: a horizontal scroll-snap track + dot indicators. Two forms:
+ *
+ * - **card** (default) — a tap-to-open grid card; pass explicit `pages`. Tap fires `onOpen`; a swipe
+ *   scrolls instead. Natural height.
+ * - **fill** (`fill`) — fills its flex parent (a detail body). Pass `sections` and it **auto-packs**
+ *   them into pages by measuring against the viewport (grow sections stretch to fill leftover space,
+ *   short all-fixed pages center); or pass explicit `pages` as an escape hatch.
+ *
+ * @public
+ */
+export const Deck = (props: {
+  /** Explicit pages (required for a card; an escape hatch for `fill`). */
+  readonly pages?: ReadonlyArray<React.ReactNode>;
+  /** Auto-paginated sections (fill only) — measured + packed into pages. */
+  readonly sections?: ReadonlyArray<DeckSection>;
+  /** Fill the flex parent (detail body) instead of sizing to content (grid card). */
+  readonly fill?: boolean;
+  /** Card tap-to-open (card form only). */
+  readonly onOpen?: () => void;
+  /** Absolute overlay over the deck (root is `relative`) — e.g. a degraded treatment. */
+  readonly overlay?: React.ReactNode;
+  readonly style?: React.CSSProperties;
+  readonly className?: string;
+}): React.ReactElement => {
+  const { ref, active, onScroll, scrollTo } = useDeckScroll();
+  const sections = props.sections;
+  const [groups, setGroups] = React.useState<ReadonlyArray<ReadonlyArray<number>>>(
+    () => (sections !== undefined ? [sections.map((_, i) => i)] : []),
+  );
+  const measureRefs = React.useRef<Array<HTMLDivElement | null>>([]);
+  const keysDep = sections?.map((s) => s.key).join("|");
+  React.useLayoutEffect(() => {
+    if (sections === undefined) return;
+    const el = ref.current;
+    if (el === null) return;
+    const remeasure = (): void => {
+      const avail = Math.max(1, el.clientHeight - DECK_DOTS);
+      const heights = sections.map((s, i) =>
+        s.grow === true ? s.minHeight ?? DECK_GROW_MIN : measureRefs.current[i]?.offsetHeight ?? 0,
+      );
+      setGroups(packSections(heights, avail));
+    };
+    remeasure();
+    const ro = new ResizeObserver(remeasure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [sections, ref, keysDep]);
+
+  const pageNodes: ReadonlyArray<React.ReactNode> =
+    props.pages ??
+    (sections !== undefined
+      ? groups.map((grp, gi) => {
+          const hasGrow = grp.some((si) => sections[si]?.grow === true);
+          return (
+            <div key={gi} className={cn("flex h-full flex-col gap-3", !hasGrow && "justify-center")}>
+              {grp.map((si) => {
+                const s = sections[si];
+                return s === undefined ? null : (
+                  <div key={s.key} className={s.grow === true ? "flex min-h-0 flex-1 flex-col" : "shrink-0"}>
+                    {s.content}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })
+      : []);
+
+  const track = (
+    <div
+      ref={ref}
+      onScroll={onScroll}
+      className={cn(
+        "flex snap-x snap-mandatory gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        props.fill === true && "min-h-0 flex-1",
+      )}
+    >
+      {pageNodes.map((page, i) => (
+        <div key={i} className={cn("w-full shrink-0 snap-center", props.fill === true && "flex flex-col overflow-y-auto")}>
+          {page}
+        </div>
+      ))}
+    </div>
+  );
+  // fill: pull the dot row down into the bottom safe-area padding with a negative margin so it sits
+  // near the screen edge — the track keeps its reserved `DECK_DOTS` height (no stretch change).
+  const dots = (
+    <DeckDots count={pageNodes.length} active={active} onDot={scrollTo} className={props.fill === true ? "h-5 shrink-0 items-center mt-3 -mb-3" : "mt-2"} />
+  );
+  // hidden measurer (fill + sections): fixed sections render their real (pure) content to be sized;
+  // grow sections render a minHeight spacer, so their live/stateful content is never double-mounted.
+  // Zero-height + overflow-hidden so the stacked sections are clipped and add **nothing** to the
+  // container's scrollHeight (a tall absolute measurer otherwise makes the detail scroll on iOS).
+  // Block layout (not flex) so each child keeps its natural height for `offsetHeight`.
+  const measurer =
+    sections !== undefined ? (
+      <div aria-hidden className="pointer-events-none invisible absolute left-0 top-0 h-0 w-full overflow-hidden">
+        {sections.map((s, i) => (
+          <div
+            key={s.key}
+            ref={(el) => {
+              measureRefs.current[i] = el;
+            }}
+          >
+            {s.grow === true ? <div style={{ height: s.minHeight ?? DECK_GROW_MIN }} /> : s.content}
+          </div>
+        ))}
+      </div>
+    ) : null;
+
+  if (props.fill === true) {
+    return (
+      <div className={cn("relative flex min-h-0 flex-1 flex-col", props.className)} style={props.style}>
+        {measurer}
+        {track}
+        {dots}
+        {props.overlay}
+      </div>
+    );
+  }
   return (
     <div
       role="button"
@@ -986,53 +1565,63 @@ export const PagedCard = (props: {
         if (e.key === "Enter" || e.key === " ") props.onOpen?.();
       }}
       style={props.style}
-      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
+      className={cn(
+        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none",
+        props.className,
+      )}
     >
-      <div
-        ref={ref}
-        onScroll={() => {
-          const el = ref.current;
-          if (el === null) return;
-          // nearest page by element offset — robust to the inter-page gap (clientWidth math isn't).
-          let best = 0;
-          let bestD = Infinity;
-          Array.from(el.children).forEach((c, i) => {
-            if (c instanceof HTMLElement) {
-              const d = Math.abs(c.offsetLeft - el.scrollLeft);
-              if (d < bestD) {
-                bestD = d;
-                best = i;
-              }
-            }
-          });
-          setActive(best);
-        }}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {props.pages.map((page, i) => (
-          <div key={i} className="w-full shrink-0 snap-center">{page}</div>
-        ))}
-      </div>
-      {props.pages.length > 1 ? (
-        <div className="mt-2 flex justify-center gap-1">
-          {props.pages.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                const el = ref.current;
-                const child = el?.children[i];
-                if (el !== null && child instanceof HTMLElement) {
-                  el.scrollTo({ left: child.offsetLeft, behavior: "smooth" });
-                }
-              }}
-              className={cn("size-1.5 rounded-full transition-colors", i === active ? "bg-foreground" : "bg-muted-foreground/40")}
-              aria-label={`page ${i + 1}`}
-            />
-          ))}
+      {track}
+      {dots}
+      {props.overlay}
+    </div>
+  );
+};
+
+/**
+ * A **fullscreen detail** shell — a standard header (back + icon/title + optional badge + readiness
+ * banner) over an auto-paginating {@link Deck}. Hand it an ordered list of `sections` and it packs
+ * them into as many pages as the viewport needs (one → no dots); or pass explicit `pages` as an
+ * escape hatch. Gives a HyperService more room than its grid card. @public
+ */
+export const DetailScreen = (props: {
+  readonly title: string;
+  /** Omit when the shell Outlet owns back (View compose / Router). */
+  readonly onBack?: () => void;
+  /**
+   * When `false`, render body only (Deck + readiness) — shell owns title/back.
+   * Default `true` for standalone Dashboard detail routes.
+   */
+  readonly chrome?: boolean;
+  /** View-transition key — pass `res-${tag.key}` so the card↔detail morph matches the grid. */
+  readonly vtKey: string;
+  readonly icon?: React.ReactNode;
+  readonly badge?: React.ReactNode;
+  /** Renders a {@link HyperlinkReadinessBanner} for this tag (no-op when the tag has no node). */
+  readonly readinessTag?: unknown;
+  /** Auto-paginated content — the common case. */
+  readonly sections?: ReadonlyArray<DeckSection>;
+  /** Explicit pages — an escape hatch when you want a hard page break. */
+  readonly pages?: ReadonlyArray<React.ReactNode>;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(props.vtKey);
+  const showChrome = props.chrome !== false;
+  return (
+    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
+      {showChrome ? (
+        <div className="flex items-center gap-2">
+          {props.onBack !== undefined ? (
+            <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+          ) : null}
+          <strong className="flex-1 truncate text-base">
+            {props.icon !== undefined ? <>{props.icon} </> : null}{props.title}
+          </strong>
+          {props.badge}
         </div>
+      ) : props.badge !== undefined ? (
+        <div className="flex justify-end">{props.badge}</div>
       ) : null}
+      {props.readinessTag !== undefined ? <HyperlinkReadinessBanner tag={props.readinessTag} /> : null}
+      <Deck fill sections={props.sections} pages={props.pages} />
     </div>
   );
 };
@@ -1044,22 +1633,27 @@ const topEndpoints = (
 ): ReadonlyArray<{ readonly endpoint: string; readonly requests: number; readonly errors: number }> =>
   [...bundle].sort((a, b) => b.requests - a.requests).slice(0, limit);
 
-/** An API-metrics resource as a grid card — a {@link PagedCard}: page 1 is throughput + health,
- *  page 2 is the busiest endpoints. Read-only. @since 1.0.0 */
+/** An HttpApiClient HyperService as a grid card — a {@link Deck}: page 1 is throughput + rate-limit
+ *  remaining, page 2 is the busiest endpoints. Read-only. */
 export const ApiCard = (props: {
   readonly tag: ApiTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (t: ApiTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (t: ApiTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useApiBundle(props.tag);
+  const bundle = Observe.use(props.tag, ApiMetricsView.pack);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
+  const remainingR = useAtomValue(bundle.remaining);
+  const exceededR = useAtomValue(bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
   const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : undefined;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : 0;
   const health = apiHealth(s?.requestsTotal ?? 0, s?.errorsTotal ?? 0);
   const endpoints = topEndpoints([...(m?.byEndpoint ?? [])], 6);
   const maxReq = Math.max(...endpoints.map((e) => e.requests), 1);
@@ -1069,12 +1663,18 @@ export const ApiCard = (props: {
       <div className="flex items-center gap-2">
         <span>🌐</span>
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={health.color}>{health.label}</Badge>
+        <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span><strong className="text-foreground">{(m?.throughputPerSec ?? 0).toFixed(1)}</strong> req/s</span>
         <span><strong className="text-foreground">{s?.inFlight ?? 0}</strong> in-flight</span>
       </div>
+      {remaining !== undefined ? (
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span><strong className="text-foreground">{remaining}</strong> remaining</span>
+          <span><strong className="text-foreground">{exceeded}</strong> exceeded</span>
+        </div>
+      ) : null}
       <Sparkline points={history.map((p) => p.throughput)} color={health.color} />
     </div>
   );
@@ -1095,15 +1695,35 @@ export const ApiCard = (props: {
         ))}
       </div>
     );
-  return <PagedCard onOpen={() => props.onOpen(props.tag)} style={vt} pages={[page1, page2]} />;
+  return (
+    <Deck
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      style={vt}
+      pages={[page1, page2]}
+      overlay={<DegradedOverlay tag={props.tag} />}
+    />
+  );
 };
 
-/** Stat cards from an API resource's snapshot + latest window. @since 1.0.0 */
+/** Format nest `resetAfter` (ms) for the API stats strip. */
+const fmtResetAfter = (ms: number): string => {
+  if (!(ms > 0)) return "—";
+  if (ms < 1_000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1_000).toFixed(1)}s`;
+};
+
+/** Stat cards from an API HyperService's snapshot + latest window + rate-limit nest. */
 export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
+  const remainingR = useAtomValue(props.bundle.remaining);
+  const resetAfterR = useAtomValue(props.bundle.resetAfter);
+  const exceededR = useAtomValue(props.bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : undefined;
+  const resetAfter = AsyncResult.isSuccess(resetAfterR) ? resetAfterR.value : undefined;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : undefined;
   const requests = s?.requestsTotal ?? 0;
   const errors = s?.errorsTotal ?? 0;
   const rate = requests > 0 ? (errors / requests) * 100 : 0;
@@ -1114,6 +1734,9 @@ export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElem
       <Stat label="error rate" value={`${rate.toFixed(1)}%`} />
       <Stat label="in-flight" value={String(s?.inFlight ?? 0)} />
       <Stat label="req/s" value={(m?.throughputPerSec ?? 0).toFixed(1)} />
+      {remaining !== undefined ? <Stat label="remaining" value={String(remaining)} /> : null}
+      {resetAfter !== undefined ? <Stat label="reset" value={fmtResetAfter(resetAfter)} /> : null}
+      {exceeded !== undefined ? <Stat label="exceeded" value={String(exceeded)} /> : null}
     </div>
   );
 };
@@ -1126,7 +1749,7 @@ const API_SERIES = {
 type ApiSeriesKey = keyof typeof API_SERIES;
 
 /** An API usage chart — a dropdown switches throughput / errors / in-flight, fed from the
- *  accumulated metrics history. @since 1.0.0 */
+ *  accumulated metrics history. */
 export const ApiMetricChart = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const [series, setSeries] = React.useState<ApiSeriesKey>("throughput");
   // Selection is kept by duration (not index) so it survives as more windows unlock with data.
@@ -1220,10 +1843,10 @@ const SORT_GLYPH: Record<string, string> = { asc: " ▲", desc: " ▼" };
 
 /** The per-endpoint table — `group · endpoint` with requests / errors / avg-ms, in a sortable
  *  TanStack table (tap a header to sort; default busiest-first). Error rows are tinted. The
- *  distinctive API widget. @since 1.0.0 */
+ *  distinctive API widget. */
 export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.metrics);
-  const m = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const m = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const rows = React.useMemo(() => [...(m?.byEndpoint ?? [])], [m]);
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "requests", desc: true }]);
   const table = useReactTable({
@@ -1289,14 +1912,64 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 };
 
 // ── Node widgets ─────────────────────────────────────────────────────────────
-// Nodes are read straight off the tags (`nodesOf`): a dot per node the group's resources are bound
-// to. Each dot's colour + popover come from that node's `NodeStatus` (over its own transport).
+// Nodes are read straight off the tags (`nodesOf`): a dot per node the group's HyperServices are bound
+// to. Each dot's colour + popover come from that node's node status (over its own transport).
 
-/** A node's overall colour: grey while connecting, red down, amber degraded, green ok. @since 1.0.0 */
+/**
+ * F5 — how a node-status atom is reading right now. Pending must never be painted as healthy;
+ * Failed must never look like "still connecting…" (that hid the split-dial bug for weeks).
+ */
+type NodeConnState =
+  | { readonly _tag: "Connecting" }
+  | { readonly _tag: "Failed" }
+  | { readonly _tag: "Ready"; readonly status: NodeStatusValue };
+
+const nodeConnState = (
+  r: AsyncResult.AsyncResult<NodeStatusValue, unknown>,
+): NodeConnState =>
+  AsyncResult.isSuccess(r)
+    ? { _tag: "Ready", status: r.value }
+    : AsyncResult.isFailure(r)
+      ? { _tag: "Failed" }
+      : { _tag: "Connecting" };
+
+/** A node's overall colour: grey while connecting, red failed/down, amber degraded, green ok. */
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
 
-/** Format an uptime span (ms) compactly. @since 1.0.0 */
+const nodeConnColor = (state: NodeConnState): string =>
+  state._tag === "Connecting"
+    ? "#64748b"
+    : state._tag === "Failed"
+      ? "#ef4444"
+      : nodeColor(state.status);
+
+/** ~3× the 2s node status heartbeat: no fresh status in this long → the node's stream is dead and
+ *  the shown values are frozen (last-known, not live). */
+const STALE_MS = 6000;
+
+/** True once a node's heartbeat has stopped. `status.changes` re-emits every ~2s, so `beat` (its
+ *  `uptimeMillis`) advances each tick; when it stops advancing the age climbs past {@link STALE_MS}
+ *  and a frozen card can say so instead of looking live. Only a **genuine new heartbeat** (an advanced
+ *  `uptimeMillis`) refreshes the timer — the drop-to-`undefined` + reconnect-retry churn a dying
+ *  stream emits is ignored, so that churn can't masquerade as liveness. A 1s timer re-checks the age
+ *  even when nothing new arrives. */
+const useStale = (beat: number | undefined): boolean => {
+  const last = React.useRef({ beat, at: now() });
+  React.useEffect(() => {
+    if (beat !== undefined && beat !== last.current.beat) {
+      last.current = { beat, at: now() };
+    }
+  }, [beat]);
+  const [, retick] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    const id = setInterval(retick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now() - last.current.at > STALE_MS;
+};
+
+/** Format an uptime span (ms) compactly. */
 const fmtUptime = (ms: number): string => {
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600);
@@ -1304,11 +1977,10 @@ const fmtUptime = (ms: number): string => {
   return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 };
 
-/** One node indicator dot + tap-for-info popover (tap again, or "view node", for the full screen).
- *  @since 1.0.0 */
+/** One node indicator dot + tap-for-info popover (tap again, or "view node", for the full screen). */
 /** Compact "barrel stack" pip layout: dots in bottom-heavy, centered rows (≤3 rows) — upper rows
  *  nestle over the gaps below, so 3 → 1 over 2, 4 → 2-on-2, etc. Dots are sized **larger when there
- *  are fewer** nodes; beyond 9 the rows just keep widening. @since 1.0.0 */
+ *  are fewer** nodes; beyond 9 the rows just keep widening. */
 const pipLayout = (
   n: number,
 ): {
@@ -1346,7 +2018,7 @@ const pipLayout = (
   return { ...size, rows };
 };
 
-/** Slice items into the layout's bottom-heavy rows (top → bottom). @since 1.0.0 */
+/** Slice items into the layout's bottom-heavy rows (top → bottom). */
 const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): ReadonlyArray<ReadonlyArray<A>> => {
   let cursor = 0;
   return rows.map((count) => {
@@ -1356,27 +2028,32 @@ const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): Read
   });
 };
 
-/** One node's pip — a coloured dot, colour from its NodeStatus. @since 1.0.0 */
+/** One node's pip — a coloured dot, colour from its status snapshot (or failed/connecting). */
 const NodePip = (props: {
   readonly node: NodeRef;
   readonly size: string;
 }): React.ReactElement => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const r = useAtomValue(NodeView.use(props.node).status);
+  const state = nodeConnState(r);
+  const s = state._tag === "Ready" ? state.status : undefined;
+  const stale = useStale(s?.uptimeMillis);
   React.useEffect(() => {
     if (AsyncResult.isFailure(r)) dlog("node", props.node.id, "FAILURE", Cause.pretty(r.cause));
     else dlog("node", props.node.id, asyncTag(r));
   }, [r, props.node.id]);
+  // stale → a pulsing grey pip, so a lost node reads as "not responding" instead of its frozen colour.
+  // Failed stays red (not grey) so a broken dial is visible on the die.
+  const color = state._tag === "Failed" ? "#ef4444" : stale ? "#64748b" : nodeConnColor(state);
   return (
     <span
-      className="rounded-full"
-      style={{ width: props.size, height: props.size, backgroundColor: nodeColor(s) }}
+      className={cn("rounded-full", (stale || state._tag === "Connecting") && "animate-pulse")}
+      style={{ width: props.size, height: props.size, backgroundColor: color }}
     />
   );
 };
 
 /** Static preview of the node die at a given count — the barrel-stack pip pattern only (no live
- *  status), for examples/docs that want to show the 1..9 shapes. @since 1.0.0 */
+ *  status), for examples/docs that want to show the 1..9 shapes. */
 export const NodeDots = (props: { readonly count: number }): React.ReactElement => {
   const layout = pipLayout(props.count);
   const rows = pipRows(
@@ -1400,7 +2077,7 @@ export const NodeDots = (props: { readonly count: number }): React.ReactElement 
   );
 };
 
-/** A labelled summary number for the health board's top stat strip. @since 1.0.0 */
+/** A labelled summary number for the health board's top stat strip. */
 const HealthStat = (props: {
   readonly label: string;
   readonly value: string;
@@ -1414,10 +2091,10 @@ const HealthStat = (props: {
   </div>
 );
 
-/** One resource's readiness row — pip (green ready / amber degraded) + name + (kind or node) + the
- *  root-cause detail when degraded. Tap to open that resource's detail page. @since 1.0.0 */
-const ResourceReadinessRow = (props: {
-  readonly res: NodeStatusValue["resources"][number];
+/** One HyperService's readiness row — pip (green ready / amber degraded) + name + (kind or node) + the
+ *  root-cause detail when degraded. Tap to open that HyperService's detail page. */
+const HyperlinkReadinessRow = (props: {
+  readonly res: NodeStatusValue["services"][number];
   readonly node: NodeRef;
   /** Show the node id on the right (cross-node "needs attention" list) instead of the kind. */
   readonly showNode?: boolean;
@@ -1455,19 +2132,25 @@ const ResourceReadinessRow = (props: {
   );
 };
 
-/** One node's card on the health board — status dot + name + stats (uptime · ready/total · resource
- *  count), then its full resource roster (each tappable). Tap the header for the node's full screen.
- *  Pure: the status value is read once by {@link HealthBoard} and passed in. @since 1.0.0 */
+/** One node's card on the health board — status dot + name + stats (uptime · ready/total · service
+ *  count), then its full service roster (each tappable). Tap the header for the node's full screen.
+ *  Pure: the connection state is read once by {@link HealthBoard} and passed in. */
 const NodeHealthCard = (props: {
   readonly node: NodeRef;
-  readonly s: NodeStatusValue | undefined;
+  readonly state: NodeConnState;
   readonly history: ReadonlyArray<number>;
   readonly onOpen: () => void;
-  readonly onOpenResource: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
-  const s = props.s;
-  const ready = s !== undefined ? s.resources.filter((x) => x.ready).length : 0;
-  const total = s !== undefined ? s.resources.length : 0;
+  const s = props.state._tag === "Ready" ? props.state.status : undefined;
+  const ready = s !== undefined ? s.services.filter((x) => x.ready).length : 0;
+  const total = s !== undefined ? s.services.length : 0;
+  const subtitle =
+    s !== undefined
+      ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.serviceCount} service${s.serviceCount === 1 ? "" : "s"}`
+      : props.state._tag === "Failed"
+        ? "unreachable — missing same-origin runtime transport"
+        : "connecting…";
   return (
     <div className="rounded-lg border bg-card">
       <button
@@ -1475,13 +2158,19 @@ const NodeHealthCard = (props: {
         onClick={props.onOpen}
         className="flex w-full items-center gap-2.5 rounded-t-lg px-2 py-2 text-left hover:bg-muted"
       >
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: nodeColor(s) }} />
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: nodeConnColor(props.state) }}
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{displayName(props.node.id)}</span>
-          <span className="mt-0.5 block text-[0.7rem] leading-tight text-muted-foreground">
-            {s !== undefined
-              ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.resourceCount} resource${s.resourceCount === 1 ? "" : "s"}`
-              : "connecting…"}
+          <span
+            className="mt-0.5 block text-[0.7rem] leading-tight"
+            style={{ color: props.state._tag === "Failed" ? "#ef4444" : undefined }}
+          >
+            <span className={props.state._tag === "Failed" ? undefined : "text-muted-foreground"}>
+              {subtitle}
+            </span>
           </span>
         </span>
         <span className="shrink-0 text-muted-foreground">›</span>
@@ -1494,17 +2183,17 @@ const NodeHealthCard = (props: {
               {ready}/{total}
             </span>
           </div>
-          <Sparkline points={props.history} color={nodeColor(s)} />
+          <Sparkline points={props.history} color={nodeConnColor(props.state)} />
         </div>
       ) : null}
-      {s !== undefined && s.resources.length > 0 ? (
+      {s !== undefined && s.services.length > 0 ? (
         <ul className="space-y-0.5 border-t px-1 py-1">
-          {s.resources.map((res) => (
-            <ResourceReadinessRow
+          {s.services.map((res) => (
+            <HyperlinkReadinessRow
               key={res.key}
               res={res}
               node={props.node}
-              onOpen={() => props.onOpenResource(res.key)}
+              onOpen={() => props.onOpenHyperlink(res.key)}
             />
           ))}
         </ul>
@@ -1515,7 +2204,7 @@ const NodeHealthCard = (props: {
 
 /** The single node-status **die** button (top-right): one pip per node, coloured by its status — a die
  *  face for 1–9 nodes, then 3 rows + more columns. Tap to open the **health board** (full screen).
- *  Renders nothing for a nodeless (local) group. @since 1.0.0 */
+ *  Renders nothing for a nodeless (local) group. */
 export const NodeBar = (props: {
   readonly group: GroupNode;
   readonly onOpen: () => void;
@@ -1548,35 +2237,73 @@ export const NodeBar = (props: {
   );
 };
 
-/** The full-screen **health board** (opened from the die): a top stat strip, then degraded resources
- *  across **every** node first (with their root-cause detail — tap → that resource's detail), then a
- *  card per node (status · uptime · ready/total · resource count, tap → its full screen) with its full
- *  resource roster. Reads each node's `NodeStatus` once (the node list is stable for a group, so the
- *  per-node reads keep a constant hook order; bundles are cached per runtime+node). @since 1.0.0 */
+/** The full-screen **health board** (opened from the die): a top stat strip, then degraded HyperServices
+ *  across **every** node first (with their root-cause detail — tap → that HyperService's detail), then a
+ *  card per node (status · uptime · ready/total · service count, tap → its full screen) with its full
+ *  service roster. Reads each node's node status once (the node list is stable for a group, so the
+ *  per-node reads keep a constant hook order; bundles are cached per runtime+node). */
 export const HealthBoard = (props: {
   readonly group: GroupNode;
   readonly onBack: () => void;
   readonly onOpenNode: (node: NodeRef) => void;
-  readonly onOpenResource: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
   const nodes = nodesOf(props.group);
-  const rows = nodes.map((node) => {
-    const bundle = useNodeBundle(node);
-    const r = useAtomValue(bundle.status);
-    const h = useAtomValue(bundle.health);
-    return {
-      node,
-      s: AsyncResult.isSuccess(r) ? r.value : undefined,
-      history: AsyncResult.isSuccess(h) ? h.value : [],
-    };
-  });
-  const degraded = rows.flatMap(({ node, s }) =>
-    (s?.resources ?? []).filter((x) => !x.ready).map((res) => ({ node, res })),
+  // Each node's live status is read by its own `NodeHealthRow` child (hooks at the child's top level —
+  // not in a `.map` over the node list, which the Rules of Hooks forbid and which would break if a
+  // group ever gained/lost a node). The children report their status up so this board can compute the
+  // cross-node aggregates (ready/total, degraded HyperServices, degraded nodes). Statuses arrive async
+  // (the underlying atoms start "connecting"), so this reporting adds no flash the direct reads didn't.
+  const [stateMap, setStateMap] = React.useState<ReadonlyMap<string, NodeConnState>>(
+    () => new Map(),
   );
-  const total = rows.reduce((n, { s }) => n + (s?.resources.length ?? 0), 0);
-  const ready = rows.reduce((n, { s }) => n + (s?.resources.filter((x) => x.ready).length ?? 0), 0);
-  const degradedNodes = rows.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
-  const healthy = degradedNodes === 0;
+  const reportState = React.useCallback((id: string, state: NodeConnState): void => {
+    setStateMap((prev) => {
+      const next = new Map(prev);
+      next.set(id, state);
+      return next;
+    });
+  }, []);
+  const statuses = nodes.map((node) => ({
+    node,
+    state: stateMap.get(node.id) ?? ({ _tag: "Connecting" } satisfies NodeConnState),
+  }));
+  const degraded = statuses.flatMap(({ node, state }) =>
+    (state._tag === "Ready" ? state.status.services : [])
+      .filter((x) => !x.ready)
+      .map((res) => ({ node, res })),
+  );
+  const total = statuses.reduce(
+    (n, { state }) => n + (state._tag === "Ready" ? state.status.services.length : 0),
+    0,
+  );
+  const ready = statuses.reduce(
+    (n, { state }) =>
+      n + (state._tag === "Ready" ? state.status.services.filter((x) => x.ready).length : 0),
+    0,
+  );
+  const live = statuses.filter(({ state }) => state._tag === "Ready").length;
+  const failed = statuses.filter(({ state }) => state._tag === "Failed").length;
+  const pending = statuses.some(({ state }) => state._tag === "Connecting");
+  const degradedNodes = statuses.filter(
+    ({ state }) =>
+      state._tag === "Ready" && (!state.status.up || state.status.status === "degraded"),
+  ).length;
+  const healthy = !pending && failed === 0 && degradedNodes === 0;
+  const headline = pending
+    ? `connecting… ${live}/${nodes.length}`
+    : failed > 0
+      ? `⚠ ${failed}/${nodes.length} unreachable`
+      : healthy
+        ? "all healthy"
+        : `⚠ ${degradedNodes}/${nodes.length} degraded`;
+  const headlineColor = pending
+    ? "#64748b"
+    : failed > 0
+      ? "#ef4444"
+      : healthy
+        ? "#22c55e"
+        : "#eab308";
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-y-auto safe-area landscape:h-auto landscape:min-h-[100dvh]">
       <header className="flex items-center gap-2">
@@ -1584,17 +2311,24 @@ export const HealthBoard = (props: {
           ← back
         </Button>
         <strong className="flex-1 truncate text-base">⬢ Health</strong>
-        <span className="text-sm font-medium" style={{ color: healthy ? "#22c55e" : "#eab308" }}>
-          {healthy ? "all healthy" : `⚠ ${degradedNodes}/${nodes.length} degraded`}
+        <span className="text-sm font-medium" style={{ color: headlineColor }}>
+          {headline}
         </span>
       </header>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <HealthStat label="nodes ok" value={`${nodes.length - degradedNodes}/${nodes.length}`} />
-        <HealthStat label="resources ready" value={`${ready}/${total}`} />
+        <HealthStat
+          label="nodes ok"
+          value={
+            pending || failed > 0
+              ? `${live}/${nodes.length}`
+              : `${nodes.length - degradedNodes}/${nodes.length}`
+          }
+        />
+        <HealthStat label="HyperServices ready" value={`${ready}/${total}`} />
         <HealthStat
           label="needs attention"
-          value={`${degraded.length}`}
-          tone={degraded.length > 0 ? "#eab308" : undefined}
+          value={`${degraded.length + failed}`}
+          tone={degraded.length + failed > 0 ? (failed > 0 ? "#ef4444" : "#eab308") : undefined}
         />
       </div>
       {degraded.length > 0 ? (
@@ -1604,12 +2338,12 @@ export const HealthBoard = (props: {
           </h2>
           <ul className="space-y-0.5">
             {degraded.map(({ node, res }) => (
-              <ResourceReadinessRow
+              <HyperlinkReadinessRow
                 key={`${node.id}:${res.key}`}
                 res={res}
                 node={node}
                 showNode
-                onOpen={() => props.onOpenResource(res.key)}
+                onOpen={() => props.onOpenHyperlink(res.key)}
               />
             ))}
           </ul>
@@ -1620,14 +2354,13 @@ export const HealthBoard = (props: {
           nodes · {nodes.length}
         </h2>
         <div className="space-y-2">
-          {rows.map(({ node, s, history }) => (
-            <NodeHealthCard
+          {nodes.map((node) => (
+            <NodeHealthRow
               key={node.id}
               node={node}
-              s={s}
-              history={history}
+              onState={reportState}
               onOpen={() => props.onOpenNode(node)}
-              onOpenResource={props.onOpenResource}
+              onOpenHyperlink={props.onOpenHyperlink}
             />
           ))}
         </div>
@@ -1636,17 +2369,47 @@ export const HealthBoard = (props: {
   );
 };
 
-/** Reads one resource's readiness from its node's `NodeStatus` (the node computes it — SSOT). Always
+/** One node's health card for {@link HealthBoard}. Calls the per-node status/health hooks at its own
+ *  top level (Rules-of-Hooks safe) and reports the connection state up so the board can aggregate. */
+const NodeHealthRow = (props: {
+  readonly node: NodeRef;
+  readonly onState: (id: string, state: NodeConnState) => void;
+  readonly onOpen: () => void;
+  readonly onOpenHyperlink: (serviceKey: string) => void;
+}): React.ReactElement => {
+  const bundle = NodeView.use(props.node);
+  const r = useAtomValue(bundle.status);
+  const h = useAtomValue(bundle.health);
+  const state = nodeConnState(r);
+  const history = AsyncResult.isSuccess(h) ? h.value : [];
+  const { onState, node } = props;
+  // Depend on `r` (atom result identity), not the derived `state` object — a fresh `{ _tag }` each
+  // render would re-fire the effect and loop setState.
+  React.useEffect(() => {
+    onState(node.id, nodeConnState(r));
+  }, [onState, node.id, r]);
+  return (
+    <NodeHealthCard
+      node={node}
+      state={state}
+      history={history}
+      onOpen={props.onOpen}
+      onOpenHyperlink={props.onOpenHyperlink}
+    />
+  );
+};
+
+/** Reads one HyperService's readiness from its node's node status (the node computes it — SSOT). Always
  *  has a node (the public wrapper renders nothing for a nodeless tag). Shows **only when degraded** —
- *  nothing while ready/connecting, so the banner only takes space when there's a problem. @since 1.0.0 */
+ *  nothing while ready/connecting, so the banner only takes space when there's a problem. */
 const ReadinessBannerInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;
 }): React.ReactElement | null => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
+  const r = useAtomValue(NodeView.use(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const key = tagWireKey(props.tag);
-  const readiness = s?.resources.find((x) => x.key === key);
+  const readiness = s?.services.find((x) => x.key === key);
   if (readiness === undefined || readiness.ready) return null; // ready/connecting → no banner
   return (
     <div
@@ -1665,28 +2428,28 @@ const ReadinessBannerInner = (props: {
   );
 };
 
-/** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
- *  read from its node's `NodeStatus` (the same SSOT the health board uses). Renders nothing while the
- *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem.
- *  @since 1.0.0 */
-export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const node = resourceNodeRef(props.tag);
+/** A HyperService's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
+ *  read from its node's node status (the same SSOT the health board uses). Renders nothing while the
+ *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem. */
+export const HyperlinkReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
+  const node = serviceNodeRef(props.tag);
   if (node === undefined) return null;
   return <ReadinessBannerInner tag={props.tag} node={node} />;
 };
 
-/** Fullscreen node view: header + each served resource's readiness (tap → that resource's page).
- *  Graphs land with node metrics. @since 1.0.0 */
+/** Fullscreen node view: header + each served HyperService's readiness (tap → that HyperService's page).
+ *  Graphs land with node metrics. */
 export const NodeDetail = (props: {
   readonly node: NodeRef;
   readonly onBack: () => void;
-  /** Open a served resource's detail page, by its wire key (`NodeStatus.resources[].key`). */
-  readonly onOpenResource: (resourceKey: string) => void;
+  /** Open a served HyperService's detail page, by its wire key (`Node.Status.services[].key`). */
+  readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
-  const bundle = useNodeBundle(props.node);
+  const bundle = NodeView.use(props.node);
   const r = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const color = nodeColor(s);
+  const state = nodeConnState(r);
+  const s = state._tag === "Ready" ? state.status : undefined;
+  const color = nodeConnColor(state);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible">
       <div className="flex items-center gap-2">
@@ -1695,23 +2458,36 @@ export const NodeDetail = (props: {
         </Button>
         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
         <strong className="flex-1 truncate text-base">{displayName(props.node.id)}</strong>
-        <span className="text-sm text-muted-foreground">{s !== undefined ? (s.up ? s.status : "down") : "…"}</span>
+        <span
+          className="text-sm"
+          style={{ color: state._tag === "Failed" ? "#ef4444" : undefined }}
+        >
+          <span className={state._tag === "Failed" ? undefined : "text-muted-foreground"}>
+            {s !== undefined
+              ? s.up
+                ? s.status
+                : "down"
+              : state._tag === "Failed"
+                ? "unreachable"
+                : "…"}
+          </span>
+        </span>
       </div>
       {s !== undefined ? (
         <>
           <div className="flex gap-3">
             <Stat label="uptime" value={fmtUptime(s.uptimeMillis)} />
-            <Stat label="resources" value={String(s.resourceCount)} />
+            <Stat label="services" value={String(s.serviceCount)} />
             <Stat label="status" value={s.status} />
           </div>
           <div className="max-h-[38dvh] shrink-0 overflow-auto rounded-xl border bg-card p-3">
-            <div className="mb-2 text-sm font-semibold">resources</div>
+            <div className="mb-2 text-sm font-semibold">services</div>
             <ul className="space-y-1">
-              {s.resources.map((res) => (
+              {s.services.map((res) => (
                 <li key={res.key}>
                   <button
                     type="button"
-                    onClick={() => props.onOpenResource(res.key)}
+                    onClick={() => props.onOpenHyperlink(res.key)}
                     className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
                   >
                     <span
@@ -1733,11 +2509,690 @@ export const NodeDetail = (props: {
             <div className="shrink-0 border-b px-3 py-2 text-sm font-semibold">logs</div>
             <LogStream bundle={{ logs: bundle.logs }} className="flex-1 py-1" />
           </div>
-          {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with NodeStatus.metrics. */}
+          {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with status metrics. */}
         </>
+      ) : state._tag === "Failed" ? (
+        <div className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: "#ef4444", color: "#ef4444" }}>
+          unreachable — provide this node in the dashboard runtime (e.g.{" "}
+          <code className="text-xs">Hyperlink.ws(Node, {"{ url: \"/rpc\" }"})</code> for a
+          same-origin browser path). The node&apos;s host endpoints are for peers/servers, not for
+          the page to open directly.
+        </div>
       ) : (
         <div className="text-muted-foreground">connecting to node…</div>
       )}
     </div>
   );
+};
+
+// ============================================================================
+// Widget registry — the built-in set
+// ============================================================================
+
+/** A HyperService's readiness as a small "badge dot": a border-only **green** circle when ready, a filled
+ *  **amber** one when not — the UI's ready/degraded colours (`#22c55e` / `#eab308`, as the readiness
+ *  pips). Reads its node's node status — the SSOT the overlay uses. */
+const ReadinessDotInner = (props: {
+  readonly tag: unknown;
+  readonly node: NodeRef;
+}): React.ReactElement => {
+  const r = useAtomValue(NodeView.use(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const readiness = s?.services.find((x) => x.key === tagWireKey(props.tag));
+  const ready = readiness === undefined || readiness.ready; // loading/unknown → ready (empty)
+  return (
+    <span
+      className="size-3.5 shrink-0 rounded-full border"
+      style={ready ? { borderColor: "#22c55e" } : { borderColor: "#eab308", backgroundColor: "#eab308" }}
+      aria-label={ready ? "ready" : "degraded"}
+      title={ready ? "ready" : (readiness?.detail ?? "degraded")}
+    />
+  );
+};
+
+/** The plain-HyperService readiness dot — an empty badge when ready, filled when degraded. Nothing for a
+ *  nodeless tag (no node computes its readiness). @public */
+export const ReadinessDot = (props: { readonly tag: unknown }): React.ReactElement | null => {
+  const node = serviceNodeRef(props.tag);
+  if (node === undefined) return null;
+  return <ReadinessDotInner tag={props.tag} node={node} />;
+};
+
+/**
+ * Basic fallback card — a HyperService whose kind has no registered widget (a bare `…/Hyperlink`, or an
+ * unregistered kind). Shows the HyperService's name, its kind, and a degraded banner; a richer card is
+ * left to a dedicated widget registered for that kind. @public
+ */
+export const FallbackCard = (props: WidgetProps): React.ReactElement => (
+  <Card>
+    <CardContent className="p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-medium text-foreground">{props.name}</span>
+        {/* no operational status ref → the readiness dot fills the status slot (same as HyperlinkCard) */}
+        <ReadinessDot tag={props.tag} />
+      </div>
+      <HyperlinkReadinessBanner tag={props.tag} />
+    </CardContent>
+  </Card>
+);
+
+/**
+ * The card for a plain HyperService — a bare `Hyperlink.Service` with no richer widget (a dependency like a
+ * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
+ * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
+ */
+export const HyperlinkCard = (props: {
+  readonly tag: LeafTag;
+  readonly name: string;
+  /** Unused — parent View Cell owns activation when present. */
+  readonly onOpen?: (tag: LeafTag) => void;
+}): React.ReactElement => {
+  const node = serviceNodeRef(props.tag);
+  return (
+    <Card className="relative">
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2">
+          <span className="flex-1 truncate font-medium text-foreground">{props.name}</span>
+          <ReadinessDot tag={props.tag} />
+        </div>
+        {node !== undefined ? (
+          <div className="mt-2 text-[0.8rem] text-muted-foreground">{displayName(node.id)}</div>
+        ) : null}
+      </CardContent>
+      <DegradedOverlay tag={props.tag} />
+    </Card>
+  );
+};
+
+// Each built-in adapts a typed card to the registry's LeafTag props. Registered under its kind, so
+// the matching guard recovers the tag's type at render — runtime-discriminated, cast-free.
+/** One node's row in a fleet-health card: a coloured pip (reachable ok/degraded, or unreachable) +
+ *  the node name + its state. */
+const FleetNodeRow = (props: { readonly node: string; readonly report: NodeReport }): React.ReactElement => {
+  const color =
+    props.report._tag === "Unreachable"
+      ? "#ef4444"
+      : props.report.status === "degraded"
+        ? "#eab308"
+        : "#22c55e";
+  const label = props.report._tag === "Unreachable" ? "unreachable" : props.report.status;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">{displayName(props.node)}</span>
+      <span className="shrink-0" style={{ color }}>{label}</span>
+    </div>
+  );
+};
+
+/** Fleet-status rollup colours — ok / degraded / partial (any node unreachable). */
+const FLEET_STATUS: Record<string, string> = { ok: "#22c55e", degraded: "#eab308", partial: "#ef4444" };
+
+/**
+ * The card for a **FleetHealth** HyperService — surfaces its two `fleet` fields: the `status` rollup
+ * (ok / degraded / partial) as the header badge, and the `byNode` map as a pip-per-node roster
+ * (Reachable ok/degraded, or Unreachable when a peer is down). Read-only. @public
+ */
+export const FleetHealthCard = (props: {
+  readonly tag: FleetHealthTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: FleetHealthTag) => void;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = Observe.use(props.tag, FleetHealthView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const byNodeR = useAtomValue(bundle.byNode);
+  const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  return (
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>
+      </div>
+      <div className="flex flex-col gap-1">
+        {rows.length === 0 ? (
+          <div className="text-xs text-muted-foreground">connecting…</div>
+        ) : (
+          rows.map(([node, report]) => <FleetNodeRow key={node} node={node} report={report} />)
+        )}
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </DrillRoot>
+  );
+};
+
+/** One node's count as a labelled bar — the per-node breakdown for the telemetry + shard-map cards. */
+const NodeCountRow = (props: {
+  readonly node: string;
+  readonly count: number;
+  readonly max: number;
+}): React.ReactElement => (
+  <div className="flex items-center gap-2 text-xs">
+    <span className="w-16 shrink-0 truncate text-muted-foreground">{displayName(props.node)}</span>
+    <Bar value={props.count} max={props.max} color="#3b82f6" />
+    <span className="w-6 shrink-0 text-right tabular-nums text-foreground">{props.count}</span>
+  </div>
+);
+
+/**
+ * The card for a **Telemetry** HyperService — surfaces its fleet folds: `fleetInFlight` (in-flight across
+ * the whole fleet) as the headline number, `inFlightByNode` as a bar-per-node breakdown, plus this
+ * node's live metric count (from `snapshot`). Read-only. @public
+ */
+export const TelemetryCard = (props: {
+  readonly tag: TelemetryTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: TelemetryTag) => void;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = Observe.use(props.tag, TelemetryView.pack);
+  const fleetR = useAtomValue(bundle.fleetInFlight);
+  const byNodeR = useAtomValue(bundle.inFlightByNode);
+  const countR = useAtomValue(bundle.metricCount);
+  const fleet = AsyncResult.isSuccess(fleetR) ? fleetR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const count = AsyncResult.isSuccess(countR) ? countR.value : undefined;
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  return (
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        {count !== undefined ? (
+          <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
+            {count} metrics
+          </span>
+        ) : null}
+      </div>
+      <div className="mb-3 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{fleet}</span>
+        <span className="text-xs text-muted-foreground">in-flight · fleet total</span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </DrillRoot>
+  );
+};
+
+/**
+ * The card for a **ShardMap** HyperService — a partitioned key/value mesh. Surfaces its fleet folds:
+ * `size` (entries across the whole fleet) as the headline, `sizeByNode` as a bar-per-node breakdown,
+ * plus this node's own shard (`sizeLocal`) as a footnote. Read-only. @public
+ */
+export const ShardMapCard = (props: {
+  readonly tag: ShardMapTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: ShardMapTag) => void;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = Observe.use(props.tag, ShardMapView.pack);
+  const sizeR = useAtomValue(bundle.size);
+  const byNodeR = useAtomValue(bundle.sizeByNode);
+  const localR = useAtomValue(bundle.sizeLocal);
+  const size = AsyncResult.isSuccess(sizeR) ? sizeR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const local = AsyncResult.isSuccess(localR) ? localR.value : undefined;
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  return (
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
+          {rows.length} shard{rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="mb-3 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{size}</span>
+        <span className="text-xs text-muted-foreground">entries · fleet total</span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+      </div>
+      {local !== undefined ? (
+        <div className="mt-2 text-[0.7rem] text-muted-foreground">this node holds {local}</div>
+      ) : null}
+      <DegradedOverlay tag={props.tag} />
+    </DrillRoot>
+  );
+};
+
+/** One labelled counter for the gate card's outcome row. */
+const GateCounter = (props: {
+  readonly label: string;
+  readonly value: number;
+  readonly color: string;
+}): React.ReactElement => (
+  <div className="flex flex-col gap-0.5">
+    <span className="tabular-nums text-sm font-semibold" style={{ color: props.color }}>{props.value}</span>
+    <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">{props.label}</span>
+  </div>
+);
+
+/**
+ * The card for a **Gate** (concurrency gate) — surfaces its live counters: `inFlight` /
+ * `concurrency` as a utilization gauge headline (plus `waiting` backlog), the completed / failed /
+ * interrupted outcome tallies, and the mean run duration. Read-only. @public
+ */
+export const GateCard = (props: {
+  readonly tag: GateTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: GateTag) => void;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = Observe.use(props.tag, GateView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const concurrency = s !== undefined ? s.concurrency : 0;
+  const inFlight = s !== undefined ? s.inFlight : 0;
+  const waiting = s !== undefined ? s.waiting : 0;
+  const completed = s !== undefined ? s.completed : 0;
+  const failed = s !== undefined ? s.failed : 0;
+  const interrupted = s !== undefined ? s.interrupted : 0;
+  const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : undefined;
+  return (
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
+          limit {concurrency}
+        </span>
+      </div>
+      <div className="mb-1.5 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{inFlight}</span>
+        <span className="text-xs text-muted-foreground">in-flight · {waiting} waiting</span>
+      </div>
+      <div className="mb-3">
+        <Bar value={inFlight} max={Math.max(1, concurrency)} color="#3b82f6" />
+      </div>
+      <div className="flex items-center gap-6">
+        <GateCounter label="done" value={completed} color="#22c55e" />
+        <GateCounter label="failed" value={failed} color="#ef4444" />
+        <GateCounter label="interrupted" value={interrupted} color="#a1a1aa" />
+        {avgMs !== undefined ? (
+          <div className="ml-auto text-[0.7rem] text-muted-foreground">avg {avgMs}ms</div>
+        ) : null}
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </DrillRoot>
+  );
+};
+
+// ── Fullscreen detail pages for the newer kinds ──────────────────────────────
+// Each is a DetailScreen fed an ordered list of `sections`; the Deck auto-packs them into pages by
+// measuring against the viewport. Live/hook-heavy blocks (charts, logs, long lists) are marked
+// `grow` so they stretch to fill and are measured as a spacer, not double-mounted.
+
+/**
+ * Fullscreen detail for a `WorkPool.priority` queue — stats, lanes, controls, the throughput chart,
+ * and the live log stream, auto-paginated. Fills the drill-in that the grid {@link PriorityCard}
+ * opens. @public
+ */
+export const PriorityDetail = (props: {
+  readonly tag: PriorityTag;
+  readonly name?: string;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
+}): React.ReactElement => {
+  const bundle = Observe.use(props.tag, PriorityView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const lifecycleR = useAtomValue(bundle.lifecycle);
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
+  const paused = lifecycleTag === "Paused";
+  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
+  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
+  const max = Math.max(1, ...lanes.map(([, n]) => n));
+  const [locked, setLocked] = React.useState(true);
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "stats",
+      content: (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="pending" value={String(pending)} />
+          <Stat label="done" value={String(s?.completed ?? 0)} />
+          <Stat label="lanes" value={String(lanes.length)} />
+          <Stat label="lifecycle" value={statusKey(lifecycleTag)} />
+        </div>
+      ),
+    },
+    {
+      key: "lanes",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">lanes</div>
+          <div className="flex flex-col gap-1.5">
+            {lanes.length === 0 ? (
+              <div className="text-xs text-muted-foreground">no lanes</div>
+            ) : (
+              lanes.map(([lane, count]) => <LaneRow key={lane} lane={lane} count={count} max={max} />)
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "controls",
+      content: (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {paused ? (
+            <ActionButton atom={bundle.resume} label="resume" icon={<Play className="size-4" />} disabled={locked} />
+          ) : (
+            <ActionButton atom={bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
+          )}
+          <ActionButton atom={bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
+          <ActionButton atom={bundle.stop} label="stop" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
+          <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+        </div>
+      ),
+    },
+    {
+      key: "chart",
+      grow: true,
+      minHeight: 190,
+      content: <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>,
+    },
+    {
+      key: "logs",
+      grow: true,
+      minHeight: 200,
+      content: <LogStream bundle={bundle} className="h-full rounded-xl border bg-card" />,
+    },
+  ];
+  return (
+    <DetailScreen
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      chrome={props.chrome}
+      vtKey={`res-${props.tag.key}`}
+      readinessTag={props.tag}
+      badge={<Badge color={PRIORITY_PHASE[statusKey(lifecycleTag)] ?? "#22c55e"}>{statusKey(lifecycleTag)}</Badge>}
+      sections={sections}
+    />
+  );
+};
+
+/** One metric datum as a row — id + kind + its reading (count / gauge value / histogram count). */
+const MetricRow = (props: { readonly datum: MetricDatum }): React.ReactElement => {
+  const d = props.datum;
+  const value = d._tag === "Gauge" ? d.value : d._tag === "Counter" ? d.count : d.count;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="min-w-0 flex-1 truncate text-foreground">{d.id}</span>
+      <span className="shrink-0 rounded border px-1 text-[0.65rem] text-muted-foreground">{d._tag.toLowerCase()}</span>
+      <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">{value}</span>
+    </div>
+  );
+};
+
+/**
+ * Fullscreen detail for a **Telemetry** mesh — page 1 the fleet in-flight total + per-node bars,
+ * page 2 this node's full metric registry (id + kind + reading), which the card only counts. @public
+ */
+export const TelemetryDetail = (props: {
+  readonly tag: TelemetryTag;
+  readonly name?: string;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
+}): React.ReactElement => {
+  const bundle = Observe.use(props.tag, TelemetryView.pack);
+  const fleetR = useAtomValue(bundle.fleetInFlight);
+  const byNodeR = useAtomValue(bundle.inFlightByNode);
+  const countR = useAtomValue(bundle.metricCount);
+  const metricsR = useAtomValue(bundle.metrics);
+  const fleet = AsyncResult.isSuccess(fleetR) ? fleetR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const count = AsyncResult.isSuccess(countR) ? countR.value : undefined;
+  const metrics = AsyncResult.isSuccess(metricsR) ? metricsR.value : [];
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  const sorted = [...metrics].sort((a, b) => a.id.localeCompare(b.id));
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "overview",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 flex items-baseline gap-1.5">
+            <span className="text-3xl font-semibold tabular-nums text-foreground">{fleet}</span>
+            <span className="text-xs text-muted-foreground">in-flight · fleet total</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "metrics",
+      grow: true,
+      minHeight: 220,
+      content: (
+        <div className="flex h-full min-h-0 flex-col rounded-xl border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">{sorted.length} metrics (this node)</div>
+          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+            {sorted.length === 0 ? (
+              <div className="text-xs text-muted-foreground">no metrics</div>
+            ) : (
+              sorted.map((d) => <MetricRow key={`${d._tag}:${d.id}`} datum={d} />)
+            )}
+          </div>
+        </div>
+      ),
+    },
+  ];
+  return (
+    <DetailScreen
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      chrome={props.chrome}
+      vtKey={`res-${props.tag.key}`}
+      badge={count !== undefined ? <Badge color="#94a3b8">{count} metrics</Badge> : undefined}
+      sections={sections}
+    />
+  );
+};
+
+/**
+ * Fullscreen detail for a **ShardMap** mesh — the entry count across the fleet, the per-node shard
+ * sizes as bars, and this node's own shard. A single richer page (the card is a compact preview).
+ * @public
+ */
+export const ShardMapDetail = (props: {
+  readonly tag: ShardMapTag;
+  readonly name?: string;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
+}): React.ReactElement => {
+  const bundle = Observe.use(props.tag, ShardMapView.pack);
+  const sizeR = useAtomValue(bundle.size);
+  const byNodeR = useAtomValue(bundle.sizeByNode);
+  const localR = useAtomValue(bundle.sizeLocal);
+  const size = AsyncResult.isSuccess(sizeR) ? sizeR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const local = AsyncResult.isSuccess(localR) ? localR.value : undefined;
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "shards",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 flex items-baseline gap-1.5">
+            <span className="text-3xl font-semibold tabular-nums text-foreground">{size}</span>
+            <span className="text-xs text-muted-foreground">entries · fleet total</span>
+          </div>
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">per shard</div>
+          <div className="flex flex-col gap-1.5">
+            {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+          </div>
+          {local !== undefined ? (
+            <div className="mt-3 text-xs text-muted-foreground">this node holds <strong className="text-foreground">{local}</strong></div>
+          ) : null}
+        </div>
+      ),
+    },
+  ];
+  return (
+    <DetailScreen
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      chrome={props.chrome}
+      vtKey={`res-${props.tag.key}`}
+      badge={<Badge color="#94a3b8">{rows.length} shard{rows.length === 1 ? "" : "s"}</Badge>}
+      sections={sections}
+    />
+  );
+};
+
+/**
+ * Fullscreen detail for a **FleetHealth** mesh — the status rollup and the full per-node roster
+ * (each peer Reachable ok/degraded or Unreachable), roomier than the grid card. @public
+ */
+export const FleetHealthDetail = (props: {
+  readonly tag: FleetHealthTag;
+  readonly name?: string;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
+}): React.ReactElement => {
+  const bundle = Observe.use(props.tag, FleetHealthView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const byNodeR = useAtomValue(bundle.byNode);
+  const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "roster",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">{rows.length} nodes</div>
+          <div className="flex flex-col gap-2">
+            {rows.length === 0 ? (
+              <div className="text-xs text-muted-foreground">connecting…</div>
+            ) : (
+              rows.map(([node, report]) => <FleetNodeRow key={node} node={node} report={report} />)
+            )}
+          </div>
+        </div>
+      ),
+    },
+  ];
+  return (
+    <DetailScreen
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      chrome={props.chrome}
+      vtKey={`res-${props.tag.key}`}
+      badge={<Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>}
+      sections={sections}
+    />
+  );
+};
+
+/**
+ * Fullscreen detail for a **Gate** gate — the in-flight gauge + outcome tallies of the card,
+ * plus the raw status fields the card omits (concurrency, mean + total duration, config version).
+ * @public
+ */
+export const GateDetail = (props: {
+  readonly tag: GateTag;
+  readonly name?: string;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
+}): React.ReactElement => {
+  const bundle = Observe.use(props.tag, GateView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const concurrency = s?.concurrency ?? 0;
+  const inFlight = s?.inFlight ?? 0;
+  const completed = s?.completed ?? 0;
+  const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : 0;
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "gauge",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-1.5 flex items-baseline gap-1.5">
+            <span className="text-3xl font-semibold tabular-nums text-foreground">{inFlight}</span>
+            <span className="text-xs text-muted-foreground">in-flight · {s?.waiting ?? 0} waiting · limit {concurrency}</span>
+          </div>
+          <Bar value={inFlight} max={Math.max(1, concurrency)} color="#3b82f6" />
+        </div>
+      ),
+    },
+    {
+      key: "outcomes",
+      content: (
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="done" value={String(completed)} />
+          <Stat label="failed" value={String(s?.failed ?? 0)} />
+          <Stat label="interrupted" value={String(s?.interrupted ?? 0)} />
+        </div>
+      ),
+    },
+    {
+      key: "timings",
+      content: (
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="avg run" value={`${avgMs}ms`} />
+          <Stat label="total time" value={`${Math.round((s?.totalDurationMs ?? 0) / 1000)}s`} />
+          <Stat label="config v" value={String(s?.configVersion ?? 0)} />
+        </div>
+      ),
+    },
+  ];
+  return (
+    <DetailScreen
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      chrome={props.chrome}
+      vtKey={`res-${props.tag.key}`}
+      readinessTag={props.tag}
+      badge={<Badge color="#94a3b8">limit {concurrency}</Badge>}
+      sections={sections}
+    />
+  );
+};
+
+/**
+ * Fallback-only widget registry for `<Dashboard>`. Default card/detail chrome comes from
+ * `Views.react` over `web/Dashboard.layer`. Prefer Dashboard `views` / `Views.only` for
+ * app cards; `forKey` / `withEntries` remain as a legacy escape hatch.
+ *
+ * @public
+ */
+export const base: WidgetRegistry<Widget> = {
+  byKey: HashMap.empty<string, Widget>(),
+  byKind: HashMap.empty<string, Widget>(),
+  fallback: FallbackCard,
 };
