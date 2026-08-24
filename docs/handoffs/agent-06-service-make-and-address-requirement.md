@@ -1966,6 +1966,108 @@ adds
 10. **Names.** `Node.of`, `NodeClient` / `NodeServer`, `Node.Of<S>`, `NodeSubset`, and whether the
     server protocol layers keep Effect's `…SocketServer` suffix.
 
+### 6.16 Node / address requirements — absorption, not a token (owner, 2026-08-21)
+
+Supersedes 6.8's `Node.Of<S>` and the `Node.DefaultAddress` token from the intermediate sketch. The
+token was a proxy for something the type cannot see, and it produced an inconsistency: a
+service-declared address could not discharge it, because services are merged *above* the node layer
+and nothing they output flows down into its requirements.
+
+**The rule (owner).** Which requirement a service carries depends on whether it was declared with an
+address.
+
+```
+service declared with an address     requires  DefaultNode
+service declared with neither        requires  NodeWithAddress
+```
+
+```
+NodeWithAddress                  = a node, which still needs an address
+DefaultNode                      = DefaultNode
+NodeWithAddress | DefaultNode    = DefaultNode
+```
+
+The absorption is plain subtyping — no conditional types, no runtime check:
+
+``` ts
+interface DefaultNode { … }
+interface NodeWithAddress extends DefaultNode { … }
+```
+
+Type-tested under `tsc --strict` 5.9.3:
+
+```
+Exclude<DefaultNode | NodeWithAddress, DefaultNode>   → never             the absorption
+Exclude<NodeWithAddress, never>                        → NodeWithAddress   nothing supplied one
+Exclude<NodeWithAddress, NodeWithAddress>              → never             a real node satisfies it
+Exclude<DefaultNode, NodeWithAddress>                  → DefaultNode       see "asymmetry" below
+```
+
+#### In use
+
+``` ts
+class Mail extends Hyperlink.Service<Mail>()("app/Mail", spec, Address.http(8080)) {}
+// Layer<Mail, never, Node.DefaultNode>
+```
+
+``` ts
+class Jobs extends Hyperlink.Service<Jobs>()("app/Jobs", spec) {}
+// Layer<Jobs, never, Node.NodeWithAddress>
+```
+
+``` ts
+// both present — Mail's address feeds the default node, Jobs rides along
+Layer.mergeAll(
+  Hyperlink.layer(Mail, mailImpl),
+  Hyperlink.layer(Jobs, jobsImpl)
+).pipe(
+  Layer.provide(
+    Node.default
+  )
+)
+```
+
+``` ts
+// only addressless services — nothing supplied an address
+Hyperlink.layer(Jobs, jobsImpl).pipe(
+  Layer.provide(
+    Node.default
+  )
+)
+// Node.NodeWithAddress unprovided
+```
+
+``` ts
+// supplying one turns the plain requirement into the satisfied one
+Hyperlink.layer(Jobs, jobsImpl).pipe(
+  Layer.provide(
+    Node.default.add(Address.http(8080))
+  )
+)
+```
+
+#### The model this preserves
+
+```
+one node, many services, many addresses
+addresses have exactly one owner — the node — and many sources
+a service never creates a node; a service-declared address is a contribution to one
+```
+
+Which is why per-service nodes, per-service sockets, and address-mints-a-node were all dropped: each
+of them fragments one node into N.
+
+#### Two things to settle
+
+1. **Asymmetry.** `Exclude<DefaultNode, NodeWithAddress>` is not `never`, so a real declared node does
+   not satisfy an address-carrying service. Binding `Mail` to `Worker` in its declaration avoids the
+   requirement entirely, but "declared an address" and "attach to a node later" are otherwise
+   mutually exclusive without a bridge that adopts the address onto the node.
+2. **Names read backwards from the hierarchy.** `NodeWithAddress` is the *narrower* type and
+   `DefaultNode` the wider one, which inverts what the names suggest. The relation is really
+   *needs an address supplied* vs *an address is in hand* — `Node.NeedsAddress` / `Node.Addressed`
+   would read the right way round.
+
 ## 7. Work order (owner, 2026-08-18)
 
 **Node/Address (§5) remains priority #1.** It is not the *first* task, because it will reshape
@@ -1988,6 +2090,10 @@ adds
 | b | `NodeMakeDef` brands `Self` from `Key` (§1.5) | c |
 | c | Delete `Node.Service` + its nine inline-target overloads | — |
 | d | `Store.Service` arity, `.add`, key literal (§1.6) | — |
+
+**Also designed, not yet ordered:** §6.16 (node/address requirements — absorption) and §10
+(Directory / Lookup — schema, storage, change propagation). §10 is the "reimagining and major work"
+the owner flagged for the Lookup node.
 
 Rationale: step 3 gives a full picture of everything else in motion before step 4 starts. Nothing
 in steps 2–3 is binding; the address model may invalidate any of it.
@@ -2571,6 +2677,237 @@ handler registration) not yet designed.
 1. Does the default-client Reference need a no-default alternative, or is `.make` enough?
 2. How does a requirement type carry N addresses without R becoming combinatorial?
 3. What exactly does `.make` return — class or value — and does it keep `class X extends` form?
+
+## 10. Directory / Lookup — schema, storage, change propagation (owner, 2026-08-21)
+
+Reached by asking what advertising is actually for. Four consumers, and they are not equal.
+
+```
+Hyperlink.lookupClient   Hyperlink.ts:6429   nodeless dial
+Hyperlink.peersLayer     Hyperlink.ts:7167   fleet siblings + hot-rebind
+dialHandoffPeer          Hyperlink.ts:3532   Node.shutdown handoff target
+Lookup.planUpdate        lookupPlanUpdate.ts:253   cutover impact
+```
+
+`lookupClient` tries Identity **first** and only falls back to the Directory:
+
+``` ts
+// src/Hyperlink.ts:6472
+const resolved = yield* identity.resolve(new Identity.ResolveRequest({ key: tag.key }))
+if (Option.isSome(resolved)) {
+  return resolved.value satisfies LookupDialEndpoint
+}
+```
+
+So for a singly-held service the Directory adds nothing — Identity already answers *where*. The
+Directory earns its keep only where the answer is a **set**: peers, planUpdate, handoff,
+FleetHealth, Advice.
+
+### 10.1 Three problems with the current shape
+
+**One row per node.** The store is keyed by `nodeKey` alone, so two protocols for one node cannot
+coexist — the second advertise overwrites the first:
+
+``` ts
+// src/internal/lookup.ts:99
+/** Mutable node directory — nodeKey → entry. */
+```
+
+``` ts
+// :236
+const prior = current.get(entry.nodeKey)
+next.set(entry.nodeKey, entry)
+```
+
+``` ts
+// src/internal/lookup.ts:16 — one dial, no endpoints map
+export type StoredEndpoint = {
+  readonly nodeKey: string
+  readonly kind: "Http" | "WebSocket" | "IpcSocket"
+  readonly url?: string
+  readonly path?: string
+}
+```
+
+Everything downstream is consistent with that assumption rather than buggy — `serves` is flat because
+there is one row, `node.kind` is used because there is one kind slot.
+
+**The producer never groups.** Both transport servers advertise the same node, and the row's kind
+comes from the node's preferred kind rather than the server doing the advertising:
+
+``` ts
+// src/internal/nodeServerCommon.ts:123 and :158
+const serves = entries.map((entry) => entry.wireKey)
+kind: advertiseNode.kind
+```
+
+**The change feed is row-level and lossy.** Every subscriber sees every fleet change and derives its
+own view, and a slow subscriber drops updates:
+
+``` ts
+// src/internal/lookup.ts:157, :162
+readonly directoryChanges: PubSub.PubSub<StoredDirectoryChange>
+/** Sliding buffer for directory / advice change subscribers. */
+```
+
+### 10.2 The schema — five relations
+
+Today this is three maps with implicit foreign keys and one denormalised column:
+
+``` ts
+// src/internal/lookup.ts:24
+export type StoredDirectoryEntry = StoredEndpoint & {
+  readonly serves: ReadonlyArray<string>
+}
+```
+
+```
+node       (nodeKey)                          PK nodeKey
+endpoint   (nodeKey, kind, url|path)          PK (nodeKey, kind)             FK node
+serving    (serviceKey, nodeKey, kind)        PK (serviceKey,nodeKey,kind)   FK endpoint
+claim      (serviceKey, nodeKey, kind)        PK serviceKey                  FK endpoint
+advice     (serviceKey, nodeKey)              PK serviceKey                  FK node
+```
+
+Every existing read is a query over that, and **the owner's protocol partition is just making
+`(nodeKey, kind)` the endpoint key**:
+
+```
+nodesServing(serviceKey)          serving ⋈ endpoint
+nodesServing(serviceKey, kind)    the same, filtered
+get(nodeKey)                      endpoint where nodeKey = ?
+Identity.resolve(serviceKey)      claim
+Advice.preferred(serviceKey)      advice
+planUpdate                        serving ⋈ endpoint, grouped by node
+```
+
+Note the relations are tiny and change rarely, so indexes and joins are not the win. The win is
+entirely in **who gets notified of what**.
+
+### 10.3 Storage — a narrow interface, not a query language
+
+Effect's cluster registry is the model: eight named operations, no filters, and a typed/encoded
+split with an adapter so the store is dumb strings.
+
+``` ts
+// unstable/cluster/RunnerStorage.ts:34
+readonly register: (runner: Runner, healthy: boolean) => Effect.Effect<MachineId, PersistenceError>
+readonly unregister: (address: RunnerAddress) => Effect.Effect<void, PersistenceError>
+readonly getRunners: Effect.Effect<Array<readonly [runner: Runner, healthy: boolean]>, PersistenceError>
+readonly setRunnerHealth: (address: RunnerAddress, healthy: boolean) => Effect.Effect<void, PersistenceError>
+readonly acquire: (…)
+readonly refresh: (…)
+readonly release: (…)
+readonly releaseAll: (address: RunnerAddress) => Effect.Effect<void, PersistenceError>
+```
+
+``` ts
+// :94 — the encoded half
+readonly register: (address: string, runner: string, healthy: boolean) => Effect.Effect<number, PersistenceError>
+```
+
+Ours, with the protocol in the key:
+
+``` ts
+readonly advertise: (endpoint: Endpoint, serves: ReadonlyArray<string>) => Effect<void>
+readonly withdraw: (nodeKey: string, kind: ProtocolKind) => Effect<void>
+readonly endpointsServing: (serviceKey: string, kind: ProtocolKind) => Effect<ReadonlyArray<Endpoint>>
+readonly endpointsOf: (nodeKey: string) => Effect<ReadonlyArray<Endpoint>>
+```
+
+Cluster also uses **leases** rather than bare presence — `acquire` / `refresh` / `release` — which is
+worth weighing against our claim-plus-liveness split.
+
+### 10.4 Change propagation — `SubscriptionRef`, and never sliding
+
+``` ts
+// SubscriptionRef.ts:4
+// A `SubscriptionRef<A>` stores the latest value, publishes the initial value, and publishes every
+// committed update … Updates are serialized so only one change is applied at a time.
+```
+
+``` ts
+// :102
+// The initial value is published during construction, so `changes` starts new subscribers with the
+// current value
+```
+
+That one property removes the snapshot-then-subscribe race `peersLayer` hand-manages today:
+
+``` ts
+// src/Hyperlink.ts:7167
+const slot = slots.get(nodeKey)
+const before = slot === undefined ? 0 : yield* Ref.get(slot.generation)
+```
+
+And where events must not be lost, Effect picks unbounded, not sliding:
+
+``` ts
+// unstable/cluster/Sharding.ts:253
+const events = yield* PubSub.unbounded<ShardingRegistrationEvent>()
+const getRegistrationEvents: Stream.Stream<ShardingRegistrationEvent> = Stream.fromPubSub(events)
+```
+
+### 10.5 Per-query subscriptions — `RcMap`
+
+One `SubscriptionRef` per `(serviceKey, kind)`, created on the first watcher and released when the
+last leaves:
+
+``` ts
+// RcMap.ts:4
+// An `RcMap` runs a lookup effect the first time a key is requested, shares the in-progress or
+// acquired resource with other callers for the same key, and tracks each caller through its current
+// `Scope`. When the last scope for a key closes, the resource can be released, kept alive for an
+// idle time, or removed by capacity limits.
+```
+
+``` ts
+Directory.watch(Jobs, "IpcSocket")
+// SubscriptionRef<ReadonlyArray<Endpoint>> — snapshot on subscribe, deltas after,
+// nothing about other services or other protocols
+```
+
+This is what makes the protocol partition load-bearing rather than cosmetic: an http rebind never
+wakes a unix subscriber.
+
+### 10.6 Rejected — `unstable/reactivity/Atom`
+
+It does have real dependency tracking:
+
+``` ts
+// unstable/reactivity/Atom.ts:4
+// The registry runs atom reads, remembers current values, tracks dependencies between atoms, starts
+// effects and streams, and cleans up atoms that are no longer used.
+```
+
+But it is built for UI state — browser storage, server-rendered values — and adopting it puts a
+reactive registry inside a transport service. `RcMap` + `SubscriptionRef` give the same caching and
+cleanup for this shape without importing that model.
+
+### 10.7 The summary
+
+```
+storage       narrow named ops, typed/encoded split      RunnerStorage
+schema        (nodeKey, kind) as the endpoint key        the owner's protocol partition
+state         SubscriptionRef per derived view           SubscriptionRef
+lifecycle     RcMap keyed by (serviceKey, kind)          RcMap
+events        PubSub.unbounded where loss is wrong       Sharding
+```
+
+### 10.8 Open
+
+1. **Should advertising be opt-in?** It is a soft default on every listen
+   (`nodeIpcServer.ts:59`). Identity covers singly-held services; the Directory is for fleets. If
+   advertising became opt-in, the double-advertise overwrite in 10.1 would be moot for most apps.
+2. **`nodesServing` returns rows per protocol now** — `peersLayer`, `planUpdate`, and the handoff
+   peer dial all treat "the node's entry" as singular and need to say which.
+3. **Leases vs claims.** Cluster uses `acquire` / `refresh` / `release`; we have Identity claims plus
+   separate liveness. Worth deciding whether they merge.
+4. **A Lookup node per machine** (§6.15 item 2) still open, and it is what any *generated* node
+   depends on to be reachable across a boundary. `Address.unixFromKey` covers the machine-local case
+   and is currently a stub — declared, typed, never resolved (`nodeMake.ts:75`).
+5. **Subsets become expressible on the wire** once `serves` is per-`(node, kind)`. The owner ruled
+   they need not be visible, so this is a side effect to leave unused, not a reason to do the work.
 
 ## Notes (Agent 6 — not owner decisions)
 
