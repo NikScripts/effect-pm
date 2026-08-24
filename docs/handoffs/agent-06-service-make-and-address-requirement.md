@@ -2113,6 +2113,166 @@ of them fragments one node into N.
    *needs an address supplied* vs *an address is in hand* — `Node.NeedsAddress` / `Node.Addressed`
    would read the right way round.
 
+### 6.17 Keyed addressing — a layer strategy, not an address (owner, 2026-08-21)
+
+A nodeless, addressless service still needs somewhere to listen and somewhere to dial. Both sides
+compute it from the service key, so nothing is published and nothing is looked up.
+
+**Keying is a property of the layer, not of an address.** `Address` holds concrete addresses only;
+naming a `keyed` address there conflates the two.
+
+``` ts
+class Worker extends Node.make("fleet/Worker") {}
+```
+
+``` ts
+class Mail extends Hyperlink.Service<Mail>()("app/Mail", spec, Worker) {}
+class Jobs extends Hyperlink.Service<Jobs>()("app/Jobs", spec, Worker) {}
+```
+
+``` ts
+Layer.mergeAll(
+  Hyperlink.layer(Mail, mailImpl),
+  Hyperlink.layer(Jobs, jobsImpl)
+).pipe(
+  Layer.provide(
+    NodeServer.layerKeyedIpcSocket
+  )
+)
+// binds ${Address.IpcSocketPrefix}/{app-Mail,app-Jobs}.sock
+```
+
+Client is the mirror and needs no registry — each service layer computes its own path from its own
+key:
+
+``` ts
+Layer.mergeAll(
+  Hyperlink.layer(Mail),
+  Hyperlink.layer(Jobs)
+).pipe(
+  Layer.provide(
+    NodeClient.layerKeyedIpcSocket
+  )
+)
+```
+
+#### Stability is the requirement
+
+The same key must always produce the same address. The existing derivation is deliberately the
+opposite — all three sources of drift have to go:
+
+``` ts
+// src/internal/nodeUnix.ts:382
+const safe = nodeKey.replace(/[/\\]/g, "-")
+return `/tmp/hyperlink-ts-${safe}-${now}-${dynamicInstanceSeq}.sock`
+//                                  ↑ clock   ↑ process-local counter
+```
+
+``` ts
+`${prefix}/${slug(key)}.sock`
+```
+
+#### Per-kind service, so protocols combine
+
+Keyed by kind, so merging two does not last-wins:
+
+``` ts
+interface Addressing<Kind extends ProtocolKind> {
+  readonly kind: Kind
+  readonly addressFor: (serviceKey: string) => Endpoint
+}
+```
+
+``` ts
+Layer.provide([
+  NodeServer.layerKeyedIpcSocket,
+  NodeServer.layerKeyedHttp
+])
+// every service on both protocols, derived once per protocol
+```
+
+```
+ipc          /var/run/acme            →  /var/run/acme/app-Mail.sock
+http         http://localhost:8080    →  http://localhost:8080/app-Mail
+websocket    ws://localhost:8080      →  ws://localhost:8080/app-Mail
+```
+
+#### Names, and why
+
+```
+NodeServer / NodeClient        modules            per RpcServer / RpcClient
+Addressing<Kind>               service            Effect service types are nouns — Protocol,
+                                                  HttpRouter, RpcSerialization, RunnerStorage
+layerKeyedIpcSocket            layer              the layer name is the variant word only, not the
+                                                  service noun — `layerJson: Layer<RpcSerialization>`
+Address.IpcSocketPrefix        Reference          flat PascalCase per References.ts
+Address.ipc(…)                 constructor        concrete addresses only
+```
+
+Variant suffixes track our own `ProtocolKind` literals rather than Effect's `Socket` — ours is the
+narrower concept and the literal is already on the wire:
+
+``` ts
+// src/internal/nodeCore.ts:88
+export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket"
+```
+
+``` ts
+// src/Directory.ts:33
+kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"])
+```
+
+Known one-character divergence: the wire literal is `WebSocket`, Effect spells identifiers
+`Websocket` (`layerProtocolWebsocket`). Identifiers follow Effect; the literal stays.
+
+#### `ipc`, not `unix` — one word
+
+`unix` and `nPipe` are two spellings of **one kind**, so the umbrella word is `ipc`:
+
+``` ts
+// src/internal/nodeNPipe.ts:58
+// Same `IpcSocket` kind; paths are `\\.\pipe\…`
+```
+
+A keyed address on Windows derives a `\\.\pipe\…` path, so it could never have been called `unix…`
+in the first place. `Node.nPipe` stays as the Windows constructor for the same kind.
+
+The library currently spells this transport four ways — `Address.unix`, `Hyperlink.protocolIpc`,
+`Node.ipcServer`, `ProtocolKind "IpcSocket"`. Settle on `ipc` across all of them rather than letting
+new names land on a fifth.
+
+#### What this deletes
+
+``` ts
+// src/internal/address.ts:246 — the sentinel, never resolved
+export const unixFromKey: UnixFromKeySentinel = { … }
+```
+
+``` ts
+// src/internal/nodeMake.ts:75 — its only handling
+if (item._tag === "UnixFromKey") {
+  // Resolved at bind — no concrete endpoint yet.
+  continue
+}
+```
+
+It also removes an ambiguity that was never resolved: `unixFromKey` derived from the **node** key,
+while these layers derive from **service** keys. Only the layer survives.
+
+#### Open
+
+1. **http and websocket keying puts the key in the path**, so every service shares one port — the
+   port is part of the prefix and is not derived. An ipc keyed address is unique on the machine; an
+   http one is only unique within a chosen port.
+2. **Node-bound services must be excluded** or they gain a second address nobody dials. The registry
+   can already tell them apart (`Hyperlink.ts:4490`, `nodeLogKey`).
+3. **Slug rules.** `nodeUnix.ts:382` only replaces `/` and `\`. Keys with other path-hostile
+   characters, and length limits on unix socket paths (~104 bytes on macOS), are unhandled.
+4. **`Address.IpcSocketPrefix` means different things per platform** — a directory on POSIX, a pipe
+   namespace on Windows.
+5. **`Addressing` is a placeholder.** The slot needs a noun for "service key → endpoint";
+   `Resolver`, `Locator`, and `Naming` fit equally.
+
 ## 7. Work order (owner, 2026-08-18)
 
 **Node/Address (§5) remains priority #1.** It is not the *first* task, because it will reshape
