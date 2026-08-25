@@ -61,6 +61,73 @@ describe("scanRepos", () => {
     ]);
   });
 
+  it("finds a checkout when `rootDir` itself is a linked worktree, not just its children", async () => {
+    listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root/epsilon" && query.path === ".") return { data: [file(".git")] };
+      if (query.directory === "/root/main-checkout" && query.path === ".git/worktrees") {
+        return { data: [dir("epsilon")] };
+      }
+      return { data: [] };
+    });
+    readMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root/epsilon" && query.path === ".git") {
+        return { data: { type: "text", content: "gitdir: /root/main-checkout/.git/worktrees/epsilon\n" } };
+      }
+      if (query.directory === "/root/main-checkout" && query.path === ".git/worktrees/epsilon/gitdir") {
+        return { data: { type: "text", content: "/root/epsilon/.git\n" } };
+      }
+      return { data: undefined };
+    });
+
+    const repos = await scanRepos("/root/epsilon");
+
+    expect(repos).toEqual([
+      {
+        repo: "main-checkout",
+        worktrees: [
+          { name: "(main)", path: "/root/main-checkout", isMain: true },
+          { name: "epsilon", path: "/root/epsilon", isMain: false },
+        ],
+      },
+    ]);
+  });
+
+  it("doesn't mistake a submodule nested under a worktree's gitdir for the worktree entry itself", async () => {
+    // A submodule checked out inside a linked worktree has a `.git` FILE whose
+    // content is a *relative*, further-nested path like
+    // `../../main/.git/worktrees/epsilon/modules/repos/effect` — it contains
+    // the same `/.git/worktrees/` marker a real worktree pointer has, but
+    // isn't one.
+    listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root" && query.path === ".") return { data: [dir("epsilon")] };
+      if (query.directory === "/root" && query.path === "epsilon") return { data: [dir(".git")] };
+      if (query.directory === "/root/epsilon" && query.path === ".git/worktrees") return Promise.reject(new Error("ENOENT"));
+      return { data: [] };
+    });
+
+    const repos = await scanRepos("/root");
+
+    expect(repos).toEqual([{ repo: "epsilon", worktrees: [{ name: "(main)", path: "/root/epsilon", isMain: true }] }]);
+  });
+
+  it("rejects a relative gitdir pointer outright, even without the nested-submodule shape", async () => {
+    listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root" && query.path === ".") return { data: [dir("odd")] };
+      if (query.directory === "/root" && query.path === "odd") return { data: [file(".git")] };
+      return { data: [] };
+    });
+    readMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root/odd" && query.path === ".git") {
+        return { data: { type: "text", content: "gitdir: ../main/.git/worktrees/odd\n" } };
+      }
+      return { data: undefined };
+    });
+
+    const repos = await scanRepos("/root");
+
+    expect(repos).toEqual([]);
+  });
+
   it("looks two levels deep for a `.git` entry", async () => {
     listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
       if (query.directory === "/root" && query.path === ".") return { data: [dir("packages")] };

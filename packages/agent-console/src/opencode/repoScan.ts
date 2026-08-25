@@ -73,10 +73,18 @@ type GitEntry = { readonly checkoutDir: string; readonly gitType: "file" | "dire
 
 /** Every directory under `rootDir` with a `.git` entry (one or two levels
  * down — see the module comment), noting whether that `.git` is a file or
- * a directory. Doesn't descend into a confirmed checkout's own
- * subdirectories (avoids treating a submodule as its own top-level repo). */
+ * a directory. Also checks `rootDir` itself — the configured root is often
+ * pointed straight at a checkout (this very repo, say), not a container
+ * folder above one; missing that case meant every session under it fell
+ * through to the basename fallback instead of ever reaching a real scan.
+ * Doesn't descend into a confirmed checkout's own subdirectories (avoids
+ * treating a submodule as its own top-level repo). */
 const findGitEntries = async (rootDir: string): Promise<ReadonlyArray<GitEntry>> => {
-  const level1 = (await listDirectoryEntries(rootDir, ".")).filter((e) => e.type === "directory");
+  const rootEntries = await listDirectoryEntries(rootDir, ".");
+  const rootDotGit = rootEntries.find((e) => e.name === ".git");
+  const ownRoot: ReadonlyArray<GitEntry> = rootDotGit === undefined ? [] : [{ checkoutDir: rootDir, gitType: rootDotGit.type }];
+
+  const level1 = rootEntries.filter((e) => e.type === "directory");
 
   const found = await Promise.all(
     level1.map(async (entry): Promise<ReadonlyArray<GitEntry>> => {
@@ -99,13 +107,23 @@ const findGitEntries = async (rootDir: string): Promise<ReadonlyArray<GitEntry>>
     }),
   );
 
-  return found.flat();
+  return [...ownRoot, ...found.flat()];
 };
 
-/** A `.git` FILE means this checkout is a linked worktree, not a repo in
- * its own right. Its content is a single `gitdir: <path>` line where
- * `<path>` is `<main checkout>/.git/worktrees/<name>` — resolve back to
- * `<main checkout>`, the repo's real identity. */
+/** A `.git` FILE usually means this checkout is a linked worktree, not a
+ * repo in its own right — its content is `gitdir: <main>/.git/worktrees/<name>`,
+ * resolved back to `<main>`, the repo's real identity.
+ *
+ * But a `.git` FILE is also what a git *submodule* checkout has, and when
+ * the superproject containing it is itself a linked worktree, git nests the
+ * submodule's real gitdir under that worktree's own entry:
+ * `<main>/.git/worktrees/<name>/modules/<submodule path...>` — a *relative*
+ * path in practice, and one that still contains the `/.git/worktrees/`
+ * marker, so it'd otherwise be misread as this checkout's own worktree
+ * entry (confirmed hands-on: a `repos/effect` submodule checkout produced a
+ * bogus second "repo" with a broken relative main path). A genuine worktree
+ * pointer is always absolute and ends exactly at `.../worktrees/<name>` —
+ * nothing after it. */
 const resolveMainFromWorktreeGitFile = async (checkoutDir: string): Promise<string | undefined> => {
   const content = await readFileText(checkoutDir, ".git");
   if (content === undefined) return undefined;
@@ -114,9 +132,16 @@ const resolveMainFromWorktreeGitFile = async (checkoutDir: string): Promise<stri
   if (match === null || match[1] === undefined) return undefined;
 
   const gitdirPath = match[1].trim();
+  if (!gitdirPath.startsWith("/")) return undefined;
+
   const marker = "/.git/worktrees/";
-  const markerIndex = gitdirPath.lastIndexOf(marker);
-  return markerIndex === -1 ? undefined : gitdirPath.slice(0, markerIndex);
+  const markerIndex = gitdirPath.indexOf(marker);
+  if (markerIndex === -1) return undefined;
+
+  const afterMarker = gitdirPath.slice(markerIndex + marker.length);
+  if (afterMarker.length === 0 || afterMarker.includes("/")) return undefined;
+
+  return gitdirPath.slice(0, markerIndex);
 };
 
 /** A `.git` DIRECTORY is a main checkout (or a standalone repo with no

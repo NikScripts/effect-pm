@@ -18,7 +18,7 @@ const STORAGE_KEY = "agent-console:repoScan";
  * was fixed, but every tab/device with a cached scan from before the fix
  * kept rendering the old, wrong grouping until its 30-minute timer happened
  * to expire. A version mismatch is treated as no cache at all. */
-const SCAN_VERSION = 2;
+const SCAN_VERSION = 3;
 
 /** How stale the cache can get before a Home mount triggers a background
  * rescan on its own — "occasional", not on every render. */
