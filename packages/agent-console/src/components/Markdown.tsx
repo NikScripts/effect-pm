@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import ReactMarkdown from "react-markdown";
-import { codeToHtml } from "shiki";
+import { useDebouncedHighlight } from "./useDebouncedHighlight";
 
 const CodeBlock = (props: {
   readonly className?: string;
@@ -16,23 +16,11 @@ const CodeBlock = (props: {
 }): React.ReactElement => {
   const lang = /language-(\w+)/.exec(props.className ?? "")?.[1] ?? "text";
   const code = String(props.children ?? "").replace(/\n$/, "");
-  const [html, setHtml] = React.useState<string | undefined>(undefined);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    codeToHtml(code, { lang, theme: "github-dark" })
-      .then((out) => {
-        if (!cancelled) setHtml(out);
-      })
-      .catch(() => {
-        // Unknown/unsupported language — fall back to the plain <pre> below.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [code, lang]);
+  const html = useDebouncedHighlight(code, lang);
 
   if (html === undefined) {
+    // Always the *current* text, not a stale highlighted snapshot — matters
+    // while a response is still streaming in (see useDebouncedHighlight).
     return (
       <pre>
         <code>{code}</code>

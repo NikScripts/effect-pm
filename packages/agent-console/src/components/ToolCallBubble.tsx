@@ -12,7 +12,7 @@
  */
 import * as React from "react";
 import type { ToolPart } from "@opencode-ai/sdk";
-import { codeToHtml } from "shiki";
+import { useDebouncedHighlight } from "./useDebouncedHighlight";
 
 const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
 const COLLAPSE_LINE_THRESHOLD = 12;
@@ -34,22 +34,7 @@ const HighlightedOutput = (props: {
   readonly text: string;
   readonly lang: string;
 }): React.ReactElement => {
-  const [html, setHtml] = React.useState<string | undefined>(undefined);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    codeToHtml(props.text, { lang: props.lang, theme: "github-dark" })
-      .then((out) => {
-        if (!cancelled) setHtml(out);
-      })
-      .catch(() => {
-        // Unsupported language (e.g. a diff, or a tool output that isn't real
-        // source) — the plain <pre> fallback below still shows the content.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [props.text, props.lang]);
+  const html = useDebouncedHighlight(props.text, props.lang);
 
   if (html === undefined) {
     return <pre className="tool-output">{props.text}</pre>;
@@ -58,7 +43,7 @@ const HighlightedOutput = (props: {
   return <div className="code-block" dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
-export const ToolCallBubble = (props: {
+const ToolCallBubbleImpl = (props: {
   readonly part: ToolPart;
 }): React.ReactElement => {
   const { part } = props;
@@ -102,3 +87,6 @@ export const ToolCallBubble = (props: {
     </details>
   );
 };
+ToolCallBubbleImpl.displayName = "ToolCallBubble";
+
+export const ToolCallBubble = React.memo(ToolCallBubbleImpl);

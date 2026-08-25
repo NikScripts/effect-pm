@@ -5,6 +5,15 @@
  * History always applies before the live subscription starts, so past messages
  * can't land after (and out of order relative to) a message sent moments later.
  *
+ * Cached (cache.ts) per session id: re-opening a session you were just in
+ * paints instantly from the cached transcript while history/live reconnect
+ * happen in the background, instead of a blank screen every time.
+ *
+ * If the SSE connection drops (network blip, backgrounded tab, a phone
+ * switching networks over Tailscale) it reconnects with exponential backoff
+ * instead of silently going dead until the page is reloaded — refetches
+ * history on each reconnect too, self-healing any events missed while down.
+ *
  * Role comes from `message.updated` events (`info.role`), not from guessing which
  * message ID the client just sent — an earlier version pre-generated a client-side
  * `messageID` to pass into `promptAsync` for exactly that purpose, but doing so
@@ -21,6 +30,7 @@
  */
 import * as React from "react";
 import type { Part, TextPart, ToolPart } from "@opencode-ai/sdk";
+import { transcriptCache } from "./cache";
 import { client } from "./client";
 
 export type RenderablePart = TextPart | ToolPart;
@@ -38,6 +48,7 @@ export type Transcript = {
 };
 
 const EMPTY: Transcript = { messages: new Map(), order: [], busy: false };
+const MAX_RECONNECT_DELAY_MS = 10_000;
 
 const isRenderablePart = (part: Part): part is RenderablePart =>
   part.type === "text" || part.type === "tool";
@@ -76,6 +87,9 @@ const withPart = (transcript: Transcript, part: RenderablePart): Transcript => {
   return { ...transcript, messages, order };
 };
 
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 export const useSessionStream = (
   sessionID: string | undefined,
 ): {
@@ -83,21 +97,46 @@ export const useSessionStream = (
   readonly markBusy: () => void;
   readonly clearBusy: () => void;
 } => {
-  const [transcript, setTranscript] = React.useState<Transcript>(EMPTY);
+  const [transcript, setTranscript] = React.useState<Transcript>(
+    () => (sessionID !== undefined ? transcriptCache.get(sessionID) ?? EMPTY : EMPTY),
+  );
+  // A ref, not a plain closure variable — markBusy/clearBusy (called from
+  // outside the effect, e.g. by the composer) and the effect's own event
+  // loop both need to read/write the *same* current value, or one can
+  // silently clobber the other's update with a stale snapshot.
+  const currentRef = React.useRef<Transcript>(transcript);
+  const sessionIdRef = React.useRef(sessionID);
+  sessionIdRef.current = sessionID;
+
+  const apply = React.useCallback((updater: (t: Transcript) => Transcript): void => {
+    const next = updater(currentRef.current);
+    currentRef.current = next;
+    const id = sessionIdRef.current;
+    if (id !== undefined) transcriptCache.set(id, next);
+    setTranscript(next);
+  }, []);
 
   React.useEffect(() => {
-    setTranscript(EMPTY);
-    if (sessionID === undefined) return;
+    if (sessionID === undefined) {
+      currentRef.current = EMPTY;
+      setTranscript(EMPTY);
+      return;
+    }
+    // Instant paint from cache (covers navigating back into a session), or a
+    // clean slate for one never opened before.
+    const seeded = transcriptCache.get(sessionID) ?? EMPTY;
+    currentRef.current = seeded;
+    setTranscript(seeded);
 
     const controller = new AbortController();
     let cancelled = false;
 
-    (async () => {
+    const loadHistory = async (): Promise<void> => {
       const { data: history } = await client.session.messages({
         path: { id: sessionID },
       });
       if (cancelled) return;
-      setTranscript((t) => {
+      apply((t) => {
         let next = t;
         for (const { info, parts } of history ?? []) {
           next = withRole(next, info.id, info.role);
@@ -107,51 +146,68 @@ export const useSessionStream = (
         }
         return next;
       });
+    };
 
-      const { stream } = await client.event.subscribe({
-        signal: controller.signal,
-      });
-      for await (const event of stream) {
-        if (cancelled) return;
-        if (
-          event.type === "message.updated" &&
-          event.properties.info.sessionID === sessionID
-        ) {
-          const info = event.properties.info;
-          setTranscript((t) => withRole(t, info.id, info.role));
-        } else if (
-          event.type === "message.part.updated" &&
-          isRenderablePart(event.properties.part) &&
-          event.properties.part.sessionID === sessionID
-        ) {
-          const part = event.properties.part;
-          setTranscript((t) => withPart(t, part));
-        } else if (
-          event.type === "session.idle" &&
-          event.properties.sessionID === sessionID
-        ) {
-          setTranscript((t) => ({ ...t, busy: false }));
+    const run = async (): Promise<void> => {
+      let attempt = 0;
+      while (!cancelled) {
+        try {
+          await loadHistory();
+          const { stream } = await client.event.subscribe({
+            signal: controller.signal,
+          });
+          attempt = 0; // reset backoff once a connection actually succeeds
+          for await (const event of stream) {
+            if (cancelled) return;
+            if (
+              event.type === "message.updated" &&
+              event.properties.info.sessionID === sessionID
+            ) {
+              const info = event.properties.info;
+              apply((t) => withRole(t, info.id, info.role));
+            } else if (
+              event.type === "message.part.updated" &&
+              isRenderablePart(event.properties.part) &&
+              event.properties.part.sessionID === sessionID
+            ) {
+              const part = event.properties.part;
+              apply((t) => withPart(t, part));
+            } else if (
+              event.type === "session.idle" &&
+              event.properties.sessionID === sessionID
+            ) {
+              apply((t) => ({ ...t, busy: false }));
+            }
+          }
+          // Stream ended without throwing (server closed it) — treat like a
+          // drop and reconnect below, same as a thrown error.
+        } catch (error: unknown) {
+          if (cancelled) return;
+          console.error("session event stream dropped, reconnecting", error);
         }
+        if (cancelled) return;
+        attempt += 1;
+        await sleep(Math.min(1000 * 2 ** (attempt - 1), MAX_RECONNECT_DELAY_MS));
       }
-    })().catch((error: unknown) => {
-      if (!cancelled) console.error("session event stream failed", error);
-    });
+    };
+
+    void run();
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [sessionID]);
+  }, [sessionID, apply]);
 
   const markBusy = React.useCallback(() => {
-    setTranscript((t) => ({ ...t, busy: true }));
-  }, []);
+    apply((t) => ({ ...t, busy: true }));
+  }, [apply]);
 
   // For when the send request itself fails — only `session.idle` clears `busy`
   // otherwise, which never arrives if the prompt never reached the server.
   const clearBusy = React.useCallback(() => {
-    setTranscript((t) => ({ ...t, busy: false }));
-  }, []);
+    apply((t) => ({ ...t, busy: false }));
+  }, [apply]);
 
   return { transcript, markBusy, clearBusy };
 };

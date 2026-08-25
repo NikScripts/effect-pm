@@ -1,6 +1,7 @@
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import * as Router from "last-ts/Router";
+import { sessionListCache } from "../opencode/cache";
 import { client } from "../opencode/client";
 import { type SessionDetail, useSessionDetails } from "../opencode/useSessionDetails";
 import { urls } from "../site";
@@ -30,9 +31,15 @@ const SessionStats = (props: {
           {detail.status === "retry" ? "retrying" : "active"}
         </span>
       ) : null}
-      <span className="stat-fixed">{detail.messageCount} msg</span>
+      <span className="stat-fixed">
+        {detail.messageCount}
+        {detail.messageCountIsExact ? "" : "+"} msg
+      </span>
       {detail.editCount > 0 ? (
-        <span className="stat-add stat-fixed">{detail.editCount} ed</span>
+        <span className="stat-add stat-fixed">
+          {detail.editCount}
+          {detail.messageCountIsExact ? "" : "+"} ed
+        </span>
       ) : null}
     </div>
   );
@@ -66,15 +73,22 @@ const SessionCard = (props: {
 
 export const SessionList = (): React.ReactElement => {
   const router = Router.useRouter();
-  const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
-  const [loading, setLoading] = React.useState(true);
+  // Stale-while-revalidate: render the cached list instantly (e.g. coming
+  // back from a chat) instead of a blank "Loading…" flash, then refresh.
+  const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>(
+    sessionListCache.sessions ?? [],
+  );
+  const [loading, setLoading] = React.useState(sessionListCache.sessions === undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
 
   const refresh = React.useCallback(async (): Promise<void> => {
-    setLoading(true);
+    // Only show the loading state on a true cold start — a background
+    // refresh of already-cached data shouldn't blank the list out.
+    if (sessionListCache.sessions === undefined) setLoading(true);
     setError(undefined);
     try {
       const { data } = await client.session.list();
+      sessionListCache.sessions = data ?? [];
       setSessions(data ?? []);
     } catch {
       // Server unreachable / restarting — surface it instead of leaving the
@@ -104,7 +118,7 @@ export const SessionList = (): React.ReactElement => {
   };
 
   const sorted = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
-  const details = useSessionDetails(sorted.map((s) => s.id));
+  const details = useSessionDetails(sorted);
 
   return (
     <div className="session-list">
