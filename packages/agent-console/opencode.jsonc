@@ -49,36 +49,15 @@
         "bash": false,
         "task": false
       }
-    },
-    // Scoped only to worktree creation (see src/opencode/worktree.ts) — the
-    // "console" agent's bash denial is deliberate and stays untouched; this
-    // is a separate, narrowly-permissioned profile, not a general shell
-    // opening. `bash` is a pattern object, not the blanket "allow" console
-    // avoids: only `git worktree*` commands pass, everything else is denied.
-    "repo-admin": {
-      "mode": "subagent",
-      "description": "Runs `git worktree add` for new-worktree creation — nothing else.",
-      "steps": 2,
-      "permission": {
-        "doom_loop": "deny",
-        "edit": "deny",
-        "write": "deny",
-        "patch": "deny",
-        "bash": {
-          "git worktree*": "allow",
-          "*": "deny"
-        },
-        "task": "deny",
-        "read": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "lsp": "deny",
-        "webfetch": "deny"
-      },
-      "tools": {
-        "task": false
-      }
     }
+    // "repo-admin" (worktree creation/scanning, see src/opencode/worktree.ts
+    // and repoScan.ts) is NOT defined here — it has to run `git worktree`
+    // commands against arbitrary repos elsewhere on disk, and opencode's
+    // agent config is directory-scoped (an agent defined here is invisible
+    // to a session whose directory isn't this project's tree — confirmed
+    // hands-on: session.shell/session.prompt 500'd with an opaque
+    // "UnknownError" instead of a clean "agent not found" when it couldn't
+    // resolve repo-admin for the target repo's directory). It's defined
+    // globally instead, in ~/.config/opencode/opencode.jsonc.
   }
 }

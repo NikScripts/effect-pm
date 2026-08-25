@@ -68,13 +68,13 @@ export const NewSessionPicker = (props: {
     }
   };
 
-  const createNewWorktree = async (repo: string): Promise<void> => {
+  const createNewWorktree = async (repo: string, mainCheckoutPath: string): Promise<void> => {
     if (rootDir === undefined) return;
     const name = newWorktreeName.trim() || randomSlug();
     setBusy(true);
     setError(undefined);
     try {
-      const path = await createWorktree(rootDir, repo, name);
+      const path = await createWorktree(rootDir, repo, mainCheckoutPath, name);
       await createInDirectory(path);
     } catch {
       setError(`Couldn't create worktree "${name}".`);
@@ -160,8 +160,13 @@ export const NewSessionPicker = (props: {
               />
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => void createNewWorktree(state.step === "worktree" ? state.repo : "")}
+                disabled={busy || worktrees.length === 0}
+                onClick={() => {
+                  if (state.step !== "worktree") return;
+                  const main = worktrees.find((w) => w.isMain) ?? worktrees[0];
+                  if (main === undefined) return;
+                  void createNewWorktree(state.repo, main.path);
+                }}
               >
                 {busy ? "Creating…" : "+ New worktree"}
               </button>

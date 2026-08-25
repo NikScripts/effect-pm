@@ -646,7 +646,6 @@ a {
 }
 
 .repo-list-section {
-  border-top: 1px solid var(--border);
   padding-bottom: 1rem;
 }
 
