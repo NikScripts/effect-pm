@@ -10,9 +10,21 @@ import { getLastScanAt, setLastScanAt } from "./settings";
 
 const STORAGE_KEY = "agent-console:repoScan";
 
+/** Bump whenever repoScan.ts's *algorithm* changes shape or behavior (not
+ * just its output data shape). A stale-but-not-yet-30-minutes-old cache from
+ * a previous, buggier scan algorithm would otherwise keep being served as
+ * "current" indefinitely — this is what actually broke the "worktrees show
+ * up as their own repos" fix from shipping to already-open clients: the code
+ * was fixed, but every tab/device with a cached scan from before the fix
+ * kept rendering the old, wrong grouping until its 30-minute timer happened
+ * to expire. A version mismatch is treated as no cache at all. */
+const SCAN_VERSION = 2;
+
 /** How stale the cache can get before a Home mount triggers a background
  * rescan on its own — "occasional", not on every render. */
 const STALE_AFTER_MS = 30 * 60 * 1000;
+
+type Persisted = { readonly version: number; readonly repos: ReadonlyArray<ScannedRepo> };
 
 let inMemory: ReadonlyArray<ScannedRepo> | undefined;
 let inFlight: Promise<ReadonlyArray<ScannedRepo>> | undefined;
@@ -21,7 +33,9 @@ const readPersisted = (): ReadonlyArray<ScannedRepo> | undefined => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === null) return undefined;
-    return JSON.parse(raw) as ReadonlyArray<ScannedRepo>;
+    const parsed = JSON.parse(raw) as Partial<Persisted>;
+    if (parsed.version !== SCAN_VERSION || parsed.repos === undefined) return undefined;
+    return parsed.repos;
   } catch {
     return undefined;
   }
@@ -29,7 +43,8 @@ const readPersisted = (): ReadonlyArray<ScannedRepo> | undefined => {
 
 const persist = (repos: ReadonlyArray<ScannedRepo>): void => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(repos));
+    const toStore: Persisted = { version: SCAN_VERSION, repos };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
   } catch {
     // Storage full/unavailable — cache just won't survive reload, non-fatal.
   }
