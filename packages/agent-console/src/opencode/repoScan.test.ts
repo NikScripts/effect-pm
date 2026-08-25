@@ -61,6 +61,54 @@ describe("scanRepos", () => {
     ]);
   });
 
+  it("names the repo from its origin remote, not the main checkout folder's (possibly stale) name", async () => {
+    // Ground truth this reproduces: this repo's main checkout folder is
+    // still named `effect-pm` — a pre-rename leftover — but its origin
+    // remote is github.com/nikolasstow/Hyperlink. The folder name is not
+    // the repo's identity; the remote is.
+    listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root" && query.path === ".") return { data: [dir("effect-pm")] };
+      if (query.directory === "/root" && query.path === "effect-pm") return { data: [dir(".git")] };
+      if (query.directory === "/root/effect-pm" && query.path === ".git/worktrees") return Promise.reject(new Error("ENOENT"));
+      return { data: [] };
+    });
+    readMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root/effect-pm" && query.path === ".git/config") {
+        return {
+          data: {
+            type: "text",
+            content:
+              '[remote "origin"]\n\turl = https://github.com/nikolasstow/Hyperlink.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch "main"]\n\tremote = origin\n',
+          },
+        };
+      }
+      return { data: undefined };
+    });
+
+    const repos = await scanRepos("/root");
+
+    expect(repos).toEqual([{ repo: "Hyperlink", worktrees: [{ name: "(main)", path: "/root/effect-pm", isMain: true }] }]);
+  });
+
+  it("falls back to the folder name when a repo has no origin remote configured", async () => {
+    listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root" && query.path === ".") return { data: [dir("local-only")] };
+      if (query.directory === "/root" && query.path === "local-only") return { data: [dir(".git")] };
+      if (query.directory === "/root/local-only" && query.path === ".git/worktrees") return Promise.reject(new Error("ENOENT"));
+      return { data: [] };
+    });
+    readMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
+      if (query.directory === "/root/local-only" && query.path === ".git/config") {
+        return { data: { type: "text", content: '[core]\n\trepositoryformatversion = 0\n' } };
+      }
+      return { data: undefined };
+    });
+
+    const repos = await scanRepos("/root");
+
+    expect(repos).toEqual([{ repo: "local-only", worktrees: [{ name: "(main)", path: "/root/local-only", isMain: true }] }]);
+  });
+
   it("finds a checkout when `rootDir` itself is a linked worktree, not just its children", async () => {
     listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
       if (query.directory === "/root/epsilon" && query.path === ".") return { data: [file(".git")] };

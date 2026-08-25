@@ -41,6 +41,6 @@ describe("repoScanCache", () => {
     expect(getCachedRepos()).toEqual([repo]);
 
     const stored = JSON.parse(localStorage.getItem("agent-console:repoScan") ?? "{}") as { version: number };
-    expect(stored.version).toBe(3);
+    expect(stored.version).toBe(4);
   });
 });

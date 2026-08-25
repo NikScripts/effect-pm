@@ -164,6 +164,36 @@ const listLinkedWorktrees = async (mainCheckoutDir: string): Promise<ReadonlyArr
   return worktrees.filter((w): w is ScannedWorktree => w !== undefined);
 };
 
+/** The main checkout's own folder name is *still* just a folder — it can be
+ * a stale pre-rename artifact (confirmed hands-on: this repo's main
+ * checkout folder is named `effect-pm`, left over from before it was
+ * renamed to `Hyperlink`; that's not the repo's identity, it's history).
+ * The repo's real identity is its `origin` remote, read straight out of
+ * `.git/config` — falls back to the folder name only for a repo with no
+ * remote configured at all (never pushed anywhere). */
+const resolveRepoName = async (mainCheckoutDir: string): Promise<string> => {
+  const config = await readFileText(mainCheckoutDir, ".git/config");
+  const fromRemote = config === undefined ? undefined : repoNameFromConfig(config);
+  return fromRemote ?? basename(mainCheckoutDir);
+};
+
+const repoNameFromConfig = (config: string): string | undefined => {
+  const originSection = config.match(/\[remote "origin"\][^[]*/);
+  const anySection = originSection?.[0] ?? config.match(/\[remote "[^"]+"\][^[]*/)?.[0];
+  if (anySection === undefined) return undefined;
+
+  const urlMatch = anySection.match(/url\s*=\s*(\S+)/);
+  if (urlMatch === null || urlMatch[1] === undefined) return undefined;
+
+  return repoNameFromRemoteUrl(urlMatch[1]);
+};
+
+const repoNameFromRemoteUrl = (url: string): string | undefined => {
+  const withoutDotGit = url.trim().replace(/\.git$/, "");
+  const segments = withoutDotGit.split(/[/:]/).filter((s) => s.length > 0);
+  return segments[segments.length - 1];
+};
+
 export const scanRepos = async (rootDir: string): Promise<ReadonlyArray<ScannedRepo>> => {
   const entries = await findGitEntries(rootDir);
 
@@ -182,9 +212,9 @@ export const scanRepos = async (rootDir: string): Promise<ReadonlyArray<ScannedR
 
   const groups = await Promise.all(
     Array.from(mains).map(async (mainCheckoutDir): Promise<ScannedRepo> => {
-      const linked = await listLinkedWorktrees(mainCheckoutDir);
+      const [linked, repo] = await Promise.all([listLinkedWorktrees(mainCheckoutDir), resolveRepoName(mainCheckoutDir)]);
       return {
-        repo: basename(mainCheckoutDir),
+        repo,
         worktrees: [{ name: "(main)", path: mainCheckoutDir, isMain: true }, ...linked],
       };
     }),
