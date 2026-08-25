@@ -1,21 +1,40 @@
 import * as React from "react";
+import * as Router from "last-ts/Router";
 import { Composer } from "../components/Composer";
 import { MessageBubble } from "../components/MessageBubble";
+import { client } from "../opencode/client";
 import { useSessionStream } from "../opencode/useSessionStream";
-import { Link } from "../site";
+import { urls } from "../site";
+import { navigateWithTransition } from "../viewTransition";
 
 export const SessionChat = (props: { readonly id: string }): React.ReactElement => {
+  const router = Router.useRouter();
   const { transcript, markBusy, clearBusy } = useSessionStream(props.id);
+  const [title, setTitle] = React.useState<string | undefined>(undefined);
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [transcript.order.length]);
 
+  React.useEffect(() => {
+    setTitle(undefined);
+    client.session
+      .get({ path: { id: props.id } })
+      .then(({ data }) => setTitle(data?.title))
+      .catch(() => {
+        // Non-critical — the header just shows the raw id as a fallback.
+      });
+  }, [props.id]);
+
+  const goBack = (): void => {
+    navigateWithTransition(() => router.go(urls.sessions()));
+  };
+
   return (
     <div className="session-chat">
-      <header className="chat-header">
-        <Link to={(u) => u.sessions()} className="back-link" aria-label="Back to sessions">
+      <header className="chat-header" style={{ viewTransitionName: `session-${props.id}` }}>
+        <button type="button" className="back-link" aria-label="Back to sessions" onClick={goBack}>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path
               d="M15 6l-6 6 6 6"
@@ -26,7 +45,8 @@ export const SessionChat = (props: { readonly id: string }): React.ReactElement 
               strokeLinejoin="round"
             />
           </svg>
-        </Link>
+        </button>
+        <span className="chat-title">{title ?? props.id}</span>
       </header>
       <div className="transcript">
         {transcript.order.length === 0 ? (

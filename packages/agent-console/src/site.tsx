@@ -1,11 +1,14 @@
 /**
- * Catalog — two routes for phase 1: the session list and one session's chat.
+ * Catalog — two routes: the session list and one session's chat. Navigation
+ * goes through `router.go(urls...)` wrapped in `navigateWithTransition`
+ * (viewTransition.ts) rather than `Router.link`, since the View Transitions
+ * API needs an imperative hook around the DOM update — see SessionList.tsx /
+ * SessionChat.tsx.
  *
  * @internal
  */
 import { Schema } from "effect";
 import * as Route from "last-ts/Route";
-import * as Router from "last-ts/Router";
 import { SessionChat } from "./pages/SessionChat";
 import { SessionList } from "./pages/SessionList";
 
@@ -18,5 +21,3 @@ export const site = Route.make("agent-console").add(
 );
 
 export const urls = Route.urlBuilder(site);
-
-export const Link = Router.link(site);

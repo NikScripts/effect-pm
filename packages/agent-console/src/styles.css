@@ -106,41 +106,69 @@ a {
   font-size: 0.9rem;
 }
 
-.session-list ul {
-  list-style: none;
-  margin: 0;
-  padding: 0.25rem 0.5rem;
-}
-
-.session-list li {
-  border-radius: 12px;
-}
-
-.session-list li a {
+.session-cards {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.9rem 0.75rem;
-  color: inherit;
-  text-decoration: none;
-  border-radius: 12px;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
 }
 
-.session-list li a:active {
+.session-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 14px;
   background: var(--bg-raised);
+  color: inherit;
+  font: inherit;
+  padding: 0.85rem 1rem;
 }
 
-.session-title {
+.session-card:active {
+  background: color-mix(in srgb, var(--bg-raised) 80%, white 6%);
+}
+
+.session-card-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 560;
+  margin-bottom: 0.35rem;
+}
+
+.session-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.session-stats {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.stat-add {
+  color: #4ade80;
+}
+
+.stat-del {
+  color: #ff7b72;
+}
+
+.stat-files {
+  color: var(--text-dim);
 }
 
 .session-time {
   flex-shrink: 0;
-  font-size: 0.78rem;
-  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 /* ── Chat ────────────────────────────────────────────────────────────────── */
@@ -169,12 +197,22 @@ a {
 
 .back-link {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 2.5rem;
   height: 2.5rem;
+  border: none;
+  background: none;
   border-radius: 999px;
   color: var(--text);
+}
+
+.chat-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 560;
 }
 
 .back-link:active {
@@ -409,25 +447,16 @@ a {
 
 @media (min-width: 720px) {
   /* Narrow phone widths stay edge-to-edge; wider viewports (tablet/desktop) get a
-     centered reading column instead of stretching messages full-width. */
+     centered reading column. These containers keep their own internal flex
+     alignment (space-between on headers, etc.) — only their own box narrows and
+     centers, nothing here touches how their children lay out inside them. */
   .transcript,
-  .composer-inner,
-  .list-header-inner {
-    max-width: 720px;
-    margin: 0 auto;
-    width: 100%;
-  }
-
+  .session-cards,
   .list-header,
   .chat-header,
-  .composer {
-    display: flex;
-    justify-content: center;
-  }
-
-  .list-header > *,
-  .composer > * {
+  .composer-field {
     max-width: 720px;
+    margin: 0 auto;
     width: 100%;
   }
 }
