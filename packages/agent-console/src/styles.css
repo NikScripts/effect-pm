@@ -107,51 +107,93 @@ a {
 }
 
 .session-cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0.6rem;
   padding: 0.75rem;
 }
 
 .session-card {
-  display: block;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Roughly 3:2 (landscape tile), not a full-width row. */
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
   text-align: left;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg-raised);
   color: inherit;
   font: inherit;
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 0.85rem;
 }
 
 .session-card:active {
   background: color-mix(in srgb, var(--bg-raised) 80%, white 6%);
 }
 
+.session-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
 .session-card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-weight: 560;
-  margin-bottom: 0.35rem;
+  line-height: 1.25;
+}
+
+.session-fork-badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.session-card-preview {
+  flex: 1;
+  margin-top: 0.3rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--text-dim);
 }
 
 .session-card-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.8rem;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  font-size: 0.72rem;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .session-stats {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  min-width: 0;
+  overflow: hidden;
   font-family: ui-monospace, monospace;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
+}
+
+.stat-fixed {
+  /* Never clip mid-word — the whole badge disappears if the row runs out of
+     room, instead of "edits" truncating to "edi". */
+  flex-shrink: 0;
 }
 
 .stat-add {

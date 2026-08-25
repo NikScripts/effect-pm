@@ -1,8 +1,9 @@
 /**
- * Per-session detail for the session list cards — message count and edit-tool-
- * call count, derived from each session's actual message history, plus live
- * idle/busy/retry status from the bulk status endpoint (one call for all
- * sessions, not N).
+ * Per-session detail for the session list cards — message count, edit-tool-call
+ * count, and a preview snippet, all derived from each session's actual message
+ * history (one fetch per session, reused for all three — the preview is free),
+ * plus live idle/busy/retry status from the bulk status endpoint (one call for
+ * all sessions, not N).
  *
  * `Session.summary` (additions/deletions/files) looks like the obvious source
  * for this but isn't used here: it's a live diff against the session's
@@ -21,9 +22,12 @@ export type SessionDetail = {
   readonly messageCount: number;
   readonly editCount: number;
   readonly status: SessionStatus["type"] | undefined;
+  /** Last text part found, most recent message first — free from the same fetch. */
+  readonly preview: string | undefined;
 };
 
 const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
+const PREVIEW_LENGTH = 140;
 
 export const useSessionDetails = (
   sessionIds: ReadonlyArray<string>,
@@ -49,7 +53,19 @@ export const useSessionDetails = (
       sessionIds.forEach((id, i) => {
         const messages = messageResults[i]?.data ?? [];
         let editCount = 0;
-        for (const { parts } of messages) {
+        let preview: string | undefined;
+        // Walk newest-first: the most recent message's text is the preview.
+        for (let m = messages.length - 1; m >= 0; m--) {
+          const { parts } = messages[m]!;
+          const text = parts
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join(" ")
+            .trim();
+          if (preview === undefined && text.length > 0) {
+            preview =
+              text.length > PREVIEW_LENGTH ? `${text.slice(0, PREVIEW_LENGTH)}…` : text;
+          }
           for (const part of parts) {
             if (
               part.type === "tool" &&
@@ -64,6 +80,7 @@ export const useSessionDetails = (
           messageCount: messages.length,
           editCount,
           status: statuses[id]?.type,
+          preview,
         });
       });
       setDetails(next);

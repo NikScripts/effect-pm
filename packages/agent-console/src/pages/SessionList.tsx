@@ -30,15 +30,37 @@ const SessionStats = (props: {
           {detail.status === "retry" ? "retrying" : "active"}
         </span>
       ) : null}
-      <span>
-        {detail.messageCount} msg{detail.messageCount === 1 ? "" : "s"}
-      </span>
+      <span className="stat-fixed">{detail.messageCount} msg</span>
       {detail.editCount > 0 ? (
-        <span className="stat-add">
-          {detail.editCount} edit{detail.editCount === 1 ? "" : "s"}
-        </span>
+        <span className="stat-add stat-fixed">{detail.editCount} ed</span>
       ) : null}
     </div>
+  );
+};
+
+const SessionCard = (props: {
+  readonly session: Session;
+  readonly detail: SessionDetail | undefined;
+  readonly onOpen: (id: string) => void;
+}): React.ReactElement => {
+  const { session, detail } = props;
+  return (
+    <button
+      type="button"
+      className="session-card"
+      style={{ viewTransitionName: `session-${session.id}` }}
+      onClick={() => props.onOpen(session.id)}
+    >
+      <div className="session-card-top">
+        <div className="session-card-title">{session.title || session.id}</div>
+        {session.parentID !== undefined ? <span className="session-fork-badge">forked</span> : null}
+      </div>
+      <div className="session-card-preview">{detail?.preview ?? " "}</div>
+      <div className="session-card-meta">
+        <SessionStats detail={detail} />
+        <span className="session-time">{timeAgo(session.time.updated)}</span>
+      </div>
+    </button>
   );
 };
 
@@ -112,19 +134,12 @@ export const SessionList = (): React.ReactElement => {
       ) : null}
       <div className="session-cards">
         {sorted.map((session) => (
-          <button
-            type="button"
+          <SessionCard
             key={session.id}
-            className="session-card"
-            style={{ viewTransitionName: `session-${session.id}` }}
-            onClick={() => openSession(session.id)}
-          >
-            <div className="session-card-title">{session.title || session.id}</div>
-            <div className="session-card-meta">
-              <SessionStats detail={details.get(session.id)} />
-              <span className="session-time">{timeAgo(session.time.updated)}</span>
-            </div>
-          </button>
+            session={session}
+            detail={details.get(session.id)}
+            onOpen={openSession}
+          />
         ))}
       </div>
       {!loading && error === undefined && sessions.length === 0 ? (
