@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { AssistantMessage, Part, TextPart, ToolPart } from "@opencode-ai/sdk";
+import type { AssistantMessage, Part, TextPart, ToolPart, UserMessage } from "@opencode-ai/sdk";
 import { detailFromMessages, MESSAGE_FETCH_LIMIT } from "./useSessionDetails";
 
-const assistantMessage = (id: string): AssistantMessage => ({
+const assistantMessage = (
+  id: string,
+  overrides?: Partial<Pick<AssistantMessage, "cost" | "tokens">>,
+): AssistantMessage => ({
   id,
   sessionID: "ses_1",
   role: "assistant",
@@ -19,6 +22,16 @@ const assistantMessage = (id: string): AssistantMessage => ({
     reasoning: 0,
     cache: { read: 0, write: 0 },
   },
+  ...overrides,
+});
+
+const userMessage = (id: string): UserMessage => ({
+  id,
+  sessionID: "ses_1",
+  role: "user",
+  time: { created: 0 },
+  agent: "console",
+  model: { providerID: "provider", modelID: "model" },
 });
 
 const textPart = (messageID: string, text: string): TextPart => ({
@@ -60,6 +73,14 @@ const withParts = (
   parts: ReadonlyArray<Part>,
 ): { readonly info: AssistantMessage; readonly parts: ReadonlyArray<Part> } => ({
   info: assistantMessage(messageID),
+  parts,
+});
+
+const withInfo = (
+  info: AssistantMessage | UserMessage,
+  parts: ReadonlyArray<Part> = [],
+): { readonly info: AssistantMessage | UserMessage; readonly parts: ReadonlyArray<Part> } => ({
+  info,
   parts,
 });
 
@@ -121,5 +142,42 @@ describe("detailFromMessages", () => {
     const result = detailFromMessages([]);
     expect(result.preview).toBeUndefined();
     expect(result.messageCount).toBe(0);
+  });
+
+  it("takes contextTokens from the most recent assistant message (input + both cache fields)", () => {
+    const result = detailFromMessages([
+      withInfo(
+        assistantMessage("msg_1", { tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 10, write: 5 } } }),
+      ),
+      withInfo(userMessage("msg_2")),
+      withInfo(
+        assistantMessage("msg_3", { tokens: { input: 500, output: 40, reasoning: 0, cache: { read: 200, write: 0 } } }),
+      ),
+    ]);
+    // msg_3 is most recent — 500 + 200 + 0
+    expect(result.contextTokens).toBe(700);
+  });
+
+  it("ignores trailing user messages when computing contextTokens — uses the last assistant turn", () => {
+    const result = detailFromMessages([
+      withInfo(assistantMessage("msg_1", { tokens: { input: 50, output: 10, reasoning: 0, cache: { read: 0, write: 0 } } })),
+      withInfo(userMessage("msg_2")),
+    ]);
+    expect(result.contextTokens).toBe(50);
+  });
+
+  it("sums cost across all assistant messages in the fetched batch", () => {
+    const result = detailFromMessages([
+      withInfo(assistantMessage("msg_1", { cost: 0.02 })),
+      withInfo(userMessage("msg_2")),
+      withInfo(assistantMessage("msg_3", { cost: 0.05 })),
+    ]);
+    expect(result.cost).toBeCloseTo(0.07);
+  });
+
+  it("returns undefined contextTokens and cost when there are no assistant messages", () => {
+    const result = detailFromMessages([withInfo(userMessage("msg_1"))]);
+    expect(result.contextTokens).toBeUndefined();
+    expect(result.cost).toBeUndefined();
   });
 });

@@ -44,6 +44,14 @@ export type SessionDetail = {
   readonly status: SessionStatus["type"] | undefined;
   /** Last text part found, most recent message first — from the same fetch. */
   readonly preview: string | undefined;
+  /** Context window size at the most recent assistant turn (input + both
+   * cache fields) — a coding agent's context fills with tool output, not
+   * just the visible conversation, so this is the number that actually
+   * predicts "does this session need compaction soon," not a message count. */
+  readonly contextTokens: number | undefined;
+  /** Cumulative cost across the fetched (last MESSAGE_FETCH_LIMIT) messages
+   * — same "in the last N" caveat as editCount for long sessions. */
+  readonly cost: number | undefined;
 };
 
 const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
@@ -57,9 +65,13 @@ export const detailFromMessages = (
 ): Omit<SessionDetail, "status"> => {
   let editCount = 0;
   let preview: string | undefined;
-  // Walk newest-first: the most recent message's text is the preview.
+  let contextTokens: number | undefined;
+  let cost = 0;
+  let sawAssistantMessage = false;
+  // Walk newest-first: the most recent message's text is the preview, and
+  // the most recent *assistant* message's tokens are the current context size.
   for (let m = messages.length - 1; m >= 0; m--) {
-    const { parts } = messages[m]!;
+    const { info, parts } = messages[m]!;
     const text = parts
       .filter((part) => part.type === "text")
       .map((part) => part.text)
@@ -77,12 +89,21 @@ export const detailFromMessages = (
         editCount += 1;
       }
     }
+    if (info.role === "assistant") {
+      sawAssistantMessage = true;
+      cost += info.cost;
+      if (contextTokens === undefined) {
+        contextTokens = info.tokens.input + info.tokens.cache.read + info.tokens.cache.write;
+      }
+    }
   }
   return {
     messageCount: messages.length,
     messageCountIsExact: messages.length < MESSAGE_FETCH_LIMIT,
     editCount,
     preview,
+    contextTokens,
+    cost: sawAssistantMessage ? cost : undefined,
   };
 };
 
