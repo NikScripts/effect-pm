@@ -1,0 +1,55 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // "console" is the agent this package's client talks to (see src/opencode/client.ts).
+  // edit/bash denied — a session on this agent is structurally unable to touch files.
+  // Flip both to "allow" (or "ask") when phase 2 (editing) starts; no client code changes.
+  "agent": {
+    "console": {
+      "mode": "primary",
+      "description": "Phase 1 chat agent — read/search/LSP only, no file edits.",
+      // Hard cap on agentic loop iterations — a general safety margin, not a fix for anything
+      // specific observed here. (A real runaway loop *was* hit and root-caused during this
+      // client's own build: a client-supplied `messageID` in the prompt request broke the
+      // server's turn-completion tracking, so the session never reached `session.idle`. The
+      // actual fix was dropping the client-side ID entirely — see useSessionStream.ts's top
+      // comment — not this setting. `steps` stays as a ceiling regardless.)
+      "steps": 8,
+      "permission": {
+        // Explicit "deny" (not the default "ask") — this client has no permission-response
+        // UI yet, and "ask" with no answerer is untested territory. `doom_loop` is opencode's
+        // own protection against exactly the kind of runaway loop found and root-caused while
+        // building this client (see the `steps` comment above) — keep it active, not disabled.
+        "doom_loop": "deny",
+        "edit": "deny",
+        // "write" (new-file creation) isn't in opencode's documented/schema-named permission
+        // keys, but PermissionObjectConfig accepts arbitrary keys via additionalProperties and
+        // the runtime honors it — confirmed hands-on: without this, `edit: "deny"` alone still
+        // let the agent create new files (spiked before shipping this config).
+        "write": "deny",
+        "patch": "deny",
+        "bash": "deny",
+        // Confirmed hands-on: without this, the console agent could invoke the `task` tool
+        // to delegate to a general-purpose subagent — which has its OWN, unrestricted
+        // permissions — and that subagent created a file `console`'s own edit/write/bash
+        // denial never touched. Denying `task` closes that delegation path entirely.
+        "task": "deny",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow",
+        "webfetch": "allow"
+      },
+      // Belt-and-suspenders: also disable the tools outright (deprecated field, but it gates
+      // tool *registration*, not just the permission check — a second layer in case a future
+      // tool ever bypasses the permission list the way "write" did here).
+      "tools": {
+        "write": false,
+        "edit": false,
+        "patch": false,
+        "bash": false,
+        "task": false
+      }
+    }
+  }
+}
