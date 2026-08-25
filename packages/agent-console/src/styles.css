@@ -107,8 +107,8 @@ a {
 }
 
 .session-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 0.6rem;
   padding: 0.75rem;
 }
@@ -116,16 +116,14 @@ a {
 .session-card {
   display: flex;
   flex-direction: column;
-  /* Roughly 3:2 (landscape tile), not a full-width row. */
-  aspect-ratio: 3 / 2;
-  overflow: hidden;
+  width: 100%;
   text-align: left;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg-raised);
   color: inherit;
   font: inherit;
-  padding: 0.75rem 0.85rem;
+  padding: 0.8rem 0.9rem;
 }
 
 .session-card:active {
@@ -158,10 +156,9 @@ a {
 }
 
 .session-card-preview {
-  flex: 1;
   margin-top: 0.3rem;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   font-size: 0.8rem;
