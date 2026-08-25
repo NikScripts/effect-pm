@@ -36,7 +36,7 @@ export const Composer = (props: {
       <textarea
         value={text}
         disabled={props.disabled}
-        placeholder="Ask about the codebase — this agent can't edit files yet."
+        placeholder="Ask about the codebase, or ask it to make a change…"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {

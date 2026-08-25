@@ -3,44 +3,103 @@
   font-family: system-ui, sans-serif;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
   margin: 0;
+  /* Prevent iOS's rubber-band pan from revealing background outside the app shell. */
+  overscroll-behavior-y: none;
+  /* No layout here is meant to scroll sideways — a wide code block should scroll
+     inside its own box (see .code-block), never the page. */
+  overflow-x: hidden;
+}
+
+body {
   background: #0d1117;
   color: #e6edf3;
+}
+
+#root {
+  height: 100dvh;
 }
 
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid #21262d;
+}
+
+header a {
+  /* Real tap target, not just the underlined text (Apple HIG minimum ~44px). */
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: #a5d6ff;
+}
+
+.session-list {
+  height: 100dvh;
+  overflow-y: auto;
+}
+
+.session-list h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.session-list button {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  background: #21262d;
+  color: inherit;
 }
 
 .session-list ul {
   list-style: none;
+  margin: 0;
   padding: 0 1rem;
 }
 
 .session-list li {
-  padding: 0.5rem 0;
+  padding: 0;
   border-bottom: 1px solid #161b22;
 }
 
+.session-list li a {
+  display: block;
+  padding: 0.85rem 0;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+/* 100dvh (not 100vh) — iOS Safari's address bar collapsing on scroll shrinks the
+   *visual* viewport without shrinking 100vh, leaving a sliver of dead space under
+   fixed-height layouts; dvh tracks the visual viewport instead. */
 .session-chat {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
 }
 
 .transcript {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .message {
   margin-bottom: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .message-role {
@@ -53,30 +112,136 @@ header {
   color: #a5d6ff;
 }
 
+.message-body p {
+  margin: 0.4rem 0;
+}
+
 .typing {
   opacity: 0.6;
   font-style: italic;
 }
 
+.tool-call {
+  margin: 0.5rem 0;
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tool-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
+  align-items: baseline;
+  padding: 0.4rem 0.6rem;
+  background: #161b22;
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+}
+
+.tool-name {
+  color: #79c0ff;
+  text-transform: lowercase;
+  /* `.message`'s inherited `overflow-wrap: anywhere` + a long sibling (.tool-path)
+     in this flex row let the browser shrink this to near-zero and wrap "edit"
+     one character per line — reset both so the tool name never breaks or shrinks. */
+  overflow-wrap: normal;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tool-path {
+  color: #8b949e;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.tool-meta {
+  color: #8b949e;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tool-status {
+  padding: 0.5rem 0.6rem;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.tool-output {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-error {
+  color: #ff7b72;
+}
+
+.tool-completed .code-block pre {
+  border-radius: 0;
+  margin: 0;
+}
+
 .composer {
   display: flex;
   gap: 0.5rem;
-  padding: 1rem;
+  align-items: flex-end;
+  padding: 0.75rem 1rem;
+  /* iOS home-indicator / notch clearance when the composer sits at the screen edge. */
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   border-top: 1px solid #21262d;
 }
 
 .composer textarea {
   flex: 1;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
+  max-height: 40vh;
+  /* >=16px — iOS Safari auto-zooms the page on focusing a smaller input. */
+  font-size: 16px;
   background: #161b22;
   color: inherit;
   border: 1px solid #30363d;
-  border-radius: 6px;
-  padding: 0.5rem;
+  border-radius: 8px;
+  padding: 0.6rem;
+  resize: none;
+}
+
+.composer button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0 1rem;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  background: #238636;
+  color: white;
+}
+
+.composer button:disabled {
+  background: #21262d;
+  color: #8b949e;
 }
 
 .code-block pre {
   overflow-x: auto;
   border-radius: 6px;
   padding: 0.75rem;
+  font-size: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  /* Narrow phone widths stay edge-to-edge; wider viewports (tablet/desktop) get a
+     centered reading column instead of stretching messages full-width. */
+  .transcript,
+  .composer,
+  header,
+  .session-list ul {
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+  }
 }

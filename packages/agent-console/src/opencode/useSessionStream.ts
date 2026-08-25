@@ -11,16 +11,21 @@
  * server assign every ID and reading role back off its own events avoids that
  * entirely, and is the more robust design anyway.
  *
+ * Renderable parts are text (the assistant's prose) and tool calls (edit/write/read/
+ * etc.) — a message is the ordered interleaving of both, not just its joined text.
+ *
  * @internal
  */
 import * as React from "react";
-import type { Part, TextPart } from "@opencode-ai/sdk";
+import type { Part, TextPart, ToolPart } from "@opencode-ai/sdk";
 import { client } from "./client";
+
+export type RenderablePart = TextPart | ToolPart;
 
 export type TranscriptMessage = {
   readonly id: string;
   readonly role: "user" | "assistant";
-  readonly parts: ReadonlyMap<string, TextPart>;
+  readonly parts: ReadonlyMap<string, RenderablePart>;
 };
 
 export type Transcript = {
@@ -31,7 +36,8 @@ export type Transcript = {
 
 const EMPTY: Transcript = { messages: new Map(), order: [], busy: false };
 
-const isTextPart = (part: Part): part is TextPart => part.type === "text";
+const isRenderablePart = (part: Part): part is RenderablePart =>
+  part.type === "text" || part.type === "tool";
 
 const withRole = (
   transcript: Transcript,
@@ -51,7 +57,7 @@ const withRole = (
   return { ...transcript, messages, order };
 };
 
-const withPart = (transcript: Transcript, part: TextPart): Transcript => {
+const withPart = (transcript: Transcript, part: RenderablePart): Transcript => {
   const existing = transcript.messages.get(part.messageID);
   // Role isn't known yet if this part arrives before its `message.updated` event —
   // default to "assistant" (the far more common ordering) and let a later
@@ -96,7 +102,7 @@ export const useSessionStream = (
           setTranscript((t) => withRole(t, info.id, info.role));
         } else if (
           event.type === "message.part.updated" &&
-          isTextPart(event.properties.part) &&
+          isRenderablePart(event.properties.part) &&
           event.properties.part.sessionID === sessionID
         ) {
           const part = event.properties.part;

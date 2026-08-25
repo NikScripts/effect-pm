@@ -8,7 +8,7 @@ import globals from "globals";
 // (src/web/tsconfig.json — see docs/getting-started/install "Diagnostic rulesets"), and (2) here they
 // get the React eslint ruleset: eslint-plugin-react + react-hooks (rules-of-hooks / exhaustive-deps) +
 // browser globals. Modeled on wow-sports' @shared/eslint-config/react-internal.
-const reactFiles = ["src/web/**/*.{ts,tsx}", "src/tui/**/*.{ts,tsx}"];
+const reactFiles = ["src/web/**/*.{ts,tsx}", "src/tui/**/*.{ts,tsx}", "packages/agent-console/**/*.{ts,tsx}"];
 
 export default [
   {
@@ -32,6 +32,7 @@ export default [
       "dev/**/*.{ts,tsx}",
       "scripts/**/*.{ts,tsx}",
       "packages/last-ts/**/*.{ts,tsx}",
+      "packages/agent-console/**/*.{ts,tsx}",
       "docs/**/*.{ts,tsx}",
     ],
     languageOptions: {

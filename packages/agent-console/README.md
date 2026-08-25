@@ -53,7 +53,16 @@ noted here so they aren't accidentally reverted:
   every message ID; read `role` back off `message.updated` events instead of
   trying to know the ID in advance (see `src/opencode/useSessionStream.ts`).
 
-## Phase 2 (later)
+## Phase 2 — editing (shipped)
 
-Flip `agent.console.permission.edit` (and `bash`, if desired) from `"deny"` to
-`"allow"` (or `"ask"`) in `opencode.jsonc`. No client code changes needed.
+`edit`/`write`/`patch` are now `"allow"` in `opencode.jsonc` — the agent can
+create and modify files. `bash` and `task` (subagent delegation) stay
+`"deny"`; only editing was asked for. Tool calls (edits, reads, greps, etc.)
+render inline in the transcript — see `ToolCallBubble.tsx` — so an edit shows
+its diff/output in the chat, not just the assistant's narration text.
+
+Verified end-to-end (not just typechecked): asked the agent to edit this
+README and add a marker line, confirmed the line actually appeared on disk
+and the tool call rendered in the transcript on a mobile viewport with no
+horizontal overflow.
+

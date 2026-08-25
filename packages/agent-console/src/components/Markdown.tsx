@@ -39,7 +39,7 @@ const CodeBlock = (props: {
       </pre>
     );
   }
-  // eslint-disable-next-line react/no-danger -- shiki output is escaped token spans, not raw source
+  // shiki output is escaped token spans, not raw source, so this is the standard safe pattern.
   return <div className="code-block" dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
