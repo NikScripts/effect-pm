@@ -2,6 +2,7 @@ import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import * as Router from "last-ts/Router";
 import { client } from "../opencode/client";
+import { type SessionDetail, useSessionDetails } from "../opencode/useSessionDetails";
 import { urls } from "../site";
 import { navigateWithTransition } from "../viewTransition";
 
@@ -16,23 +17,27 @@ const timeAgo = (ms: number): string => {
   return `${days}d ago`;
 };
 
-/**
- * Diff-stat badge from `Session.summary` — free (already on the list response,
- * no per-session fetch) and the one piece of detail that actually matters for
- * a coding-agent session: what did this session change.
- */
-const SessionStats = (props: { readonly session: Session }): React.ReactElement | null => {
-  const summary = props.session.summary;
-  if (summary === undefined || (summary.additions === 0 && summary.deletions === 0)) {
-    return null;
-  }
+const SessionStats = (props: {
+  readonly detail: SessionDetail | undefined;
+}): React.ReactElement | null => {
+  const detail = props.detail;
+  if (detail === undefined) return null;
   return (
     <div className="session-stats">
-      {summary.additions > 0 ? <span className="stat-add">+{summary.additions}</span> : null}
-      {summary.deletions > 0 ? <span className="stat-del">-{summary.deletions}</span> : null}
-      <span className="stat-files">
-        {summary.files} file{summary.files === 1 ? "" : "s"}
+      {detail.status === "busy" || detail.status === "retry" ? (
+        <span className="status-active" title={detail.status}>
+          <span className="status-dot" />
+          {detail.status === "retry" ? "retrying" : "active"}
+        </span>
+      ) : null}
+      <span>
+        {detail.messageCount} msg{detail.messageCount === 1 ? "" : "s"}
       </span>
+      {detail.editCount > 0 ? (
+        <span className="stat-add">
+          {detail.editCount} edit{detail.editCount === 1 ? "" : "s"}
+        </span>
+      ) : null}
     </div>
   );
 };
@@ -77,6 +82,7 @@ export const SessionList = (): React.ReactElement => {
   };
 
   const sorted = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
+  const details = useSessionDetails(sorted.map((s) => s.id));
 
   return (
     <div className="session-list">
@@ -115,7 +121,7 @@ export const SessionList = (): React.ReactElement => {
           >
             <div className="session-card-title">{session.title || session.id}</div>
             <div className="session-card-meta">
-              <SessionStats session={session} />
+              <SessionStats detail={details.get(session.id)} />
               <span className="session-time">{timeAgo(session.time.updated)}</span>
             </div>
           </button>

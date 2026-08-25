@@ -166,6 +166,33 @@ a {
   color: var(--text-dim);
 }
 
+.status-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #4ade80;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  animation: status-pulse 1.4s infinite ease-in-out;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+
 .session-time {
   flex-shrink: 0;
   white-space: nowrap;
