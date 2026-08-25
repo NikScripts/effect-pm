@@ -5,6 +5,7 @@
  *
  * @internal
  */
+import { expandHome } from "./homeDir";
 import { type ScannedRepo, scanRepos } from "./repoScan";
 import { getLastScanAt, setLastScanAt } from "./settings";
 
@@ -68,7 +69,8 @@ export const isStale = (): boolean => {
  * in-flight scan rather than each kicking off their own. */
 export const rescan = (rootDir: string): Promise<ReadonlyArray<ScannedRepo>> => {
   if (inFlight !== undefined) return inFlight;
-  inFlight = scanRepos(rootDir)
+  inFlight = expandHome(rootDir)
+    .then(scanRepos)
     .then((repos) => {
       inMemory = repos;
       persist(repos);

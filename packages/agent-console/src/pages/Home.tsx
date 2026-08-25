@@ -46,6 +46,7 @@ export const Home = (): React.ReactElement => {
     getCachedRepos(),
   );
   const [scanning, setScanning] = React.useState(false);
+  const [scanError, setScanError] = React.useState<string | undefined>(undefined);
 
   const refresh = React.useCallback(async (): Promise<void> => {
     if (sessionListCache.sessions === undefined) setLoading(true);
@@ -66,21 +67,31 @@ export const Home = (): React.ReactElement => {
     void refresh();
   }, [refresh]);
 
+  const runRescan = React.useCallback((dir: string): void => {
+    setScanning(true);
+    rescan(dir)
+      .then((repos) => {
+        setScanned(repos);
+        setScanError(undefined);
+      })
+      .catch((err: unknown) => {
+        // Sessions still show, ungrouped via the fallback bucket — but say so
+        // out loud. Silently swallowing this is exactly what made a hard
+        // scan failure (unreachable/unresolvable root dir) look identical to
+        // "scanned fine, nothing to group" — no way to tell the two apart
+        // from the UI alone.
+        setScanError(err instanceof Error ? err.message : "Couldn't scan for repos.");
+      })
+      .finally(() => setScanning(false));
+  }, []);
+
   React.useEffect(() => {
     if (rootDir === undefined) {
       navigateWithTransition(() => router.go(urls.setup()));
       return;
     }
-    if (scanned === undefined || isStale()) {
-      setScanning(true);
-      rescan(rootDir)
-        .then(setScanned)
-        .catch(() => {
-          // Non-fatal — sessions still show, ungrouped, via the fallback bucket.
-        })
-        .finally(() => setScanning(false));
-    }
-  }, [rootDir, scanned]);
+    if (scanned === undefined || isStale()) runRescan(rootDir);
+  }, [rootDir, scanned, runRescan]);
 
   const openSession = (id: string): void => {
     navigateWithTransition(() => router.go(urls.session(id)));
@@ -151,6 +162,15 @@ export const Home = (): React.ReactElement => {
 
       {!loading && error === undefined && sessions.length === 0 ? (
         <p className="hint">No sessions yet — start one above.</p>
+      ) : null}
+
+      {scanError !== undefined ? (
+        <div className="error-banner">
+          {scanError} Sessions below are shown ungrouped until this is fixed.{" "}
+          <button type="button" onClick={() => runRescan(rootDir)}>
+            Retry
+          </button>
+        </div>
       ) : null}
 
       {recent.length > 0 ? (

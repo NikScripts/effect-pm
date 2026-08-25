@@ -62,6 +62,16 @@ const readFileText = async (directory: string, path: string): Promise<string | u
   }
 };
 
+/** Thrown only when `rootDir` itself can't be listed at all — a real
+ * failure (bad path, unreachable server), never "found nothing". Confirmed
+ * hands-on this distinction was missing entirely: a `directory` the server
+ * can't resolve at all (e.g. a literal, un-expanded `~/Coding` — the file
+ * API doesn't do shell-style `~` expansion, it 500s) came back from the
+ * swallow-everything `listDirectoryEntries` indistinguishable from "scanned
+ * fine, zero repos here" — every session silently fell through to the
+ * basename fallback with no error anywhere. */
+export class RepoScanError extends Error {}
+
 const basename = (path: string): string => {
   const segments = path.split("/").filter((s) => s.length > 0);
   return segments[segments.length - 1] ?? path;
@@ -80,7 +90,28 @@ type GitEntry = { readonly checkoutDir: string; readonly gitType: "file" | "dire
  * Doesn't descend into a confirmed checkout's own subdirectories (avoids
  * treating a submodule as its own top-level repo). */
 const findGitEntries = async (rootDir: string): Promise<ReadonlyArray<GitEntry>> => {
-  const rootEntries = await listDirectoryEntries(rootDir, ".");
+  let rootEntries: ReadonlyArray<DirEntry>;
+  try {
+    // The SDK client does NOT throw on an HTTP error response by default
+    // (throwOnError defaults to false) — it resolves normally with `data:
+    // undefined, error: {...}`. Confirmed hands-on: `{ data } =
+    // await client.file.list(...)` for an unreachable directory returns
+    // `data: undefined` with NO exception at all, which every other call
+    // site in this file (correctly) treats as "0 entries", the exact
+    // silent-failure shape that hid this whole bug. Checked explicitly here
+    // — every other call site's swallow-to-[] stays correct, since those are
+    // genuinely optional lookups (a submodule dir, a missing worktrees/
+    // folder), not "is the configured root even reachable at all".
+    const { data, error } = await client.file.list({ query: { directory: rootDir, path: "." } });
+    if (error !== undefined) {
+      const message = typeof error === "object" && error !== null && "data" in error ? (error as { data?: { message?: string } }).data?.message : undefined;
+      throw new Error(message ?? "unreachable");
+    }
+    rootEntries = data ?? [];
+  } catch (cause) {
+    throw new RepoScanError(`Couldn't list "${rootDir}" — check the root folder path in Settings.`, { cause });
+  }
+
   const rootDotGit = rootEntries.find((e) => e.name === ".git");
   const ownRoot: ReadonlyArray<GitEntry> = rootDotGit === undefined ? [] : [{ checkoutDir: rootDir, gitType: rootDotGit.type }];
 

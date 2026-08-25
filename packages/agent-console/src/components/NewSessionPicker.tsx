@@ -44,7 +44,7 @@ export const NewSessionPicker = (props: {
       setScanning(true);
       rescan(rootDir)
         .then(setScanned)
-        .catch(() => setError("Couldn't scan for repos — check the OpenCode server is reachable."))
+        .catch((err: unknown) => setError(err instanceof Error ? err.message : "Couldn't scan for repos."))
         .finally(() => setScanning(false));
     }
   }, [rootDir]); // eslint-disable-line react-hooks/exhaustive-deps -- one-shot on mount, not on every `scanned` update

@@ -7,7 +7,7 @@ vi.mock("./client", () => ({
   client: { file: { list: (...args: Array<unknown>) => listMock(...args), read: (...args: Array<unknown>) => readMock(...args) } },
 }));
 
-const { scanRepos } = await import("./repoScan");
+const { RepoScanError, scanRepos } = await import("./repoScan");
 
 type Entry = { readonly name: string; readonly type: "file" | "directory" };
 
@@ -15,6 +15,31 @@ const dir = (name: string): Entry => ({ name, type: "directory" });
 const file = (name: string): Entry => ({ name, type: "file" });
 
 describe("scanRepos", () => {
+  it("throws instead of silently returning an empty scan when rootDir itself can't be listed", async () => {
+    // Reproduces a real, confirmed failure: a literal `~/Coding` root dir
+    // (the file API doesn't shell-expand `~`) 500s. Before this was fixed,
+    // that error was swallowed and scanRepos just returned `[]` —
+    // indistinguishable from "scanned fine, no repos here".
+    listMock.mockImplementation(() => Promise.reject(new Error("500 UnknownError")));
+
+    await expect(scanRepos("~/Coding")).rejects.toThrow(RepoScanError);
+  });
+
+  it("throws even when the SDK resolves an HTTP error instead of rejecting", async () => {
+    // The real shape, confirmed hands-on: the generated SDK client does NOT
+    // throw on a non-2xx response by default (throwOnError defaults to
+    // false) — it resolves normally with `data: undefined, error: {...}`.
+    // A version of this fix that only wrapped `list()` in try/catch missed
+    // this entirely: no exception was ever thrown, so `data ?? []` silently
+    // produced an empty (not failed) scan for a genuinely unreachable root.
+    listMock.mockResolvedValue({
+      data: undefined,
+      error: { name: "UnknownError", data: { message: "Unexpected server error. Check server logs for details." } },
+    });
+
+    await expect(scanRepos("/nope")).rejects.toThrow(RepoScanError);
+  });
+
   it("finds a repo whose main checkout has a `.git` directory with no linked worktrees", async () => {
     listMock.mockImplementation(({ query }: { query: { directory: string; path: string } }) => {
       if (query.directory === "/root" && query.path === ".") return { data: [dir("solo")] };
