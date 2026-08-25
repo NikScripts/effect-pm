@@ -48,9 +48,11 @@ export type SessionDetail = {
 
 const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
 const PREVIEW_LENGTH = 140;
-const MESSAGE_FETCH_LIMIT = 20;
+/** @internal exported for unit tests — see useSessionDetails.test.ts */
+export const MESSAGE_FETCH_LIMIT = 20;
 
-const detailFromMessages = (
+/** @internal exported for unit tests — see useSessionDetails.test.ts */
+export const detailFromMessages = (
   messages: ReadonlyArray<{ readonly info: Message; readonly parts: ReadonlyArray<Part> }>,
 ): Omit<SessionDetail, "status"> => {
   let editCount = 0;

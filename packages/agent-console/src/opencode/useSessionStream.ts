@@ -47,13 +47,15 @@ export type Transcript = {
   readonly busy: boolean;
 };
 
-const EMPTY: Transcript = { messages: new Map(), order: [], busy: false };
+export const EMPTY: Transcript = { messages: new Map(), order: [], busy: false };
 const MAX_RECONNECT_DELAY_MS = 10_000;
 
-const isRenderablePart = (part: Part): part is RenderablePart =>
+/** @internal exported for unit tests — see useSessionStream.test.ts */
+export const isRenderablePart = (part: Part): part is RenderablePart =>
   part.type === "text" || part.type === "tool";
 
-const withRole = (
+/** @internal exported for unit tests — see useSessionStream.test.ts */
+export const withRole = (
   transcript: Transcript,
   messageID: string,
   role: "user" | "assistant",
@@ -71,7 +73,8 @@ const withRole = (
   return { ...transcript, messages, order };
 };
 
-const withPart = (transcript: Transcript, part: RenderablePart): Transcript => {
+/** @internal exported for unit tests — see useSessionStream.test.ts */
+export const withPart = (transcript: Transcript, part: RenderablePart): Transcript => {
   const existing = transcript.messages.get(part.messageID);
   // Role isn't known yet if this part arrives before its `message.updated` event —
   // default to "assistant" (the far more common ordering) and let a later
