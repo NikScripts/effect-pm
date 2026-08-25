@@ -1,22 +1,22 @@
 /**
- * Real repo/worktree discovery — no assumed directory layout. A checkout is
+ * Real repo/worktree discovery — driven entirely by git's own on-disk
+ * metadata, not folder location or shelling out to `git`. A checkout is
  * anything under `rootDir` (or one level deeper — confirmed hands-on this
  * matters: real repos here live at `rootDir/packages/effect-pm`, not
- * `rootDir/effect-pm`) with a `.git` entry. Its worktrees are whatever
- * `git worktree list --porcelain` actually says, run via the "repo-admin"
- * agent (~/.config/opencode/opencode.jsonc — global, not project-local; see
- * that file's comment for why).
+ * `rootDir/effect-pm`) with a `.git` entry.
  *
- * Confirmed hands-on on this machine: worktrees of the *same* repo can be
- * scattered across genuinely different top-level folders (mid-rename, e.g.
- * `Hyperlink/worktrees/*` and `packages/effect-pm*` turned out to be one
- * repo's worktrees). So this doesn't name a repo after the folder it found
- * a checkout in — it runs `git worktree list` from each newly-discovered
- * checkout, and every path *that* returns gets marked covered before
- * moving on, so the same repo is never shelled out to twice and its
- * scattered worktrees end up in one group. The repo's display name is its
- * main worktree's own directory name (what `git worktree list` itself
- * calls canonical — always the first entry).
+ * The point the owner corrected this on: "repos aren't folders, worktrees
+ * aren't just folders. Folders are just where they are stored." Concretely:
+ * a normal repo checkout has `.git` as a DIRECTORY; a `git worktree add`'d
+ * checkout has `.git` as a FILE containing a single `gitdir: <path>` line
+ * pointing back at `<main checkout>/.git/worktrees/<name>`. That pointer —
+ * and the main checkout's own `.git/worktrees` bookkeeping, which points
+ * the other direction — is the repo's real identity. This reads those
+ * files directly (`file.read`), never `git worktree list` in a shelled-out
+ * session: it's fewer moving parts, doesn't need the repo-admin agent at
+ * all for scanning (only worktree *creation* still needs it — see
+ * worktree.ts), and can't be fooled by directories that happen to look
+ * like they belong together.
  *
  * Scanning every repo on every render would be slow and hammer the
  * server, so this is meant to be triggered occasionally (Settings' "Rescan"
@@ -25,29 +25,12 @@
  *
  * @internal
  */
-import type { AssistantMessage, Part } from "@opencode-ai/sdk";
 import { client } from "./client";
-import { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX } from "./worktree";
-
-/** The SDK's declared type for `session.shell`'s 200 response is a bare
- * `AssistantMessage` — confirmed hands-on (dumped the raw response) that's
- * wrong; the real shape is `{ info, parts }`, same as `session.message`.
- * Trusting the wrong declared type meant `.id` silently read as `undefined`
- * at runtime (TS had no way to catch it), which cascaded into a very
- * confusing failure two calls downstream. Narrowed with a real runtime
- * check below, not a blind cast past the wrong declared type. */
-type ShellResult = { readonly info: AssistantMessage; readonly parts: ReadonlyArray<Part> };
-
-const isShellResult = (value: unknown): value is ShellResult =>
-  typeof value === "object" &&
-  value !== null &&
-  "parts" in value &&
-  Array.isArray((value as { parts: unknown }).parts);
 
 export type ScannedWorktree = {
   readonly name: string;
   readonly path: string;
-  /** True for the repo's primary checkout (not a `git worktree add`'d one) —
+  /** True for the repo's primary checkout (`.git` is a directory there) —
    * shown distinctly from a real worktree, and distinctly from the
    * "(no worktree)" fallback bucket used for sessions that don't match any
    * scanned worktree at all. */
@@ -70,92 +53,117 @@ const listDirectoryEntries = async (directory: string, path: string): Promise<Re
   }
 };
 
+const readFileText = async (directory: string, path: string): Promise<string | undefined> => {
+  try {
+    const { data } = await client.file.read({ query: { directory, path } });
+    return data?.type === "text" ? data.content : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const basename = (path: string): string => {
   const segments = path.split("/").filter((s) => s.length > 0);
   return segments[segments.length - 1] ?? path;
 };
 
-/** Every directory under `rootDir` that's itself a git checkout (`.git`
- * present, one or two levels down — see the module comment). Doesn't
- * descend into a confirmed checkout's own subdirectories (avoids treating
- * a submodule as its own top-level repo). */
-const findGitCheckouts = async (rootDir: string): Promise<ReadonlyArray<string>> => {
+const stripTrailingDotGit = (path: string): string => (path.endsWith("/.git") ? path.slice(0, -"/.git".length) : path);
+
+type GitEntry = { readonly checkoutDir: string; readonly gitType: "file" | "directory" };
+
+/** Every directory under `rootDir` with a `.git` entry (one or two levels
+ * down — see the module comment), noting whether that `.git` is a file or
+ * a directory. Doesn't descend into a confirmed checkout's own
+ * subdirectories (avoids treating a submodule as its own top-level repo). */
+const findGitEntries = async (rootDir: string): Promise<ReadonlyArray<GitEntry>> => {
   const level1 = (await listDirectoryEntries(rootDir, ".")).filter((e) => e.type === "directory");
 
-  const checkouts = await Promise.all(
-    level1.map(async (entry) => {
+  const found = await Promise.all(
+    level1.map(async (entry): Promise<ReadonlyArray<GitEntry>> => {
       const ownEntries = await listDirectoryEntries(rootDir, entry.name);
-      if (ownEntries.some((e) => e.name === ".git")) return [`${rootDir}/${entry.name}`];
+      const dotGit = ownEntries.find((e) => e.name === ".git");
+      if (dotGit !== undefined) return [{ checkoutDir: `${rootDir}/${entry.name}`, gitType: dotGit.type }];
 
       const level2 = ownEntries.filter((e) => e.type === "directory");
       const nested = await Promise.all(
-        level2.map(async (sub) => {
+        level2.map(async (sub): Promise<GitEntry | undefined> => {
           const subPath = `${entry.name}/${sub.name}`;
           const subEntries = await listDirectoryEntries(rootDir, subPath);
-          return subEntries.some((e) => e.name === ".git") ? `${rootDir}/${subPath}` : undefined;
+          const nestedDotGit = subEntries.find((e) => e.name === ".git");
+          return nestedDotGit === undefined
+            ? undefined
+            : { checkoutDir: `${rootDir}/${subPath}`, gitType: nestedDotGit.type };
         }),
       );
-      return nested.filter((p): p is string => p !== undefined);
+      return nested.filter((e): e is GitEntry => e !== undefined);
     }),
   );
 
-  return checkouts.flat();
+  return found.flat();
 };
 
-/** `git worktree list --porcelain` output looks like:
- *   worktree /path/to/main
- *   HEAD <sha>
- *   branch refs/heads/main
- *
- *   worktree /path/to/other
- *   HEAD <sha>
- *   branch refs/heads/feature
- * — blank-line-separated blocks, one `worktree <path>` line each. The
- * *first* entry is always the main worktree (git's own convention). */
-const parsePorcelain = (output: string): ReadonlyArray<ScannedWorktree> =>
-  output
-    .split("\n")
-    .filter((line) => line.startsWith("worktree "))
-    .map((line) => line.slice("worktree ".length).trim())
-    .filter((path) => path.length > 0)
-    .map((path, i) => ({ path, name: i === 0 ? "(main)" : basename(path), isMain: i === 0 }));
+/** A `.git` FILE means this checkout is a linked worktree, not a repo in
+ * its own right. Its content is a single `gitdir: <path>` line where
+ * `<path>` is `<main checkout>/.git/worktrees/<name>` — resolve back to
+ * `<main checkout>`, the repo's real identity. */
+const resolveMainFromWorktreeGitFile = async (checkoutDir: string): Promise<string | undefined> => {
+  const content = await readFileText(checkoutDir, ".git");
+  if (content === undefined) return undefined;
 
-const runGitWorktreeList = async (checkoutPath: string): Promise<ReadonlyArray<ScannedWorktree>> => {
-  const { data: session } = await client.session.create({
-    query: { directory: checkoutPath },
-    body: { title: `${WORKTREE_SETUP_PREFIX} scan ${basename(checkoutPath)}` },
-  });
-  if (session === undefined) return [];
+  const match = content.trim().match(/^gitdir:\s*(.+)$/);
+  if (match === null || match[1] === undefined) return undefined;
 
-  const { data } = await client.session.shell({
-    path: { id: session.id },
-    query: { directory: checkoutPath },
-    body: { agent: REPO_ADMIN_AGENT, command: "git worktree list --porcelain" },
-  });
-  if (data === undefined || !isShellResult(data)) return [];
+  const gitdirPath = match[1].trim();
+  const marker = "/.git/worktrees/";
+  const markerIndex = gitdirPath.lastIndexOf(marker);
+  return markerIndex === -1 ? undefined : gitdirPath.slice(0, markerIndex);
+};
 
-  const toolPart = data.parts.find((p) => p.type === "tool");
-  if (toolPart === undefined || toolPart.type !== "tool" || toolPart.state.status !== "completed") return [];
+/** A `.git` DIRECTORY is a main checkout (or a standalone repo with no
+ * linked worktrees). Its `.git/worktrees/<name>/gitdir` file is git's own
+ * bookkeeping for each worktree linked to it — its content is
+ * `<worktree path>/.git`, read directly, never inferred from a folder
+ * name or location. */
+const listLinkedWorktrees = async (mainCheckoutDir: string): Promise<ReadonlyArray<ScannedWorktree>> => {
+  const entries = await listDirectoryEntries(mainCheckoutDir, ".git/worktrees");
+  const names = entries.filter((e) => e.type === "directory").map((e) => e.name);
 
-  return parsePorcelain(toolPart.state.output);
+  const worktrees = await Promise.all(
+    names.map(async (name): Promise<ScannedWorktree | undefined> => {
+      const content = await readFileText(mainCheckoutDir, `.git/worktrees/${name}/gitdir`);
+      if (content === undefined) return undefined;
+      return { name, path: stripTrailingDotGit(content.trim()), isMain: false };
+    }),
+  );
+
+  return worktrees.filter((w): w is ScannedWorktree => w !== undefined);
 };
 
 export const scanRepos = async (rootDir: string): Promise<ReadonlyArray<ScannedRepo>> => {
-  const checkouts = await findGitCheckouts(rootDir);
+  const entries = await findGitEntries(rootDir);
 
-  const covered = new Set<string>();
-  const groups: Array<ScannedRepo> = [];
-
-  // Sequential, not Promise.all: each iteration needs to know what the
-  // *previous* one already covered before deciding whether to shell out.
-  for (const checkoutPath of checkouts) {
-    if (covered.has(checkoutPath)) continue;
-    const worktrees = await runGitWorktreeList(checkoutPath);
-    if (worktrees.length === 0) continue;
-    for (const wt of worktrees) covered.add(wt.path);
-    const main = worktrees.find((w) => w.isMain) ?? worktrees[0]!;
-    groups.push({ repo: basename(main.path), worktrees });
+  // Resolve every discovered checkout to its main checkout's directory —
+  // git's own canonical repo identity, never wherever the folder happens
+  // to be sitting on disk.
+  const mains = new Set<string>();
+  for (const entry of entries) {
+    if (entry.gitType === "directory") {
+      mains.add(entry.checkoutDir);
+    } else {
+      const main = await resolveMainFromWorktreeGitFile(entry.checkoutDir);
+      if (main !== undefined) mains.add(main);
+    }
   }
+
+  const groups = await Promise.all(
+    Array.from(mains).map(async (mainCheckoutDir): Promise<ScannedRepo> => {
+      const linked = await listLinkedWorktrees(mainCheckoutDir);
+      return {
+        repo: basename(mainCheckoutDir),
+        worktrees: [{ name: "(main)", path: mainCheckoutDir, isMain: true }, ...linked],
+      };
+    }),
+  );
 
   return groups;
 };
