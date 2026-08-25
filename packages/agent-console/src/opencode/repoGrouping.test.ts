@@ -87,4 +87,20 @@ describe("groupByRepo", () => {
     expect(hyperlink.sessions.map((s) => s.id)).toEqual(["b", "a"]);
     expect([...hyperlink.worktrees.keys()].sort()).toEqual(["delta", "epsilon"]);
   });
+
+  it("marks a fallback bucket (no git identity at all) as not a known repo", () => {
+    const scanned = scan({
+      repo: "Hyperlink",
+      worktrees: [{ name: "(main)", path: `${ROOT}/Hyperlink`, isMain: true }],
+    });
+    const sessions = [
+      session("a", `${ROOT}/Hyperlink`, 100),
+      session("b", `${ROOT}/plain-folder-no-git`, 200),
+    ];
+
+    const groups = groupByRepo(sessions, scanned);
+
+    expect(groups.find((g) => g.repo === "Hyperlink")?.isKnownRepo).toBe(true);
+    expect(groups.find((g) => g.repo === "plain-folder-no-git")?.isKnownRepo).toBe(false);
+  });
 });

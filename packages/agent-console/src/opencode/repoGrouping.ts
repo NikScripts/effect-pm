@@ -49,6 +49,11 @@ export type RepoGroup = {
   readonly sessions: ReadonlyArray<Session>;
   readonly worktrees: ReadonlyMap<string, ReadonlyArray<Session>>;
   readonly mostRecentUpdate: number;
+  /** False for the basename-of-directory fallback bucket — a folder with
+   * no git identity at all, not an actual repo. Kept out of Home's REPOS
+   * list and shown separately instead, so it's never presented as if it
+   * were a real repo. */
+  readonly isKnownRepo: boolean;
 };
 
 /** Groups by repo (sorted by most-recent activity), each with its sessions
@@ -80,6 +85,7 @@ export const groupByRepo = (
       sessions: sorted,
       worktrees: byWorktree,
       mostRecentUpdate: sorted[0]?.time.updated ?? 0,
+      isKnownRepo: scanned.some((r) => r.repo === repo),
     });
   }
 

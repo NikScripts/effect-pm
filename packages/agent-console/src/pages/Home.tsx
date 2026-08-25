@@ -91,7 +91,7 @@ export const Home = (): React.ReactElement => {
       return;
     }
     if (scanned === undefined || isStale()) runRescan(rootDir);
-  }, [rootDir, scanned, runRescan]);
+  }, [rootDir, scanned, runRescan, router]);
 
   const openSession = (id: string): void => {
     navigateWithTransition(() => router.go(urls.session(id)));
@@ -105,6 +105,8 @@ export const Home = (): React.ReactElement => {
   const recent = sortedByRecent.slice(0, RECENT_COUNT);
   const details = useSessionDetails(sortedByRecent);
   const groups = groupByRepo(sessions, scanned ?? []);
+  const knownGroups = groups.filter((g) => g.isKnownRepo);
+  const otherGroups = groups.filter((g) => !g.isKnownRepo);
 
   if (rootDir === undefined) return <p className="hint">Redirecting to setup…</p>;
 
@@ -194,14 +196,38 @@ export const Home = (): React.ReactElement => {
         </section>
       ) : null}
 
-      {groups.length > 0 ? (
+      {knownGroups.length > 0 ? (
         <section className="repo-list-section">
           <h2 className="section-heading">
             Repos
             {scanning ? <span className="scanning-hint"> — scanning…</span> : null}
           </h2>
           <div className="repo-list">
-            {groups.map((group) => (
+            {knownGroups.map((group) => (
+              <button
+                key={group.repo}
+                type="button"
+                className="repo-card"
+                onClick={() => openRepo(group.repo)}
+              >
+                <span className="repo-card-name">{group.repo}</span>
+                <span className="repo-card-count">
+                  {group.sessions.length} session{group.sessions.length === 1 ? "" : "s"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {otherGroups.length > 0 ? (
+        <section className="repo-list-section">
+          <h2 className="section-heading">Other folders</h2>
+          <p className="hint">
+            Not git repos — no <code>.git</code> found here, so they can&apos;t be matched to one.
+          </p>
+          <div className="repo-list">
+            {otherGroups.map((group) => (
               <button
                 key={group.repo}
                 type="button"
