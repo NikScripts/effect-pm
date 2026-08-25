@@ -1,7 +1,7 @@
 # agent-console
 
-Phase 1 chat client for the OpenCode-backed coding agent. No file editing yet —
-the `console` agent profile in `opencode.jsonc` denies `edit`/`bash` outright.
+Chat client for the OpenCode-backed coding agent, mobile-friendly (works fine
+over Tailscale from a phone), with editing enabled — see Phase 2 below.
 
 ## Run
 
@@ -19,10 +19,20 @@ the `console` agent profile in `opencode.jsonc` denies `edit`/`bash` outright.
    pnpm -C packages/agent-console dev
    ```
 
-3. Open the printed Vite URL, create a session, and chat.
+3. Open the printed Vite URL (the `Network:` one works from another device on
+   the same Tailscale net — the LAN ones don't, use Tailscale, never plain
+   LAN), create a session, and chat.
 
-If you run the server on a different host/port, copy `.env.example` to `.env`
-and adjust `VITE_OPENCODE_HOST`/`VITE_OPENCODE_PORT`.
+**Why the client never talks to `127.0.0.1:4096` directly:** the browser
+resolves a relative URL against whatever origin it loaded the page from — a
+Tailscale IP on a phone, `localhost` on this machine. A hardcoded
+`127.0.0.1:4096` in the client would mean "that device itself" on a phone, not
+this one, and `opencode serve` only binds to loopback by default anyway. Fix:
+`client.ts` uses the relative path `/opencode`, and `vite.config.ts`'s dev
+server proxies it to `127.0.0.1:4096` — so only the already-network-reachable
+Vite dev server needs exposing, never the agent server itself. Point at a
+different opencode instance via `VITE_OPENCODE_BASE_URL` (see `.env.example`)
+if you're not using the proxy.
 
 ## Verify the no-edit permission is actually enforced
 
@@ -52,6 +62,13 @@ noted here so they aren't accidentally reverted:
   aborted manually via `POST /session/{id}/abort`). Let the server assign
   every message ID; read `role` back off `message.updated` events instead of
   trying to know the ID in advance (see `src/opencode/useSessionStream.ts`).
+- **`useSessionStream` must load a session's existing history**, not just
+  subscribe to new events. `/event` is a live stream going forward only —
+  opening a session that already had messages (from the session list, or a
+  fresh page load) showed an empty transcript otherwise. Fixed by fetching
+  `client.session.messages(...)` on mount and applying it before the live
+  subscription starts (so history can't land after, and out of order
+  relative to, something sent moments later).
 
 ## Phase 2 — editing (shipped)
 

@@ -1,6 +1,9 @@
 /**
- * Live transcript for one session — subscribes to the server's global SSE event
- * stream (`/event`, per-directory, not session-scoped) and filters to `sessionID`.
+ * Transcript for one session — loads its existing history (`session.messages`)
+ * on mount, then subscribes to the server's global SSE event stream (`/event`,
+ * per-directory, not session-scoped, filtered to `sessionID`) for anything new.
+ * History always applies before the live subscription starts, so past messages
+ * can't land after (and out of order relative to) a message sent moments later.
  *
  * Role comes from `message.updated` events (`info.role`), not from guessing which
  * message ID the client just sent — an earlier version pre-generated a client-side
@@ -78,6 +81,7 @@ export const useSessionStream = (
 ): {
   readonly transcript: Transcript;
   readonly markBusy: () => void;
+  readonly clearBusy: () => void;
 } => {
   const [transcript, setTranscript] = React.useState<Transcript>(EMPTY);
 
@@ -89,6 +93,21 @@ export const useSessionStream = (
     let cancelled = false;
 
     (async () => {
+      const { data: history } = await client.session.messages({
+        path: { id: sessionID },
+      });
+      if (cancelled) return;
+      setTranscript((t) => {
+        let next = t;
+        for (const { info, parts } of history ?? []) {
+          next = withRole(next, info.id, info.role);
+          for (const part of parts) {
+            if (isRenderablePart(part)) next = withPart(next, part);
+          }
+        }
+        return next;
+      });
+
       const { stream } = await client.event.subscribe({
         signal: controller.signal,
       });
@@ -128,5 +147,11 @@ export const useSessionStream = (
     setTranscript((t) => ({ ...t, busy: true }));
   }, []);
 
-  return { transcript, markBusy };
+  // For when the send request itself fails — only `session.idle` clears `busy`
+  // otherwise, which never arrives if the prompt never reached the server.
+  const clearBusy = React.useCallback(() => {
+    setTranscript((t) => ({ ...t, busy: false }));
+  }, []);
+
+  return { transcript, markBusy, clearBusy };
 };

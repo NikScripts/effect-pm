@@ -1,6 +1,16 @@
 :root {
   color-scheme: dark;
-  font-family: system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+  --bg: #0b0e14;
+  --bg-raised: #151922;
+  --border: #242a36;
+  --text: #e8eaed;
+  --text-dim: #8a91a0;
+  --accent: #6ea8fe;
+  --accent-strong: #4c8dff;
+  --user-bubble: #1c3a5e;
 }
 
 * {
@@ -18,67 +28,122 @@ body {
 }
 
 body {
-  background: #0d1117;
-  color: #e6edf3;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
   height: 100dvh;
 }
 
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #21262d;
+a {
+  color: var(--accent);
 }
 
-header a {
-  /* Real tap target, not just the underlined text (Apple HIG minimum ~44px). */
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.75rem;
-  color: #a5d6ff;
+.hint {
+  padding: 0 1rem;
+  color: var(--text-dim);
 }
+
+.error-banner {
+  margin: 0.5rem 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: #3a1c1c;
+  color: #ffb4ab;
+  font-size: 0.9rem;
+}
+
+.error-banner button {
+  margin-left: 0.4rem;
+  color: inherit;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+
+/* ── Session list ────────────────────────────────────────────────────────── */
 
 .session-list {
   height: 100dvh;
   overflow-y: auto;
 }
 
-.session-list h1 {
-  font-size: 1.1rem;
+.list-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.list-header h1 {
+  font-size: 1.15rem;
+  font-weight: 650;
   margin: 0;
 }
 
-.session-list button {
-  min-height: 2.75rem;
-  padding: 0 1rem;
-  border-radius: 6px;
-  border: 1px solid #30363d;
-  background: #21262d;
-  color: inherit;
+.new-session-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 550;
+  font-size: 0.9rem;
 }
 
 .session-list ul {
   list-style: none;
   margin: 0;
-  padding: 0 1rem;
+  padding: 0.25rem 0.5rem;
 }
 
 .session-list li {
-  padding: 0;
-  border-bottom: 1px solid #161b22;
+  border-radius: 12px;
 }
 
 .session-list li a {
-  display: block;
-  padding: 0.85rem 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 0.75rem;
   color: inherit;
   text-decoration: none;
-  overflow-wrap: anywhere;
+  border-radius: 12px;
 }
+
+.session-list li a:active {
+  background: var(--bg-raised);
+}
+
+.session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-time {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+/* ── Chat ────────────────────────────────────────────────────────────────── */
 
 /* 100dvh (not 100vh) — iOS Safari's address bar collapsing on scroll shrinks the
    *visual* viewport without shrinking 100vh, leaving a sliver of dead space under
@@ -89,43 +154,131 @@ header a {
   height: 100dvh;
 }
 
+.chat-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  color: var(--text);
+}
+
+.back-link:active {
+  background: var(--bg-raised);
+}
+
 .transcript {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 1rem;
+  padding: 0.75rem 1rem 0.25rem;
   -webkit-overflow-scrolling: touch;
 }
 
+.empty-chat {
+  padding: 2rem 0.5rem;
+  text-align: center;
+  color: var(--text-dim);
+}
+
 .message {
-  margin-bottom: 1rem;
+  display: flex;
+  margin-bottom: 0.9rem;
   overflow-wrap: anywhere;
 }
 
-.message-role {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  opacity: 0.6;
+.message-assistant {
+  justify-content: flex-start;
 }
 
-.message-user .message-body {
-  color: #a5d6ff;
+.message-user {
+  justify-content: flex-end;
 }
 
-.message-body p {
+.bubble {
+  max-width: 88%;
+}
+
+.message-user .bubble {
+  background: var(--user-bubble);
+  color: #dce8fb;
+  padding: 0.6rem 0.9rem;
+  border-radius: 18px 18px 4px 18px;
+}
+
+.message-assistant .bubble {
+  max-width: 100%;
+}
+
+.bubble p {
   margin: 0.4rem 0;
 }
 
-.typing {
-  opacity: 0.6;
-  font-style: italic;
+.bubble p:first-child {
+  margin-top: 0;
 }
+
+.bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.typing {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+}
+
+.typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  animation: typing-bounce 1.1s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* ── Tool calls ──────────────────────────────────────────────────────────── */
 
 .tool-call {
   margin: 0.5rem 0;
-  border: 1px solid #21262d;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   overflow: hidden;
+  background: var(--bg-raised);
 }
 
 .tool-header {
@@ -133,15 +286,14 @@ header a {
   flex-wrap: wrap;
   gap: 0.4rem 0.5rem;
   align-items: baseline;
-  padding: 0.4rem 0.6rem;
-  background: #161b22;
+  padding: 0.5rem 0.7rem;
   font-size: 0.8rem;
   font-family: ui-monospace, monospace;
   cursor: pointer;
 }
 
 .tool-name {
-  color: #79c0ff;
+  color: var(--accent);
   text-transform: lowercase;
   /* `.message`'s inherited `overflow-wrap: anywhere` + a long sibling (.tool-path)
      in this flex row let the browser shrink this to near-zero and wrap "edit"
@@ -152,19 +304,19 @@ header a {
 }
 
 .tool-path {
-  color: #8b949e;
+  color: var(--text-dim);
   overflow-wrap: anywhere;
   min-width: 0;
 }
 
 .tool-meta {
-  color: #8b949e;
+  color: var(--text-dim);
   margin-left: auto;
   white-space: nowrap;
 }
 
 .tool-status {
-  padding: 0.5rem 0.6rem;
+  padding: 0 0.7rem 0.6rem;
   opacity: 0.6;
   font-style: italic;
 }
@@ -176,54 +328,76 @@ header a {
   font-size: 0.85rem;
   white-space: pre-wrap;
   word-break: break-word;
+  border-top: 1px solid var(--border);
 }
 
 .tool-error {
   color: #ff7b72;
 }
 
-.tool-completed .code-block pre {
+.tool-call .code-block pre {
   border-radius: 0;
   margin: 0;
+  border-top: 1px solid var(--border);
 }
 
+/* ── Composer ────────────────────────────────────────────────────────────── */
+
 .composer {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-end;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.75rem;
   /* iOS home-indicator / notch clearance when the composer sits at the screen edge. */
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
-  border-top: 1px solid #21262d;
+  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.composer-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 0.3rem 0.4rem 0.3rem 0.9rem;
 }
 
 .composer textarea {
   flex: 1;
-  min-height: 2.75rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  resize: none;
+  min-height: 1.9rem;
   max-height: 40vh;
+  padding: 0.45rem 0;
   /* >=16px — iOS Safari auto-zooms the page on focusing a smaller input. */
   font-size: 16px;
-  background: #161b22;
-  color: inherit;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  padding: 0.6rem;
-  resize: none;
+  font-family: inherit;
+  line-height: 1.35;
 }
 
-.composer button {
-  min-height: 2.75rem;
-  min-width: 2.75rem;
-  padding: 0 1rem;
-  border-radius: 8px;
-  border: 1px solid #30363d;
-  background: #238636;
-  color: white;
+.composer textarea:focus {
+  outline: none;
 }
 
-.composer button:disabled {
-  background: #21262d;
-  color: #8b949e;
+.send-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.send-button:disabled {
+  background: var(--border);
+  color: var(--text-dim);
 }
 
 .code-block pre {
@@ -237,11 +411,23 @@ header a {
   /* Narrow phone widths stay edge-to-edge; wider viewports (tablet/desktop) get a
      centered reading column instead of stretching messages full-width. */
   .transcript,
-  .composer,
-  header,
-  .session-list ul {
+  .composer-inner,
+  .list-header-inner {
     max-width: 720px;
     margin: 0 auto;
+    width: 100%;
+  }
+
+  .list-header,
+  .chat-header,
+  .composer {
+    display: flex;
+    justify-content: center;
+  }
+
+  .list-header > *,
+  .composer > * {
+    max-width: 720px;
     width: 100%;
   }
 }
