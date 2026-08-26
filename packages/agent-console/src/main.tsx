@@ -3,8 +3,11 @@ import { createRoot } from "react-dom/client";
 import * as History from "last-ts/History";
 import * as Router from "last-ts/Router";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { installSafeAreaResumeFix } from "./safeAreaResumeFix";
 import { site } from "./site";
 import "./styles.css";
+
+installSafeAreaResumeFix();
 
 const router = History.service(site);
 
