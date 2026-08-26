@@ -223,9 +223,6 @@ export const Home = (): React.ReactElement => {
       {otherGroups.length > 0 ? (
         <section className="repo-list-section">
           <h2 className="section-heading">Other folders</h2>
-          <p className="hint">
-            Not git repos — no <code>.git</code> found here, so they can&apos;t be matched to one.
-          </p>
           <div className="repo-list">
             {otherGroups.map((group) => (
               <button
