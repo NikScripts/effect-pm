@@ -1,16 +1,42 @@
+/* Matches the system light/dark setting (no in-app toggle) — light values
+   live on bare :root, dark is a full override under prefers-color-scheme,
+   so neither theme is ever a partial patch of the other. */
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
   font-family:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 
-  --bg: #0b0e14;
-  --bg-raised: #151922;
-  --border: #242a36;
-  --text: #e8eaed;
-  --text-dim: #8a91a0;
-  --accent: #6ea8fe;
-  --accent-strong: #4c8dff;
-  --user-bubble: #1c3a5e;
+  --bg: #ffffff;
+  --bg-raised: #f1f2f5;
+  --border: #dfe2e8;
+  --text: #14181f;
+  --text-dim: #6b7280;
+  --accent: #2f6fed;
+  --accent-strong: #2f6fed;
+  --user-bubble: #dce8fb;
+  --user-bubble-text: #0b2c5c;
+  --error-bg: #fbe4e2;
+  --error-text: #9c2a20;
+  --success: #16a34a;
+  --danger: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0e14;
+    --bg-raised: #151922;
+    --border: #242a36;
+    --text: #e8eaed;
+    --text-dim: #8a91a0;
+    --accent: #6ea8fe;
+    --accent-strong: #4c8dff;
+    --user-bubble: #1c3a5e;
+    --user-bubble-text: #dce8fb;
+    --error-bg: #3a1c1c;
+    --error-text: #ffb4ab;
+    --success: #4ade80;
+    --danger: #ff7b72;
+  }
 }
 
 * {
@@ -63,8 +89,8 @@ a {
   margin: 0.5rem 1rem;
   padding: 0.6rem 0.8rem;
   border-radius: 10px;
-  background: #3a1c1c;
-  color: #ffb4ab;
+  background: var(--error-bg);
+  color: var(--error-text);
   font-size: 0.9rem;
 }
 
@@ -251,11 +277,11 @@ a {
 }
 
 .stat-add {
-  color: #4ade80;
+  color: var(--success);
 }
 
 .stat-del {
-  color: #ff7b72;
+  color: var(--danger);
 }
 
 .stat-files {
@@ -266,14 +292,14 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: #4ade80;
+  color: var(--success);
 }
 
 .status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4ade80;
+  background: var(--success);
   animation: status-pulse 1.4s infinite ease-in-out;
 }
 
@@ -378,7 +404,7 @@ a {
 
 .message-user .bubble {
   background: var(--user-bubble);
-  color: #dce8fb;
+  color: var(--user-bubble-text);
   padding: 0.6rem 0.9rem;
   border-radius: 18px 18px 4px 18px;
 }
@@ -495,7 +521,7 @@ a {
 }
 
 .tool-error {
-  color: #ff7b72;
+  color: var(--danger);
 }
 
 .tool-call .code-block pre {

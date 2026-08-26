@@ -2,7 +2,6 @@ import { ChevronLeft } from "lucide-react";
 import * as React from "react";
 import * as Router from "last-ts/Router";
 import { Composer } from "../components/Composer";
-import { DebugSafeArea } from "../components/DebugSafeArea";
 import { MessageBubble } from "../components/MessageBubble";
 import { client } from "../opencode/client";
 import { useSessionStream } from "../opencode/useSessionStream";
@@ -67,7 +66,6 @@ export const SessionChat = (props: { readonly id: string }): React.ReactElement 
         onSend={markBusy}
         onSendFailed={clearBusy}
       />
-      <DebugSafeArea />
     </div>
   );
 };

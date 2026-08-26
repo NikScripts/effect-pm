@@ -6,7 +6,11 @@
          env(safe-area-inset-*) values — the composer's home-indicator
          clearance padding (styles.css) silently does nothing without it. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0e14" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)" />
+    <!-- apple-mobile-web-app-status-bar-style has no light/dark equivalent —
+         iOS reads it once, statically; "black-translucent" gives light status
+         bar icons, which only reads correctly against this app's dark theme. -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
