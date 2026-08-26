@@ -11,8 +11,8 @@
  * @internal
  */
 import type { AssistantMessage, Part } from "@opencode-ai/sdk";
+import { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { client } from "./client";
-import { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX } from "./worktree";
 
 type ShellResult = { readonly info: AssistantMessage; readonly parts: ReadonlyArray<Part> };
 

@@ -11,12 +11,11 @@
  *
  * @internal
  */
+import { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { client } from "./client";
 import { resolveWorktreePath } from "./settings";
 
-export const WORKTREE_SETUP_PREFIX = "[worktree-setup]";
-
-export const REPO_ADMIN_AGENT = "repo-admin";
+export { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX };
 
 export class WorktreeCreateError extends Error {}
 

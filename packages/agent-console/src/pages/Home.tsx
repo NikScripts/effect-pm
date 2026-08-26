@@ -22,7 +22,7 @@ import { client } from "../opencode/client";
 import { displayWorktree, groupByRepo, matchSession } from "../opencode/repoGrouping";
 import type { ScannedRepo } from "../opencode/repoScan";
 import { getCachedRepos, isStale, rescan } from "../opencode/repoScanCache";
-import { getRootDir } from "../opencode/settings";
+import { getRootDir, restoreFromFile } from "../opencode/settings";
 import { useSessionDetails } from "../opencode/useSessionDetails";
 import { urls } from "../site";
 import { navigateWithTransition } from "../viewTransition";
@@ -48,6 +48,7 @@ export const Home = (): React.ReactElement => {
   );
   const [scanning, setScanning] = React.useState(false);
   const [scanError, setScanError] = React.useState<string | undefined>(undefined);
+  const [restoreAttempted, setRestoreAttempted] = React.useState(false);
 
   const refresh = React.useCallback(async (): Promise<void> => {
     if (sessionListCache.sessions === undefined) setLoading(true);
@@ -88,11 +89,17 @@ export const Home = (): React.ReactElement => {
 
   React.useEffect(() => {
     if (rootDir === undefined) {
+      // Cache wipe / genuine first run — try the durable settings file
+      // (settingsFile.ts) before asking again in Setup.
+      if (!restoreAttempted) {
+        restoreFromFile().finally(() => setRestoreAttempted(true));
+        return;
+      }
       navigateWithTransition(() => router.go(urls.setup()));
       return;
     }
     if (scanned === undefined || isStale()) runRescan(rootDir);
-  }, [rootDir, scanned, runRescan, router]);
+  }, [rootDir, scanned, runRescan, router, restoreAttempted]);
 
   const openSession = (id: string): void => {
     navigateWithTransition(() => router.go(urls.session(id)));

@@ -1,10 +1,15 @@
 /**
- * localStorage-backed settings — there's no server-side user/account model,
- * so "where do I look for repos" and "how should new worktrees be laid
- * out" live on the device, not in OpenCode.
+ * localStorage-backed settings, mirrored to a durable file
+ * (settingsFile.ts, `~/.config/agent-console/settings.json` on the
+ * server's machine) on every change — there's no server-side user/account
+ * model, so "where do I look for repos" and "how should new worktrees be
+ * laid out" live on the device by default, but a browser cache wipe
+ * shouldn't lose them outright.
  *
  * @internal
  */
+import { readSettingsFile, writeSettingsFile } from "./settingsFile";
+
 const ROOT_DIR_KEY = "agent-console:rootDir";
 const WORKTREE_TEMPLATE_KEY = "agent-console:worktreeTemplate";
 const LAST_SCAN_KEY = "agent-console:lastScanAt";
@@ -24,14 +29,37 @@ const readString = (key: string): string | undefined => {
 
 export const getRootDir = (): string | undefined => readString(ROOT_DIR_KEY);
 
-export const setRootDir = (value: string): void => {
-  localStorage.setItem(ROOT_DIR_KEY, value);
+export const getWorktreeTemplate = (): string => readString(WORKTREE_TEMPLATE_KEY) ?? DEFAULT_WORKTREE_TEMPLATE;
+
+/** Fire-and-forget — a failed write leaves localStorage as the only copy
+ * for this device, same as before the durable file existed; not surfaced
+ * as a blocking error since nothing about the current session depends on
+ * it succeeding. */
+const persistToFile = (): void => {
+  void writeSettingsFile({ rootDir: getRootDir() ?? "", worktreeTemplate: getWorktreeTemplate() });
 };
 
-export const getWorktreeTemplate = (): string => readString(WORKTREE_TEMPLATE_KEY) ?? DEFAULT_WORKTREE_TEMPLATE;
+export const setRootDir = (value: string): void => {
+  localStorage.setItem(ROOT_DIR_KEY, value);
+  persistToFile();
+};
 
 export const setWorktreeTemplate = (value: string): void => {
   localStorage.setItem(WORKTREE_TEMPLATE_KEY, value);
+  persistToFile();
+};
+
+/** Cold-start recovery: called only when localStorage has no rootDir at
+ * all (a real first run, or a cache wipe) — tries the durable file before
+ * falling back to asking. Restores into localStorage (not just returning
+ * the value) so every other `get*` call here keeps working unchanged.
+ * Returns whether it found anything. */
+export const restoreFromFile = async (): Promise<boolean> => {
+  const restored = await readSettingsFile();
+  if (restored === undefined) return false;
+  localStorage.setItem(ROOT_DIR_KEY, restored.rootDir);
+  localStorage.setItem(WORKTREE_TEMPLATE_KEY, restored.worktreeTemplate);
+  return true;
 };
 
 export const resolveWorktreePath = (rootDir: string, repo: string, name: string): string =>
