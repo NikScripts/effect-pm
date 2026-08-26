@@ -1,3 +1,4 @@
+import { ChevronLeft } from "lucide-react";
 import * as React from "react";
 import * as Router from "last-ts/Router";
 import { Composer } from "../components/Composer";
@@ -35,16 +36,7 @@ export const SessionChat = (props: { readonly id: string }): React.ReactElement 
     <div className="session-chat">
       <header className="chat-header" style={{ viewTransitionName: `session-${props.id}` }}>
         <button type="button" className="back-link" aria-label="Back to sessions" onClick={goBack}>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path
-              d="M15 6l-6 6 6 6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <ChevronLeft size={20} strokeWidth={2.2} aria-hidden="true" />
         </button>
         <span className="chat-title">{title ?? props.id}</span>
       </header>

@@ -7,6 +7,7 @@
  *
  * @internal
  */
+import { ChevronLeft } from "lucide-react";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import * as Router from "last-ts/Router";
@@ -14,7 +15,7 @@ import { NewSessionPicker } from "../components/NewSessionPicker";
 import { SessionCard } from "../components/SessionCard";
 import { sessionListCache } from "../opencode/cache";
 import { client } from "../opencode/client";
-import { NO_WORKTREE, groupByRepo, matchSession } from "../opencode/repoGrouping";
+import { MAIN_WORKTREE, NO_WORKTREE, displayWorktree, groupByRepo, matchSession } from "../opencode/repoGrouping";
 import type { ScannedRepo } from "../opencode/repoScan";
 import { getCachedRepos, isStale, rescan } from "../opencode/repoScanCache";
 import { getRootDir } from "../opencode/settings";
@@ -78,31 +79,24 @@ export const RepoSessions = (props: { readonly name: string }): React.ReactEleme
     navigateWithTransition(() => router.go(urls.sessions()));
   };
 
-  if (rootDir === undefined) return <p className="hint">Set a root folder in Setup first.</p>;
-
   const group = groupByRepo(sessions, scanned ?? []).find((g) => g.repo === props.name);
   const repoSessions = group?.sessions ?? [];
-  const worktreeNames = group === undefined ? [] : [...group.worktrees.keys()];
+  const worktreeNames = group === undefined ? [] : [...group.worktrees.keys()].filter((wt) => wt !== MAIN_WORKTREE);
   const filtered =
     filter === ALL
       ? repoSessions
       : repoSessions.filter((s) => matchSession(s.directory, scanned ?? []).worktree === filter);
+  // useSessionDetails must run on every render (Rules of Hooks) — the
+  // rootDir-undefined early return has to come after it, not before.
   const details = useSessionDetails(repoSessions);
+
+  if (rootDir === undefined) return <p className="hint">Set a root folder in Setup first.</p>;
 
   return (
     <div className="repo-sessions-page">
       <header className="chat-header">
         <button type="button" className="back-link" aria-label="Back to home" onClick={goBack}>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path
-              d="M15 6l-6 6 6 6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <ChevronLeft size={20} strokeWidth={2.2} aria-hidden="true" />
         </button>
         <span className="chat-title">{props.name}</span>
         <button type="button" className="new-session-button" onClick={() => setPickerOpen(true)}>
@@ -144,7 +138,7 @@ export const RepoSessions = (props: { readonly name: string }): React.ReactEleme
               session={session}
               detail={details.get(session.id)}
               onOpen={openSession}
-              worktree={worktree === NO_WORKTREE ? undefined : worktree}
+              worktree={displayWorktree(worktree)}
             />
           );
         })}

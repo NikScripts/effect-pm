@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@opencode-ai/sdk";
-import { groupByRepo, matchSession, NO_WORKTREE } from "./repoGrouping";
+import { MAIN_WORKTREE, NO_WORKTREE, displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
 
 const session = (id: string, directory: string, updated: number): Session =>
@@ -102,5 +102,19 @@ describe("groupByRepo", () => {
 
     expect(groups.find((g) => g.repo === "Hyperlink")?.isKnownRepo).toBe(true);
     expect(groups.find((g) => g.repo === "plain-folder-no-git")?.isKnownRepo).toBe(false);
+  });
+});
+
+describe("displayWorktree", () => {
+  it("hides the main checkout — no badge, no filter pill for it", () => {
+    expect(displayWorktree(MAIN_WORKTREE)).toBeUndefined();
+  });
+
+  it("hides the no-worktree fallback too", () => {
+    expect(displayWorktree(NO_WORKTREE)).toBeUndefined();
+  });
+
+  it("passes a real worktree name through unchanged", () => {
+    expect(displayWorktree("epsilon")).toBe("epsilon");
   });
 });

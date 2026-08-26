@@ -19,6 +19,11 @@ export type RepoWorktree = {
 export const MAIN_WORKTREE = "(main)";
 export const NO_WORKTREE = "(no worktree)";
 
+/** A repo's main checkout isn't shown as its own worktree anywhere in the
+ * UI — no badge, no filter pill. Sessions there just show the repo. */
+export const displayWorktree = (worktree: string): string | undefined =>
+  worktree === MAIN_WORKTREE || worktree === NO_WORKTREE ? undefined : worktree;
+
 const basename = (path: string): string => {
   const segments = path.split("/").filter((s) => s.length > 0);
   return segments[segments.length - 1] ?? path;

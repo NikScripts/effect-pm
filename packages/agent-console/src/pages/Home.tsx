@@ -11,6 +11,7 @@
  *
  * @internal
  */
+import { Plus, Settings as SettingsIcon } from "lucide-react";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import * as Router from "last-ts/Router";
@@ -18,7 +19,7 @@ import { NewSessionPicker } from "../components/NewSessionPicker";
 import { SessionCard } from "../components/SessionCard";
 import { sessionListCache } from "../opencode/cache";
 import { client } from "../opencode/client";
-import { NO_WORKTREE, groupByRepo, matchSession } from "../opencode/repoGrouping";
+import { displayWorktree, groupByRepo, matchSession } from "../opencode/repoGrouping";
 import type { ScannedRepo } from "../opencode/repoScan";
 import { getCachedRepos, isStale, rescan } from "../opencode/repoScanCache";
 import { getRootDir } from "../opencode/settings";
@@ -121,32 +122,10 @@ export const Home = (): React.ReactElement => {
             aria-label="Settings"
             onClick={() => navigateWithTransition(() => router.go(urls.settings()))}
           >
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-              <path
-                d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <path
-                d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V19.5a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H4.5a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H10.6A1.7 1.7 0 0 0 11.64 3H11.5a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9.14a1.7 1.7 0 0 0 1.56 1.04H19.5a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.04V13.5Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <SettingsIcon size={20} strokeWidth={1.8} aria-hidden="true" />
           </button>
           <button type="button" className="new-session-button" onClick={() => setPickerOpen(true)}>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path
-                d="M12 5v14M5 12h14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-              />
-            </svg>
+            <Plus size={18} strokeWidth={2.4} aria-hidden="true" />
             New chat
           </button>
         </div>
@@ -188,7 +167,7 @@ export const Home = (): React.ReactElement => {
                   detail={details.get(session.id)}
                   onOpen={openSession}
                   repo={repo}
-                  worktree={worktree === NO_WORKTREE ? undefined : worktree}
+                  worktree={displayWorktree(worktree)}
                 />
               );
             })}

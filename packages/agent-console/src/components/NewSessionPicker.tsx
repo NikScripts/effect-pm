@@ -6,6 +6,7 @@
  *
  * @internal
  */
+import { X } from "lucide-react";
 import * as React from "react";
 import * as Router from "last-ts/Router";
 import { client } from "../opencode/client";
@@ -103,7 +104,7 @@ export const NewSessionPicker = (props: {
         <div className="picker-header">
           <h2>{state.step === "repo" ? "Pick a repo" : `New chat in ${state.repo}`}</h2>
           <button type="button" className="picker-close" onClick={props.onClose} aria-label="Close">
-            ×
+            <X size={18} strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
 
