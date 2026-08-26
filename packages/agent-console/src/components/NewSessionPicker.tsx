@@ -1,17 +1,23 @@
 /**
  * The bottom-sheet composer for starting a new session — modeled on the
- * Cursor iOS app's own "plan, ask, build" sheet: a repo/worktree selector
- * row up top (tap to change it via the existing repo -> worktree list),
- * a real text composer, and a send button that's disabled until there's
- * text. Sending creates the session *and* delivers the typed text as its
- * first message in one motion, rather than dropping you into an empty chat.
+ * Cursor iOS app's own "plan, ask, build" sheet: two selector pills up top
+ * (repo, then worktree — Cursor's own second pill is "environment"/cloud,
+ * which we don't have a concept of), a real text composer, and a send
+ * button disabled until there's text. Sending creates the session *and*
+ * delivers the typed text as its first message in one motion, rather than
+ * dropping you into an empty chat.
+ *
+ * Tapping either pill (or the model selector) opens the same searchable
+ * full sheet as Cursor's own "Workspace" picker: close button + centered
+ * title, a search field, an "Active" row for the current pick, then every
+ * other option as a flat, dividers-not-cards list.
  *
  * Repo/worktree options still come from the real repoScan.ts result (git
  * worktree list), not an assumed layout.
  *
  * @internal
  */
-import { ArrowUp, ChevronDown, Plus, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronsUpDown, Folder, Plus, Search, X } from "lucide-react";
 import * as React from "react";
 import * as Router from "last-ts/Router";
 import { AGENT, client } from "../opencode/client";
@@ -29,7 +35,10 @@ type Selection = { readonly repo: string; readonly worktree: ScannedWorktree };
 type SubPickerStep =
   | { readonly step: "repo" }
   | { readonly step: "worktree"; readonly repo: string }
+  | { readonly step: "newWorktree"; readonly repo: string; readonly mainCheckoutPath: string }
   | { readonly step: "model" };
+
+const worktreeLabel = (wt: ScannedWorktree): string => (wt.isMain ? "main" : wt.name);
 
 export const NewSessionPicker = (props: {
   readonly onClose: () => void;
@@ -45,6 +54,7 @@ export const NewSessionPicker = (props: {
   const [scanning, setScanning] = React.useState(false);
   const [selection, setSelection] = React.useState<Selection | undefined>(undefined);
   const [subPicker, setSubPicker] = React.useState<SubPickerStep | undefined>(undefined);
+  const [pickerSearch, setPickerSearch] = React.useState("");
   const [newWorktreeName, setNewWorktreeName] = React.useState("");
   const [text, setText] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -120,9 +130,13 @@ export const NewSessionPicker = (props: {
     }
   };
 
-  const repoNames = (scanned ?? []).map((r) => r.repo);
-  const worktreesForSubPicker =
-    subPicker?.step === "worktree" ? ((scanned ?? []).find((r) => r.repo === subPicker.repo)?.worktrees ?? []) : [];
+  const openPicker = (step: SubPickerStep): void => {
+    setPickerSearch("");
+    setSubPicker(step);
+  };
+
+  const worktreesForRepo = (repo: string): ReadonlyArray<ScannedWorktree> =>
+    (scanned ?? []).find((r) => r.repo === repo)?.worktrees ?? [];
 
   const createNewWorktree = async (repo: string, mainCheckoutPath: string): Promise<void> => {
     if (rootDir === undefined) return;
@@ -152,6 +166,8 @@ export const NewSessionPicker = (props: {
     );
   }
 
+  const search = pickerSearch.trim().toLowerCase();
+
   return (
     <div className="picker-overlay" onClick={props.onClose}>
       <div className="composer-sheet" onClick={(e) => e.stopPropagation()}>
@@ -164,14 +180,19 @@ export const NewSessionPicker = (props: {
             type="button"
             className="composer-selector"
             disabled={scanned === undefined}
-            onClick={() => setSubPicker({ step: "repo" })}
+            onClick={() => openPicker({ step: "repo" })}
           >
-            {selection === undefined
-              ? scanning
-                ? "Scanning…"
-                : "Pick a repo"
-              : `${selection.repo} ${selection.worktree.isMain ? "main" : selection.worktree.name}`}
-            <ChevronDown size={16} strokeWidth={2} aria-hidden="true" />
+            {selection === undefined ? (scanning ? "Scanning…" : "Repo") : selection.repo}
+            <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="composer-selector"
+            disabled={selection === undefined}
+            onClick={() => selection !== undefined && openPicker({ step: "worktree", repo: selection.repo })}
+          >
+            {selection === undefined ? "Worktree" : worktreeLabel(selection.worktree)}
+            <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
 
@@ -196,7 +217,12 @@ export const NewSessionPicker = (props: {
             className="composer-plus"
             aria-label="New worktree"
             disabled={selection === undefined || busy}
-            onClick={() => selection !== undefined && setSubPicker({ step: "worktree", repo: selection.repo })}
+            onClick={() => {
+              if (selection === undefined) return;
+              const main = worktreesForRepo(selection.repo).find((w) => w.isMain) ?? selection.worktree;
+              setNewWorktreeName("");
+              openPicker({ step: "newWorktree", repo: selection.repo, mainCheckoutPath: main.path });
+            }}
           >
             <Plus size={18} strokeWidth={2.2} aria-hidden="true" />
           </button>
@@ -204,7 +230,7 @@ export const NewSessionPicker = (props: {
             type="button"
             className="composer-model-selector"
             disabled={models.length === 0}
-            onClick={() => setSubPicker({ step: "model" })}
+            onClick={() => openPicker({ step: "model" })}
           >
             {selectedModel?.name ?? "Model"}
             <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
@@ -219,96 +245,174 @@ export const NewSessionPicker = (props: {
             <ArrowUp size={18} strokeWidth={2.4} aria-hidden="true" />
           </button>
         </div>
-
-        {subPicker !== undefined ? (
-          <div className="sub-picker">
-            <div className="sub-picker-header">
-              <button type="button" className="picker-close" onClick={() => setSubPicker(undefined)} aria-label="Close">
-                <X size={18} strokeWidth={2} aria-hidden="true" />
-              </button>
-              <h3>
-                {subPicker.step === "repo"
-                  ? "Pick a repo"
-                  : subPicker.step === "model"
-                    ? "Pick a model"
-                    : `Worktree in ${subPicker.repo}`}
-              </h3>
-            </div>
-
-            {subPicker.step === "repo" ? (
-              <div className="picker-list">
-                {repoNames.map((repo) => (
-                  <button
-                    key={repo}
-                    type="button"
-                    className="picker-item"
-                    onClick={() => setSubPicker({ step: "worktree", repo })}
-                  >
-                    {repo}
-                  </button>
-                ))}
-              </div>
-            ) : subPicker.step === "model" ? (
-              <div className="picker-list">
-                {models.map((model) => (
-                  <button
-                    key={`${model.providerID}/${model.modelID}`}
-                    type="button"
-                    className="picker-item"
-                    onClick={() => {
-                      setSelectedModel(model);
-                      setSubPicker(undefined);
-                    }}
-                  >
-                    {model.name}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <>
-                <div className="picker-list">
-                  {worktreesForSubPicker.map((wt) => (
-                    <button
-                      key={wt.path}
-                      type="button"
-                      className="picker-item"
-                      onClick={() => {
-                        setSelection({ repo: subPicker.repo, worktree: wt });
-                        setSubPicker(undefined);
-                      }}
-                    >
-                      {wt.isMain ? "main" : wt.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="picker-new-worktree">
-                  <input
-                    type="text"
-                    placeholder="New worktree name"
-                    value={newWorktreeName}
-                    onChange={(e) => setNewWorktreeName(e.target.value)}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    disabled={busy}
-                  />
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      const main = worktreesForSubPicker.find((w) => w.isMain) ?? worktreesForSubPicker[0];
-                      if (main === undefined) return;
-                      void createNewWorktree(subPicker.repo, main.path);
-                    }}
-                  >
-                    {busy ? "Creating…" : "+ New worktree"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ) : null}
       </div>
+
+      {subPicker !== undefined ? (
+        <div className="selection-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="selection-sheet-handle" />
+          <div className="selection-sheet-header">
+            <button type="button" className="picker-close" onClick={() => setSubPicker(undefined)} aria-label="Close">
+              <X size={18} strokeWidth={2} aria-hidden="true" />
+            </button>
+            <h3>
+              {subPicker.step === "repo"
+                ? "Repo"
+                : subPicker.step === "model"
+                  ? "Model"
+                  : subPicker.step === "newWorktree"
+                    ? "New worktree"
+                    : "Worktree"}
+            </h3>
+          </div>
+
+          {subPicker.step === "newWorktree" ? (
+            <div className="picker-new-worktree">
+              <input
+                type="text"
+                placeholder="Worktree name"
+                value={newWorktreeName}
+                onChange={(e) => setNewWorktreeName(e.target.value)}
+                spellCheck={false}
+                autoCapitalize="off"
+                autoCorrect="off"
+                disabled={busy}
+                autoFocus
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void createNewWorktree(subPicker.repo, subPicker.mainCheckoutPath)}
+              >
+                {busy ? "Creating…" : "Create"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="selection-sheet-search">
+                <Search size={16} strokeWidth={2} aria-hidden="true" />
+                <input
+                  type="text"
+                  placeholder={
+                    subPicker.step === "repo" ? "Search repos…" : subPicker.step === "model" ? "Search models…" : "Search worktrees…"
+                  }
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+              </div>
+
+              {subPicker.step === "repo" ? (
+                <RepoOptions
+                  repos={(scanned ?? []).map((r) => r.repo)}
+                  active={selection?.repo}
+                  search={search}
+                  onPick={(repo) => {
+                    const target = (scanned ?? []).find((r) => r.repo === repo);
+                    const main = target?.worktrees.find((w) => w.isMain) ?? target?.worktrees[0];
+                    if (target !== undefined && main !== undefined) setSelection({ repo: target.repo, worktree: main });
+                    setSubPicker(undefined);
+                  }}
+                />
+              ) : subPicker.step === "model" ? (
+                <ModelOptions
+                  models={models}
+                  active={selectedModel}
+                  search={search}
+                  onPick={(model) => {
+                    setSelectedModel(model);
+                    setSubPicker(undefined);
+                  }}
+                />
+              ) : (
+                <WorktreeOptions
+                  worktrees={worktreesForRepo(subPicker.repo)}
+                  active={selection?.repo === subPicker.repo ? selection.worktree : undefined}
+                  search={search}
+                  onPick={(wt) => {
+                    setSelection({ repo: subPicker.repo, worktree: wt });
+                    setSubPicker(undefined);
+                  }}
+                />
+              )}
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+/** One row: folder icon, name, an up/down chevron only on the current
+ * pick — matches the reference's "Active" row treatment, folded into a
+ * single flat list instead of separate Active/Recents/More sections
+ * (we don't track repo-selection recency the way Cursor's own history
+ * does). */
+const OptionRow = (props: {
+  readonly label: string;
+  readonly active: boolean;
+  readonly onClick: () => void;
+}): React.ReactElement => (
+  <button type="button" className={`selection-option${props.active ? " selection-option-active" : ""}`} onClick={props.onClick}>
+    <Folder size={17} strokeWidth={1.6} aria-hidden="true" className="selection-option-icon" />
+    <span className="selection-option-label">{props.label}</span>
+    {props.active ? <ChevronsUpDown size={15} strokeWidth={1.8} aria-hidden="true" className="selection-option-chevron" /> : null}
+  </button>
+);
+
+const RepoOptions = (props: {
+  readonly repos: ReadonlyArray<string>;
+  readonly active: string | undefined;
+  readonly search: string;
+  readonly onPick: (repo: string) => void;
+}): React.ReactElement => {
+  const filtered = props.repos.filter((r) => r.toLowerCase().includes(props.search));
+  return (
+    <div className="selection-list">
+      {filtered.length === 0 ? <p className="hint">No matches.</p> : null}
+      {filtered.map((repo) => (
+        <OptionRow key={repo} label={repo} active={repo === props.active} onClick={() => props.onPick(repo)} />
+      ))}
+    </div>
+  );
+};
+
+const WorktreeOptions = (props: {
+  readonly worktrees: ReadonlyArray<ScannedWorktree>;
+  readonly active: ScannedWorktree | undefined;
+  readonly search: string;
+  readonly onPick: (wt: ScannedWorktree) => void;
+}): React.ReactElement => {
+  const filtered = props.worktrees.filter((wt) => worktreeLabel(wt).toLowerCase().includes(props.search));
+  return (
+    <div className="selection-list">
+      {filtered.length === 0 ? <p className="hint">No matches.</p> : null}
+      {filtered.map((wt) => (
+        <OptionRow key={wt.path} label={worktreeLabel(wt)} active={wt.path === props.active?.path} onClick={() => props.onPick(wt)} />
+      ))}
+    </div>
+  );
+};
+
+const ModelOptions = (props: {
+  readonly models: ReadonlyArray<ModelOption>;
+  readonly active: ModelOption | undefined;
+  readonly search: string;
+  readonly onPick: (model: ModelOption) => void;
+}): React.ReactElement => {
+  const filtered = props.models.filter((m) => m.name.toLowerCase().includes(props.search));
+  return (
+    <div className="selection-list">
+      {filtered.length === 0 ? <p className="hint">No matches.</p> : null}
+      {filtered.map((model) => (
+        <OptionRow
+          key={`${model.providerID}/${model.modelID}`}
+          label={model.name}
+          active={props.active?.providerID === model.providerID && props.active.modelID === model.modelID}
+          onClick={() => props.onPick(model)}
+        />
+      ))}
     </div>
   );
 };
