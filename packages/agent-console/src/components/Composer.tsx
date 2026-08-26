@@ -62,7 +62,7 @@ export const Composer = (props: {
           rows={1}
           value={text}
           disabled={props.disabled}
-          placeholder="Ask about the codebase, or ask it to make a change…"
+          placeholder="Message"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {

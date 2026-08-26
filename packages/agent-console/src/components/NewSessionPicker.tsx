@@ -151,7 +151,7 @@ export const NewSessionPicker = (props: {
             <div className="picker-new-worktree">
               <input
                 type="text"
-                placeholder="New worktree name (blank = auto)"
+                placeholder="Name (optional)"
                 value={newWorktreeName}
                 onChange={(e) => setNewWorktreeName(e.target.value)}
                 spellCheck={false}
