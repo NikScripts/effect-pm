@@ -81,29 +81,42 @@ a {
   overflow-y: auto;
 }
 
-.list-header {
+/* ── Home top bar — avatar/settings left, search + new-repo right, no
+   title (matches the iOS Cursor app's own top bar: identity + actions,
+   the page's own heading does the "what screen is this" job instead). ── */
+
+.home-topbar {
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* env(safe-area-inset-top) — without it this sticky header sits under the
-     notch/Dynamic Island/status bar on iOS instead of below it. */
-  padding: calc(0.85rem + env(safe-area-inset-top)) 1rem 0.85rem;
+  padding: calc(0.7rem + env(safe-area-inset-top)) 0.9rem 0.7rem;
   background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
 }
 
-.list-header h1 {
-  font-size: 1.15rem;
-  font-weight: 650;
-  margin: 0;
+.topbar-avatar,
+.topbar-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  background: var(--bg-raised);
+  border-radius: 999px;
+  color: var(--text-dim);
 }
 
-.list-header-actions {
+.topbar-avatar:active,
+.topbar-icon-button:active {
+  background: color-mix(in srgb, var(--bg-raised) 80%, white 6%);
+}
+
+.topbar-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -121,22 +134,6 @@ a {
   color: #fff;
   font-weight: 550;
   font-size: 0.9rem;
-}
-
-.settings-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border: none;
-  background: none;
-  border-radius: 999px;
-  color: var(--text-dim);
-}
-
-.settings-link:active {
-  background: var(--bg-raised);
 }
 
 .scanning-hint {
@@ -631,6 +628,9 @@ a {
 .home-page {
   height: 100dvh;
   overflow-y: auto;
+  /* Clearance for the fixed .home-composer-bar so the last row of content
+     isn't hidden behind it. */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
 
 .section-heading {
@@ -652,39 +652,60 @@ a {
   padding-bottom: 1rem;
 }
 
-.repo-list {
+/* Flat rows with hairline dividers, not individual cards — folder icon,
+   name, session count, chevron, matching the iOS Cursor app's own
+   "Workspaces" list. */
+.workspace-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0 0.75rem;
+  padding: 0 0.9rem;
 }
 
-.repo-card {
+.workspace-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.6rem;
   width: 100%;
   text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg-raised);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
   color: inherit;
   font: inherit;
-  padding: 0.75rem 0.9rem;
+  padding: 0.8rem 0;
 }
 
-.repo-card:active {
-  background: color-mix(in srgb, var(--bg-raised) 80%, white 6%);
+.workspace-list .workspace-row:last-child {
+  border-bottom: none;
 }
 
-.repo-card-name {
-  font-weight: 560;
+.workspace-row:active {
+  background: var(--bg-raised);
 }
 
-.repo-card-count {
-  font-size: 0.78rem;
+.workspace-row-icon {
+  flex-shrink: 0;
   color: var(--text-dim);
+}
+
+.workspace-row-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspace-row-count {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.workspace-row-chevron {
+  flex-shrink: 0;
+  color: var(--text-dim);
 }
 
 .session-worktree-badge {
@@ -740,28 +761,194 @@ a {
   background: color-mix(in srgb, black 55%, transparent);
 }
 
-.picker-sheet {
+/* ── Home's collapsed bottom bar — a tap target styled like a composer,
+   not an editable one; tapping it (anywhere) opens the real composer
+   sheet below. Matches the iOS Cursor app's own bottom bar. ── */
+
+.home-composer-bar {
+  position: fixed;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: calc(0.9rem + env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0 0.4rem 0 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px color-mix(in srgb, black 35%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.home-composer-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+.home-composer-placeholder {
+  flex: 1;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-composer-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+/* ── New-session composer sheet — repo/worktree selector, a real
+   composer, and a send button that creates the session and delivers
+   the typed text as its first message. ── */
+
+.composer-sheet {
   width: 100%;
   max-height: 80dvh;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   border-radius: 20px 20px 0 0;
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-bottom: none;
-  padding: 0.9rem;
+  padding: 0.5rem 0.9rem 0.9rem;
   padding-bottom: calc(0.9rem + env(safe-area-inset-bottom));
 }
 
-.picker-header {
+.composer-sheet-handle {
+  align-self: center;
+  width: 2.25rem;
+  height: 4px;
+  margin-bottom: 0.6rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.composer-sheet-selector-row {
+  margin-bottom: 0.5rem;
+}
+
+.composer-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-sheet textarea {
+  width: 100%;
+  min-height: 2.6rem;
+  max-height: 40vh;
+  border: none;
+  background: none;
+  color: inherit;
+  resize: none;
+  padding: 0.4rem 0;
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+.composer-sheet textarea:focus-visible {
+  outline: none;
+}
+
+.composer-sheet-bottom-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.composer-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+}
+
+.composer-plus:disabled {
+  opacity: 0.5;
+}
+
+.composer-model-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-model-selector:disabled {
+  opacity: 0.5;
+}
+
+/* The repo/worktree/model sub-picker — slides in over the composer sheet's
+   own content when a selector row is tapped. */
+.sub-picker {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+}
+
+.sub-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin-bottom: 0.6rem;
 }
 
-.picker-header h2 {
+.sub-picker-header h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 620;
 }
 

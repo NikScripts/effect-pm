@@ -11,7 +11,7 @@
  *
  * @internal
  */
-import { Plus, Settings as SettingsIcon } from "lucide-react";
+import { ArrowUp, ChevronRight, Folder, FolderPlus, Plus, Search, Settings as SettingsIcon } from "lucide-react";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import * as Router from "last-ts/Router";
@@ -113,20 +113,24 @@ export const Home = (): React.ReactElement => {
 
   return (
     <div className="home-page">
-      <header className="list-header">
-        <h1>Agent Console</h1>
-        <div className="list-header-actions">
-          <button
-            type="button"
-            className="settings-link"
-            aria-label="Settings"
-            onClick={() => navigateWithTransition(() => router.go(urls.settings()))}
-          >
-            <SettingsIcon size={20} strokeWidth={1.8} aria-hidden="true" />
+      <header className="home-topbar">
+        <button
+          type="button"
+          className="topbar-avatar"
+          aria-label="Settings"
+          onClick={() => navigateWithTransition(() => router.go(urls.settings()))}
+        >
+          <SettingsIcon size={20} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+        <div className="topbar-actions">
+          {/* Not wired yet — no search feature exists. Placeholder to match the layout. */}
+          <button type="button" className="topbar-icon-button" aria-label="Search">
+            <Search size={19} strokeWidth={1.8} aria-hidden="true" />
           </button>
-          <button type="button" className="new-session-button" onClick={() => setPickerOpen(true)}>
-            <Plus size={18} strokeWidth={2.4} aria-hidden="true" />
-            New chat
+          {/* Not wired yet — cloning/initializing a brand-new repo isn't built; this is
+              for that, distinct from the bottom bar (a session in an *existing* repo). */}
+          <button type="button" className="topbar-icon-button" aria-label="New repo or empty project">
+            <FolderPlus size={19} strokeWidth={1.8} aria-hidden="true" />
           </button>
         </div>
       </header>
@@ -178,21 +182,21 @@ export const Home = (): React.ReactElement => {
       {knownGroups.length > 0 ? (
         <section className="repo-list-section">
           <h2 className="section-heading">
-            Repos
+            Workspaces
             {scanning ? <span className="scanning-hint"> — scanning…</span> : null}
           </h2>
-          <div className="repo-list">
+          <div className="workspace-list">
             {knownGroups.map((group) => (
               <button
                 key={group.repo}
                 type="button"
-                className="repo-card"
+                className="workspace-row"
                 onClick={() => openRepo(group.repo)}
               >
-                <span className="repo-card-name">{group.repo}</span>
-                <span className="repo-card-count">
-                  {group.sessions.length} session{group.sessions.length === 1 ? "" : "s"}
-                </span>
+                <Folder size={18} strokeWidth={1.6} aria-hidden="true" className="workspace-row-icon" />
+                <span className="workspace-row-name">{group.repo}</span>
+                <span className="workspace-row-count">{group.sessions.length}</span>
+                <ChevronRight size={18} strokeWidth={1.8} aria-hidden="true" className="workspace-row-chevron" />
               </button>
             ))}
           </div>
@@ -202,23 +206,33 @@ export const Home = (): React.ReactElement => {
       {otherGroups.length > 0 ? (
         <section className="repo-list-section">
           <h2 className="section-heading">Other folders</h2>
-          <div className="repo-list">
+          <div className="workspace-list">
             {otherGroups.map((group) => (
               <button
                 key={group.repo}
                 type="button"
-                className="repo-card"
+                className="workspace-row"
                 onClick={() => openRepo(group.repo)}
               >
-                <span className="repo-card-name">{group.repo}</span>
-                <span className="repo-card-count">
-                  {group.sessions.length} session{group.sessions.length === 1 ? "" : "s"}
-                </span>
+                <Folder size={18} strokeWidth={1.6} aria-hidden="true" className="workspace-row-icon" />
+                <span className="workspace-row-name">{group.repo}</span>
+                <span className="workspace-row-count">{group.sessions.length}</span>
+                <ChevronRight size={18} strokeWidth={1.8} aria-hidden="true" className="workspace-row-chevron" />
               </button>
             ))}
           </div>
         </section>
       ) : null}
+
+      <button type="button" className="home-composer-bar" onClick={() => setPickerOpen(true)}>
+        <span className="home-composer-plus" aria-hidden="true">
+          <Plus size={16} strokeWidth={2.2} />
+        </span>
+        <span className="home-composer-placeholder">Plan, ask, build…</span>
+        <span className="home-composer-send" aria-hidden="true">
+          <ArrowUp size={16} strokeWidth={2.4} />
+        </span>
+      </button>
 
       {pickerOpen ? <NewSessionPicker onClose={() => setPickerOpen(false)} /> : null}
     </div>
