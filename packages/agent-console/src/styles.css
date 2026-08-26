@@ -34,6 +34,10 @@ body {
   /* No layout here is meant to scroll sideways — a wide code block should scroll
      inside its own box (see .code-block), never the page. */
   overflow-x: hidden;
+  /* Base for the standalone-mode height override below — 100% on its own
+     here doesn't affect anything (every full-height container below sets
+     its own explicit height regardless of display mode). */
+  height: 100%;
 }
 
 body {
@@ -1223,4 +1227,33 @@ a {
   border: none;
   background: var(--accent-strong);
   color: #fff;
+}
+
+/* ── Standalone-mode height override ────────────────────────────────────────
+   Confirmed hands-on: in a standalone (home-screen) PWA specifically,
+   `100dvh` doesn't track the same value document.documentElement's own
+   clientHeight does. On this device: correct right after "Add to Home
+   Screen" (dvh == clientHeight, both 873px), but after backgrounding and
+   resuming, window.innerHeight/visualViewport.height (which dvh tracks)
+   silently grow to the *full* screen height (932px — losing the 59px top
+   status-bar reservation), while env(safe-area-inset-*) and clientHeight
+   both stay correct and unchanged (measured directly, not guessed — see
+   DebugSafeArea.tsx). dvh exists specifically to track Safari's collapsing
+   address bar in a *regular browser tab* — standalone mode has no address
+   bar to collapse in the first place, so there's nothing for dvh to
+   correctly track there; use the stable % chain instead, only in
+   standalone mode, leaving regular-tab behavior (where dvh really is
+   doing its job) untouched. Placed at the end of the file on purpose — same
+   specificity as the 100dvh rules above, so source order is what makes it
+   win when the media query matches. */
+@media (display-mode: standalone) {
+  #root,
+  .session-chat,
+  .home-page,
+  .repo-sessions-page,
+  .setup-screen,
+  .settings-page,
+  .crash-screen {
+    height: 100%;
+  }
 }
