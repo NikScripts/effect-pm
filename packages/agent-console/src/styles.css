@@ -1248,6 +1248,18 @@ a {
    as the 100dvh rules above, so source order is what makes this win when
    the media query matches. */
 @media (display-mode: standalone) {
+  /* The actual bug, confirmed hands-on: without this, only #root/the page
+     containers got --screen-height (932px) while html/body stayed sized
+     to the layout viewport (873px, resolved from their own `height: 100%`
+     rule earlier in this file) — #root ended up taller than its own
+     parent body. With body's overflow-y: auto, that doesn't clip outright;
+     it just makes body itself an outer scroll container holding a mostly-
+     invisible 59px of unreachable content at the bottom, which is
+     indistinguishable from clipping without actually scrolling body one
+     more level up — nobody would do that. html/body need the same
+     explicit height so nothing in the chain is shorter than its child. */
+  html,
+  body,
   #root,
   .session-chat,
   .home-page,
