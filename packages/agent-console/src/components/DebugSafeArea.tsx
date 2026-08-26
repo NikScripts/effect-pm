@@ -21,6 +21,8 @@ type Readout = {
   readonly navigatorStandalone: boolean | undefined;
   readonly visibilityState: string;
   readonly displayModeStandalone: boolean;
+  readonly composerBarBottom: number | undefined;
+  readonly composerBarTop: number | undefined;
 };
 
 const measure = (): Readout => {
@@ -38,6 +40,9 @@ const measure = (): Readout => {
   const safeAreaBottom = computed.paddingBottom;
   document.body.removeChild(probe);
 
+  const composerBar = document.querySelector(".home-composer-bar");
+  const composerBarRect = composerBar?.getBoundingClientRect();
+
   return {
     safeAreaTop,
     safeAreaBottom,
@@ -51,6 +56,8 @@ const measure = (): Readout => {
     navigatorStandalone: (navigator as Navigator & { standalone?: boolean }).standalone,
     visibilityState: document.visibilityState,
     displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches,
+    composerBarBottom: composerBarRect?.bottom,
+    composerBarTop: composerBarRect?.top,
   };
 };
 
@@ -71,8 +78,8 @@ export const DebugSafeArea = (): React.ReactElement => {
     <pre
       style={{
         position: "fixed",
-        top: "auto",
-        bottom: "0",
+        top: "0",
+        bottom: "auto",
         left: "0",
         right: "0",
         zIndex: 999,
@@ -91,7 +98,8 @@ innerHeight=${readout.innerHeight} clientHeight=${readout.clientHeight}
 visualViewport height=${readout.visualViewportHeight} offsetTop=${readout.visualViewportOffsetTop}
 screen height=${readout.screenHeight} avail=${readout.screenAvailHeight} dpr=${readout.devicePixelRatio}
 navigator.standalone=${String(readout.navigatorStandalone)} display-mode:standalone=${String(readout.displayModeStandalone)}
-visibilityState=${readout.visibilityState}`}
+visibilityState=${readout.visibilityState}
+composer bar: top=${readout.composerBarTop} bottom=${readout.composerBarBottom} (screen bottom=${readout.screenHeight})`}
     </pre>
   );
 };
