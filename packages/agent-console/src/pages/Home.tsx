@@ -120,6 +120,7 @@ export const Home = (): React.ReactElement => {
 
   return (
     <div className="home-page">
+      <div className="home-scroll">
       <header className="home-topbar">
         <button
           type="button"
@@ -230,6 +231,7 @@ export const Home = (): React.ReactElement => {
           </div>
         </section>
       ) : null}
+      </div>
 
       <button type="button" className="home-composer-bar" onClick={() => setPickerOpen(true)}>
         <span className="home-composer-plus" aria-hidden="true">

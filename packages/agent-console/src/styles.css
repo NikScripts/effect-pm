@@ -625,12 +625,25 @@ a {
 
 /* ── Home (repo/worktree browsing) ──────────────────────────────────────── */
 
+/* .home-composer-bar was `position: fixed`, and iOS Safari (confirmed
+   hands-on, standalone/home-screen mode specifically) doesn't recompute
+   fixed-position bottom offsets against env(safe-area-inset-bottom)
+   reliably as the dynamic viewport settles — it showed up as the bar
+   sitting inconsistently close to or far from the true bottom edge across
+   reloads. .session-chat's own .composer never had this problem because
+   it was never `position: fixed` to begin with — a normal flex child at
+   the bottom of a `display: flex; flex-direction: column; height: 100dvh`
+   layout, which is exactly what this now matches instead. */
 .home-page {
   height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  /* Clearance for the fixed .home-composer-bar so the last row of content
-     isn't hidden behind it. */
-  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
 }
 
 .section-heading {
@@ -766,22 +779,16 @@ a {
    sheet below. Matches the iOS Cursor app's own bottom bar. ── */
 
 .home-composer-bar {
-  position: fixed;
-  left: 0.9rem;
-  right: 0.9rem;
-  bottom: calc(0.9rem + env(safe-area-inset-bottom));
-  z-index: 5;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   min-height: 3rem;
+  margin: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
   padding: 0 0.4rem 0 0.9rem;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 8px 24px color-mix(in srgb, black 35%, transparent);
+  background: var(--bg-raised);
   color: inherit;
   font: inherit;
   text-align: left;
