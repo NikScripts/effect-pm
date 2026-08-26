@@ -23,6 +23,11 @@ type Readout = {
   readonly displayModeStandalone: boolean;
   readonly composerBarBottom: number | undefined;
   readonly composerBarTop: number | undefined;
+  readonly htmlBottom: number;
+  readonly bodyBottom: number;
+  readonly rootBottom: number | undefined;
+  readonly htmlOverflowY: string;
+  readonly bodyOverflowY: string;
 };
 
 const measure = (): Readout => {
@@ -40,8 +45,9 @@ const measure = (): Readout => {
   const safeAreaBottom = computed.paddingBottom;
   document.body.removeChild(probe);
 
-  const composerBar = document.querySelector(".home-composer-bar");
+  const composerBar = document.querySelector(".home-composer-bar, .composer, .composer-sheet");
   const composerBarRect = composerBar?.getBoundingClientRect();
+  const root = document.getElementById("root");
 
   return {
     safeAreaTop,
@@ -58,6 +64,11 @@ const measure = (): Readout => {
     displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches,
     composerBarBottom: composerBarRect?.bottom,
     composerBarTop: composerBarRect?.top,
+    htmlBottom: document.documentElement.getBoundingClientRect().bottom,
+    bodyBottom: document.body.getBoundingClientRect().bottom,
+    rootBottom: root?.getBoundingClientRect().bottom,
+    htmlOverflowY: getComputedStyle(document.documentElement).overflowY,
+    bodyOverflowY: getComputedStyle(document.body).overflowY,
   };
 };
 
@@ -99,7 +110,10 @@ visualViewport height=${readout.visualViewportHeight} offsetTop=${readout.visual
 screen height=${readout.screenHeight} avail=${readout.screenAvailHeight} dpr=${readout.devicePixelRatio}
 navigator.standalone=${String(readout.navigatorStandalone)} display-mode:standalone=${String(readout.displayModeStandalone)}
 visibilityState=${readout.visibilityState}
-composer bar: top=${readout.composerBarTop} bottom=${readout.composerBarBottom} (screen bottom=${readout.screenHeight})`}
+composer bar: top=${readout.composerBarTop} bottom=${readout.composerBarBottom} (screen bottom=${readout.screenHeight})
+html bottom=${readout.htmlBottom} overflowY=${readout.htmlOverflowY}
+body bottom=${readout.bodyBottom} overflowY=${readout.bodyOverflowY}
+#root bottom=${readout.rootBottom}`}
     </pre>
   );
 };
