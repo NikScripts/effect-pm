@@ -15,6 +15,7 @@ import { ArrowUp, ChevronRight, Folder, FolderPlus, Plus, Search, Settings as Se
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import * as Router from "last-ts/Router";
+import { DebugSafeArea } from "../components/DebugSafeArea";
 import { NewSessionPicker } from "../components/NewSessionPicker";
 import { SessionCard } from "../components/SessionCard";
 import { sessionListCache } from "../opencode/cache";
@@ -244,6 +245,7 @@ export const Home = (): React.ReactElement => {
       </button>
 
       {pickerOpen ? <NewSessionPicker onClose={() => setPickerOpen(false)} /> : null}
+      <DebugSafeArea />
     </div>
   );
 };
