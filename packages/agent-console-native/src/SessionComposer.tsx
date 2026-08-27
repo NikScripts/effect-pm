@@ -80,8 +80,21 @@ export const SessionComposer = (props: {
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
+  // `onContentSizeChange` fires once on mount, before any typing — that
+  // very first measurement is the same unreliable one noted above, and
+  // storing it made the field latch onto an inflated height with no real
+  // content to justify it (visible as the field starting "expanded", and
+  // jumping again the moment the first real character landed and this
+  // handler fired *again* on top of the already-wrong stored value).
+  // Skipping only that first call keeps every measurement after it, which
+  // reflects real content, trustworthy.
+  const hasMeasuredContentRef = React.useRef(false);
 
   const onContentSizeChange = (height: number): void => {
+    if (!hasMeasuredContentRef.current) {
+      hasMeasuredContentRef.current = true;
+      return;
+    }
     // The only thing that changes this field's height now is the input
     // growing/shrinking with its content — the controls row is fixed, and
     // nothing toggles on focus anymore — so this is the one place that
