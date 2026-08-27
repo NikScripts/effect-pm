@@ -19,13 +19,16 @@
  * none of it is needed: `GlassView`'s effect sets up exactly once, for
  * real, and stays set up for as long as the composer exists.
  *
- * "Idle" and "editing" are now two arrangements of the same content, not
- * two components — a main row (+ / TextInput / send, always present,
- * mirroring HomeComposerBar's own decoy layout) plus an "Auto" model-
- * picker row that's only rendered while `expanded`. Tapping to open is
- * just tapping into the `TextInput` directly; there's no separate decoy
- * touch target standing in for it anymore, so there's nothing for that
- * tap to race against.
+ * The controls row (+ / Auto / send) is always visible and always at the
+ * bottom, not gated by focus — the `TextInput` sits alone above it and
+ * grows upward as more lines are typed, the standard chat-composer
+ * arrangement. An earlier version tried to keep the idle state visually
+ * identical to HomeComposerBar's decoy pill (+/text/send on one row,
+ * nothing else until focused) — abandoned once it turned out to just mean
+ * relearning where the buttons are depending on focus state. Tapping to
+ * open is just tapping into the `TextInput` directly; there's no separate
+ * decoy touch target standing in for it, so there's nothing for that tap
+ * to race against.
  *
  * Model switching and the attachment ("+") button are stubs for now — real
  * `client.provider.list()` wiring is the next increment once this shell's
@@ -40,17 +43,17 @@ import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { SystemIcon } from "./SystemIcon";
 
-// Comfortably under half the field's smallest (idle) rendered height, so
-// the rounded corners never overlap/distort ("weird clipping") no matter
-// which row arrangement is showing.
+// Comfortably under half the field's smallest possible rendered height
+// (a single-line TextInput plus the fixed controls row), so the rounded
+// corners never overlap/distort ("weird clipping").
 const FIELD_RADIUS = 30;
 const MIN_INPUT_HEIGHT = 24;
 const MAX_INPUT_HEIGHT = 120;
 
 // `LayoutAnimation.Presets.easeInEaseOut` runs 300ms — visibly slower than
-// iOS's own keyboard show/hide animation (~250ms), so the Auto row/field
-// height change was noticeably still finishing after the keyboard had
-// already settled. `'keyboard'` is a real, distinct RN animation type
+// iOS's own keyboard show/hide animation (~250ms), so the field's height
+// change was noticeably still finishing after the keyboard had already
+// settled. `'keyboard'` is a real, distinct RN animation type
 // (UIKit's own keyboard-curve constant, `Types.keyboard`), not a
 // substitute for `easeInEaseOut` — using it at the keyboard's own duration
 // is what actually keeps the two in sync, not just a shorter number.
@@ -72,25 +75,19 @@ export const SessionComposer = (props: {
   const scheme = useColorScheme();
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
-  const [focused, setFocused] = React.useState(false);
-  const expanded = focused || text.length > 0;
   // iOS multiline TextInput's own intrinsic-size reporting to Yoga doesn't
   // reliably account for its own padding — measuring the actual content
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
 
-  const onFocus = (): void => {
+  const onContentSizeChange = (height: number): void => {
+    // The only thing that changes this field's height now is the input
+    // growing/shrinking with its content — the controls row is fixed, and
+    // nothing toggles on focus anymore — so this is the one place that
+    // actually needs to animate.
     LayoutAnimation.configureNext(EXPAND_ANIMATION);
-    setFocused(true);
-  };
-
-  const onBlur = (): void => {
-    // Only animate the collapse when it's actually about to happen — typed
-    // text keeps `expanded` true across a blur, so there's no layout change
-    // to animate in that case.
-    if (text.length === 0) LayoutAnimation.configureNext(EXPAND_ANIMATION);
-    setFocused(false);
+    setContentHeight(height);
   };
 
   const send = async (): Promise<void> => {
@@ -115,37 +112,29 @@ export const SessionComposer = (props: {
        * while plain RN clipping on a wrapper never did. */}
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-          <View style={styles.mainRow}>
+          <TextInput
+            style={[styles.input, { height: Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) }]}
+            value={text}
+            onChangeText={setText}
+            onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
+            editable={!props.disabled}
+            placeholder="Message"
+            placeholderTextColor={colors.placeholderText}
+            multiline
+            submitBehavior="blurAndSubmit"
+            onSubmitEditing={() => void send()}
+          />
+          <View style={styles.controlsRow}>
             <Pressable style={styles.chip}>
               <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
             </Pressable>
-            <TextInput
-              style={[styles.input, { height: Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) }]}
-              value={text}
-              onChangeText={setText}
-              onContentSizeChange={(e) => setContentHeight(e.nativeEvent.contentSize.height)}
-              editable={!props.disabled}
-              placeholder="Message"
-              placeholderTextColor={colors.placeholderText}
-              multiline
-              submitBehavior="blurAndSubmit"
-              onSubmitEditing={() => void send()}
-              onFocus={onFocus}
-              onBlur={onBlur}
-            />
-            <Pressable style={styles.sendChip} onPress={() => void send()}>
-              <SystemIcon name="arrow.up" size={15} color={colors.secondaryLabel} />
-            </Pressable>
-          </View>
-          {/* Always rendered, never conditionally mounted — same reasoning
-           * as the main row's icons. Visibility is `height`/`overflow`
-           * clipping (plain RN, no native-bridge involvement) instead of
-           * removing `SystemIcon` from the tree, since that's exactly the
-           * remount this file's whole rewrite was meant to eliminate. */}
-          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
             <Pressable style={styles.autoButton}>
               <Text style={styles.autoText}>Auto</Text>
               <SystemIcon name="chevron.down" size={9} color={colors.secondaryLabel} />
+            </Pressable>
+            <View style={styles.controlsSpacer} />
+            <Pressable style={styles.sendChip} onPress={() => void send()}>
+              <SystemIcon name="arrow.up" size={15} color={colors.secondaryLabel} />
             </Pressable>
           </View>
         </GlassView>
@@ -178,13 +167,7 @@ const styles = StyleSheet.create({
     padding: 10,
     position: "relative",
   },
-  mainRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   input: {
-    flex: 1,
     color: colors.label,
     fontSize: 16,
     // height is computed inline from `contentHeight` (see the TextInput
@@ -193,15 +176,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 8,
   },
-  autoRow: {
+  // Always visible, always at the bottom — fixed, not gated by focus. The
+  // TextInput above is the only thing that grows/shrinks.
+  controlsRow: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingTop: 4,
-    paddingLeft: COMPOSER_CHIP_SIZE + 8,
-    overflow: "hidden",
   },
-  autoRowCollapsed: {
-    height: 0,
-    paddingTop: 0,
+  controlsSpacer: {
+    flex: 1,
   },
   chip: {
     width: COMPOSER_CHIP_SIZE,
