@@ -91,21 +91,17 @@ export const SessionComposer = (props: {
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
-  // `onContentSizeChange` fires once on mount, before any typing — that
-  // very first measurement is the same unreliable one noted above, and
-  // storing it made the field latch onto an inflated height with no real
-  // content to justify it (visible as the field starting "expanded", and
-  // jumping again the moment the first real character landed and this
-  // handler fired *again* on top of the already-wrong stored value).
-  // Skipping only that first call keeps every measurement after it, which
-  // reflects real content, trustworthy.
-  const hasMeasuredContentRef = React.useRef(false);
-
+  // `onContentSizeChange` can fire with an unreliable measurement before
+  // real content justifies it (mount, before any typing; possibly more
+  // than once while still settling) — storing that made the field latch
+  // onto an inflated height and stay there, looking permanently expanded
+  // regardless of how much text was actually typed. Skipping only the
+  // very first call wasn't enough on its own; ignoring *every*
+  // measurement that arrives while the field is still empty is the
+  // actual invariant that matters — an empty field has no content to
+  // measure a real height from in the first place.
   const onContentSizeChange = (height: number): void => {
-    if (!hasMeasuredContentRef.current) {
-      hasMeasuredContentRef.current = true;
-      return;
-    }
+    if (text.length === 0) return;
     // The only thing that changes this field's height now is the input
     // growing/shrinking with its content — the controls row is fixed, and
     // nothing toggles on focus anymore — so this is the one place that
@@ -117,7 +113,9 @@ export const SessionComposer = (props: {
   const send = async (): Promise<void> => {
     const value = text.trim();
     if (value.length === 0 || props.disabled) return;
+    LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setText("");
+    setContentHeight(MIN_INPUT_HEIGHT);
     setError(undefined);
     try {
       await props.onSend(value);
@@ -139,14 +137,11 @@ export const SessionComposer = (props: {
           <TextInput
             style={[
               styles.input,
-              // Ignore `contentHeight` entirely while empty — TextInput's
-              // very first `onContentSizeChange` fires on mount, before
-              // any typing, and can over-report its own height (the same
-              // multiline-measurement unreliability that motivated
-              // measuring content height directly in the first place).
-              // Left unguarded, that one bad initial measurement latches
-              // in and the field never shrinks back down after a send, or
-              // never even starts small in the first place.
+              // Ignore `contentHeight` entirely while empty — belt and
+              // suspenders alongside `onContentSizeChange`'s own guard
+              // below, since even one stale stored measurement surviving
+              // to render would mean the field never visibly shrinks back
+              // down after a send.
               { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
             ]}
             value={text}
@@ -156,8 +151,11 @@ export const SessionComposer = (props: {
             placeholder="Message"
             placeholderTextColor={colors.placeholderText}
             multiline
-            submitBehavior="blurAndSubmit"
-            onSubmitEditing={() => void send()}
+            // Return inserts a newline instead of sending — matching every
+            // real chat app's multiline composer. `onSubmitEditing` never
+            // fires in this mode, so there's no send-on-enter to wire up
+            // here at all; sending is the send button's job alone.
+            submitBehavior="newline"
           />
           <View style={styles.controlsRow}>
             <Pressable style={styles.chip}>
