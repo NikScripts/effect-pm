@@ -82,23 +82,6 @@ export const SessionComposer = (props: {
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
-  // Bisected against the exact working commit: starting the controls row
-  // permanently visible (never zero on the very first render, whether its
-  // height was "auto" or an explicit number) broke the field — stuck
-  // showing its expanded size from the moment the screen opens. Starting
-  // it collapsed and revealing it once, right after mount, keeps the
-  // field's actual *first* native layout pass identical to the working
-  // version (small, row at zero) while still landing on "always visible"
-  // within a fraction of a second — it just never collapses again after.
-  const [controlsRevealed, setControlsRevealed] = React.useState(false);
-
-  React.useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      LayoutAnimation.configureNext(EXPAND_ANIMATION);
-      setControlsRevealed(true);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, []);
 
   const onFocus = (): void => {
     LayoutAnimation.configureNext(EXPAND_ANIMATION);
@@ -149,12 +132,15 @@ export const SessionComposer = (props: {
             onFocus={onFocus}
             onBlur={onBlur}
           />
-          {/* `controlsRevealed`, not `expanded` — see its own comment
-           * above for why. Same `!x && autoRowCollapsed` mechanism as the
-           * working commit, just driven by a flag that starts false and
-           * flips true once, shortly after mount, instead of one that
-           * toggles with focus. */}
-          <View style={[styles.autoRow, !controlsRevealed && styles.autoRowCollapsed]}>
+          {/* One incremental step from the confirmed-working baseline:
+           * +/Auto/send grouped into the same row (matching the button
+           * placement asked for), everything else about this row —
+           * `Pressable`+`SystemIcon` structure, the `!expanded &&
+           * autoRowCollapsed` height-animation mechanism, `onFocus`/
+           * `onBlur` as the trigger — left exactly as it was in that
+           * working commit. Nothing about *how* this animates changes
+           * here, only which buttons are in the row. */}
+          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
             <Pressable style={styles.chip}>
               <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
             </Pressable>
