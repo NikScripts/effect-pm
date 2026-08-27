@@ -47,6 +47,20 @@ const FIELD_RADIUS = 30;
 const MIN_INPUT_HEIGHT = 24;
 const MAX_INPUT_HEIGHT = 120;
 
+// `LayoutAnimation.Presets.easeInEaseOut` runs 300ms — visibly slower than
+// iOS's own keyboard show/hide animation (~250ms), so the Auto row/field
+// height change was noticeably still finishing after the keyboard had
+// already settled. `'keyboard'` is a real, distinct RN animation type
+// (UIKit's own keyboard-curve constant, `Types.keyboard`), not a
+// substitute for `easeInEaseOut` — using it at the keyboard's own duration
+// is what actually keeps the two in sync, not just a shorter number.
+const EXPAND_ANIMATION = {
+  duration: 250,
+  create: { type: "keyboard", property: "opacity" },
+  update: { type: "keyboard" },
+  delete: { type: "keyboard", property: "opacity" },
+} as const;
+
 export const SessionComposer = (props: {
   readonly onSend: (text: string) => Promise<void>;
   readonly disabled: boolean;
@@ -67,7 +81,7 @@ export const SessionComposer = (props: {
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
 
   const onFocus = (): void => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(true);
   };
 
@@ -75,7 +89,7 @@ export const SessionComposer = (props: {
     // Only animate the collapse when it's actually about to happen — typed
     // text keeps `expanded` true across a blur, so there's no layout change
     // to animate in that case.
-    if (text.length === 0) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (text.length === 0) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(false);
   };
 
