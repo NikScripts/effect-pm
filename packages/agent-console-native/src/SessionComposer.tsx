@@ -103,8 +103,24 @@ export const SessionComposer = (props: {
     setContentHeight(height);
   };
 
+  // The row's own `SystemIcon`s sit inside a container that's clipped to
+  // zero height while collapsed (`autoRowCollapsed`) — while clipped,
+  // they're never actually painted, so their own native measurement
+  // round-trip doesn't get a chance to settle. The moment the row expands
+  // and they become visible for the first time, that round-trip has to
+  // happen right then, which is the "icons pop in and settle a moment
+  // later" timing issue. Gating their *opacity* (not their rendering, not
+  // the row's own height mechanism — that stays exactly as it tested
+  // working) behind the expand animation's real completion means they're
+  // never visible until that round-trip has already had time to finish.
+  const [controlsReady, setControlsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!expanded) setControlsReady(false);
+  }, [expanded]);
+
   const onFocus = (): void => {
-    LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    LayoutAnimation.configureNext(EXPAND_ANIMATION, () => setControlsReady(true));
     setFocused(true);
   };
 
@@ -162,15 +178,15 @@ export const SessionComposer = (props: {
             onFocus={onFocus}
             onBlur={onBlur}
           />
-          {/* One incremental step from the confirmed-working baseline:
-           * +/Auto/send grouped into the same row (matching the button
-           * placement asked for), everything else about this row —
-           * `Pressable`+`SystemIcon` structure, the `!expanded &&
-           * autoRowCollapsed` height-animation mechanism, `onFocus`/
-           * `onBlur` as the trigger — left exactly as it was in that
-           * working commit. Nothing about *how* this animates changes
-           * here, only which buttons are in the row. */}
-          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
+          {/* Height mechanism (`!expanded && autoRowCollapsed`,
+           * `onFocus`/`onBlur` as the trigger) is exactly the confirmed-
+           * working version, untouched — `opacity`/`pointerEvents` are
+           * purely paint/hit-testing, so they don't affect this row's own
+           * height computation at all. */}
+          <View
+            style={[styles.autoRow, !expanded && styles.autoRowCollapsed, { opacity: controlsReady ? 1 : 0 }]}
+            pointerEvents={controlsReady ? "auto" : "none"}
+          >
             <Pressable style={styles.chip}>
               <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
             </Pressable>
