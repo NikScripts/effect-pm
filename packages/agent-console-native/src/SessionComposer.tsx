@@ -47,7 +47,16 @@ import { SystemIcon } from "./SystemIcon";
 // the rounded corners never overlap/distort ("weird clipping") no matter
 // which row arrangement is showing.
 const FIELD_RADIUS = 30;
-const MIN_INPUT_HEIGHT = 24;
+// A fontSize:16 line needs roughly INPUT_LINE_HEIGHT of vertical room —
+// 24 alone (this constant's old value) is smaller than line height +
+// padding combined, too small to fit even one line of text once padding
+// is subtracted. TextInput can't actually honor an explicit height
+// smaller than what its own content needs, so it renders at its own
+// larger natural minimum regardless of what this constant says —
+// independent of the row-visibility mechanism entirely, present from the
+// moment the screen opens, before any focus or typing.
+const INPUT_LINE_HEIGHT = 20;
+const MIN_INPUT_HEIGHT = INPUT_LINE_HEIGHT + 16;
 const MAX_INPUT_HEIGHT = 120;
 
 // `LayoutAnimation.Presets.easeInEaseOut` runs 300ms — visibly slower than
@@ -82,6 +91,17 @@ export const SessionComposer = (props: {
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
+  // onContentSizeChange fires once on mount, before any typing, with an
+  // unreliable measurement — storing that made the field latch onto an
+  // inflated height with no real content to justify it. Ignoring it
+  // entirely while the field is empty (not just skipping the first call)
+  // is the actual invariant that matters — an empty field has no content
+  // to measure a real height from in the first place.
+  const onContentSizeChange = (height: number): void => {
+    if (text.length === 0) return;
+    LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    setContentHeight(height);
+  };
 
   const onFocus = (): void => {
     LayoutAnimation.configureNext(EXPAND_ANIMATION);
@@ -99,7 +119,9 @@ export const SessionComposer = (props: {
   const send = async (): Promise<void> => {
     const value = text.trim();
     if (value.length === 0 || props.disabled) return;
+    LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setText("");
+    setContentHeight(MIN_INPUT_HEIGHT);
     setError(undefined);
     try {
       await props.onSend(value);
@@ -119,10 +141,18 @@ export const SessionComposer = (props: {
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
           <TextInput
-            style={[styles.input, { height: Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) }]}
+            style={[
+              styles.input,
+              // Ignore `contentHeight` entirely while empty — belt and
+              // suspenders alongside `onContentSizeChange`'s own guard
+              // above, since even one stale stored measurement surviving
+              // to render would mean the field never visibly shrinks back
+              // down after a send.
+              { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
+            ]}
             value={text}
             onChangeText={setText}
-            onContentSizeChange={(e) => setContentHeight(e.nativeEvent.contentSize.height)}
+            onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
             editable={!props.disabled}
             placeholder="Message"
             placeholderTextColor={colors.placeholderText}
@@ -186,6 +216,9 @@ const styles = StyleSheet.create({
   input: {
     color: colors.label,
     fontSize: 16,
+    // Explicit, not left to the platform default — MIN_INPUT_HEIGHT is
+    // computed against this same constant, so the two can't drift apart.
+    lineHeight: INPUT_LINE_HEIGHT,
     // height is computed inline from `contentHeight` (see the TextInput
     // element itself) — no min/maxHeight here, that's handled by the
     // Math.min/Math.max clamp around MIN_INPUT_HEIGHT/MAX_INPUT_HEIGHT.
