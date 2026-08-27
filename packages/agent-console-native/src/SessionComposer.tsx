@@ -102,12 +102,27 @@ export const SessionComposer = (props: {
   // measure a real height from in the first place.
   const onContentSizeChange = (height: number): void => {
     if (text.length === 0) return;
-    // The only thing that changes this field's height now is the input
-    // growing/shrinking with its content — the controls row is fixed, and
-    // nothing toggles on focus anymore — so this is the one place that
-    // actually needs to animate.
     LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setContentHeight(height);
+  };
+
+  // Confirmed against the exact commit where this genuinely worked
+  // (before the controls row moved to always-visible): a real
+  // LayoutAnimation.configureNext call on focus/blur, not just on
+  // onContentSizeChange. onContentSizeChange alone is not a reliable
+  // trigger by itself — it can fire late, more than once, or with a
+  // measurement that doesn't reflect the real change yet — so the field's
+  // height change was landing unanimated even when `contentHeight` itself
+  // was correct. Focus/blur are simple, guaranteed-to-fire-once events;
+  // calling configureNext here too means there's always at least one
+  // reliable trigger queued up for whatever layout change is about to
+  // happen, on top of (not instead of) the content-driven one above.
+  const onFocus = (): void => {
+    LayoutAnimation.configureNext(EXPAND_ANIMATION);
+  };
+
+  const onBlur = (): void => {
+    LayoutAnimation.configureNext(EXPAND_ANIMATION);
   };
 
   const send = async (): Promise<void> => {
@@ -147,6 +162,8 @@ export const SessionComposer = (props: {
             value={text}
             onChangeText={setText}
             onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
+            onFocus={onFocus}
+            onBlur={onBlur}
             editable={!props.disabled}
             placeholder="Message"
             placeholderTextColor={colors.placeholderText}
