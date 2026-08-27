@@ -77,26 +77,26 @@ export const SessionComposer = (props: {
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [focused, setFocused] = React.useState(false);
   const expanded = focused || text.length > 0;
+  const inputRef = React.useRef<TextInput>(null);
   // iOS multiline TextInput's own intrinsic-size reporting to Yoga doesn't
   // reliably account for its own padding — measuring the actual content
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
-  // Bisected against the exact working commit: starting the controls row
-  // permanently visible (never zero on the very first render, whether its
-  // height was "auto" or an explicit number) broke the field — stuck
-  // showing its expanded size from the moment the screen opens. Starting
-  // it collapsed and revealing it once, right after mount, keeps the
-  // field's actual *first* native layout pass identical to the working
-  // version (small, row at zero) while still landing on "always visible"
-  // within a fraction of a second — it just never collapses again after.
-  const [controlsRevealed, setControlsRevealed] = React.useState(false);
-
+  // DIAGNOSTIC, not a real fix: an earlier attempt revealed the controls
+  // row programmatically (a requestAnimationFrame callback flipping
+  // `controlsRevealed` directly) instead of through a genuine focus
+  // event, and it broke the same way "always visible" did every other
+  // time. This is the one remaining variable between "works" (onFocus
+  // firing for real, engaging the actual native responder chain/
+  // keyboard) and "broken" (state flipped programmatically with no real
+  // focus event) that hasn't been tested in isolation yet. This
+  // genuinely focuses the input on mount — real onFocus fires, real
+  // keyboard shows briefly — to find out whether that's what matters
+  // before figuring out how to get the same effect without the keyboard
+  // popping.
   React.useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      LayoutAnimation.configureNext(EXPAND_ANIMATION);
-      setControlsRevealed(true);
-    });
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, []);
 
@@ -136,6 +136,7 @@ export const SessionComposer = (props: {
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
           <TextInput
+            ref={inputRef}
             style={[styles.input, { height: Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) }]}
             value={text}
             onChangeText={setText}
@@ -149,12 +150,10 @@ export const SessionComposer = (props: {
             onFocus={onFocus}
             onBlur={onBlur}
           />
-          {/* `controlsRevealed`, not `expanded` — see its own comment
-           * above for why. Same `!x && autoRowCollapsed` mechanism as the
-           * working commit, just driven by a flag that starts false and
-           * flips true once, shortly after mount, instead of one that
-           * toggles with focus. */}
-          <View style={[styles.autoRow, !controlsRevealed && styles.autoRowCollapsed]}>
+          {/* Back to `expanded` — the exact working mechanism, unchanged.
+           * The mount-time effect above triggers it via a real .focus()
+           * call instead of a user tap. */}
+          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
             <Pressable style={styles.chip}>
               <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
             </Pressable>
