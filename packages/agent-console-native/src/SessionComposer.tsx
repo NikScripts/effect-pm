@@ -49,6 +49,16 @@ import { SystemIcon } from "./SystemIcon";
 const FIELD_RADIUS = 30;
 const MIN_INPUT_HEIGHT = 24;
 const MAX_INPUT_HEIGHT = 120;
+// Third isolated step, testing a specific theory: the working version's
+// controls row *always* had an explicit numeric height (0 while
+// collapsed, its natural value once expanded) — the broken "always
+// visible" version left it to "auto"/natural sizing with no explicit
+// number at all, from the very first render. That's the one real
+// structural difference between the two. Testing whether GlassView's own
+// auto-height computation needs children to have explicit height values
+// it can sum (even if those values change over time) rather than a
+// child that's itself "auto"-sized.
+const CONTROLS_ROW_HEIGHT = COMPOSER_SEND_CHIP_SIZE + 4;
 
 // `LayoutAnimation.Presets.easeInEaseOut` runs 300ms — visibly slower than
 // iOS's own keyboard show/hide animation (~250ms), so the Auto row/field
@@ -132,15 +142,11 @@ export const SessionComposer = (props: {
             onFocus={onFocus}
             onBlur={onBlur}
           />
-          {/* One incremental step from the confirmed-working baseline:
-           * +/Auto/send grouped into the same row (matching the button
-           * placement asked for), everything else about this row —
-           * `Pressable`+`SystemIcon` structure, the `!expanded &&
-           * autoRowCollapsed` height-animation mechanism, `onFocus`/
-           * `onBlur` as the trigger — left exactly as it was in that
-           * working commit. Nothing about *how* this animates changes
-           * here, only which buttons are in the row. */}
-          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
+          {/* Always visible now (no more conditional collapse), but with
+           * an explicit height instead of "auto" — testing the theory
+           * above. `expanded` is unused as a result; left in place for
+           * now to keep this step's diff isolated to exactly one thing. */}
+          <View style={[styles.autoRow, { height: CONTROLS_ROW_HEIGHT }]}>
             <Pressable style={styles.chip}>
               <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
             </Pressable>
@@ -198,10 +204,6 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 4,
     overflow: "hidden",
-  },
-  autoRowCollapsed: {
-    height: 0,
-    paddingTop: 0,
   },
   controlsSpacer: {
     flex: 1,
