@@ -47,7 +47,18 @@ import { SystemIcon } from "./SystemIcon";
 // (a single-line TextInput plus the fixed controls row), so the rounded
 // corners never overlap/distort ("weird clipping").
 const FIELD_RADIUS = 30;
-const MIN_INPUT_HEIGHT = 24;
+// A fontSize:16 line needs roughly INPUT_LINE_HEIGHT of vertical room —
+// MIN_INPUT_HEIGHT previously didn't account for that at all (24 total,
+// smaller than line height + padding combined), too small to fit even one
+// line of text once padding's subtracted. TextInput can't actually honor
+// an explicit height smaller than what its own content needs, so it was
+// very likely rendering at its own larger natural minimum regardless of
+// this constant — which would explain the field looking permanently
+// expanded independent of anything content-measurement-related, and the
+// placeholder (probably clipped/squeezed in that too-small box) looking
+// different from real typed text (which forces a correctly-sized render).
+const INPUT_LINE_HEIGHT = 20;
+const MIN_INPUT_HEIGHT = INPUT_LINE_HEIGHT + 16;
 const MAX_INPUT_HEIGHT = 120;
 
 // `LayoutAnimation.Presets.easeInEaseOut` runs 300ms — visibly slower than
@@ -194,6 +205,9 @@ const styles = StyleSheet.create({
   input: {
     color: colors.label,
     fontSize: 16,
+    // Explicit, not left to the platform default — MIN_INPUT_HEIGHT is
+    // computed against this same constant, so the two can't drift apart.
+    lineHeight: INPUT_LINE_HEIGHT,
     // height is computed inline from `contentHeight` (see the TextInput
     // element itself) — no min/maxHeight here, that's handled by the
     // Math.min/Math.max clamp around MIN_INPUT_HEIGHT/MAX_INPUT_HEIGHT.
