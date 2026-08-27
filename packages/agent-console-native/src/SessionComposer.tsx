@@ -19,16 +19,13 @@
  * none of it is needed: `GlassView`'s effect sets up exactly once, for
  * real, and stays set up for as long as the composer exists.
  *
- * The controls row (+ / Auto / send) is always visible and always at the
- * bottom, not gated by focus — the `TextInput` sits alone above it and
- * grows upward as more lines are typed, the standard chat-composer
- * arrangement. An earlier version tried to keep the idle state visually
- * identical to HomeComposerBar's decoy pill (+/text/send on one row,
- * nothing else until focused) — abandoned once it turned out to just mean
- * relearning where the buttons are depending on focus state. Tapping to
- * open is just tapping into the `TextInput` directly; there's no separate
- * decoy touch target standing in for it, so there's nothing for that tap
- * to race against.
+ * "Idle" and "editing" are now two arrangements of the same content, not
+ * two components — a main row (+ / TextInput / send, always present,
+ * mirroring HomeComposerBar's own decoy layout) plus an "Auto" model-
+ * picker row that's only rendered while `expanded`. Tapping to open is
+ * just tapping into the `TextInput` directly; there's no separate decoy
+ * touch target standing in for it anymore, so there's nothing for that
+ * tap to race against.
  *
  * Model switching and the attachment ("+") button are stubs for now — real
  * `client.provider.list()` wiring is the next increment once this shell's
@@ -43,28 +40,17 @@ import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { SystemIcon } from "./SystemIcon";
 
-// Comfortably under half the field's smallest possible rendered height
-// (a single-line TextInput plus the fixed controls row), so the rounded
-// corners never overlap/distort ("weird clipping").
+// Comfortably under half the field's smallest (idle) rendered height, so
+// the rounded corners never overlap/distort ("weird clipping") no matter
+// which row arrangement is showing.
 const FIELD_RADIUS = 30;
-// A fontSize:16 line needs roughly INPUT_LINE_HEIGHT of vertical room —
-// MIN_INPUT_HEIGHT previously didn't account for that at all (24 total,
-// smaller than line height + padding combined), too small to fit even one
-// line of text once padding's subtracted. TextInput can't actually honor
-// an explicit height smaller than what its own content needs, so it was
-// very likely rendering at its own larger natural minimum regardless of
-// this constant — which would explain the field looking permanently
-// expanded independent of anything content-measurement-related, and the
-// placeholder (probably clipped/squeezed in that too-small box) looking
-// different from real typed text (which forces a correctly-sized render).
-const INPUT_LINE_HEIGHT = 20;
-const MIN_INPUT_HEIGHT = INPUT_LINE_HEIGHT + 16;
+const MIN_INPUT_HEIGHT = 24;
 const MAX_INPUT_HEIGHT = 120;
 
 // `LayoutAnimation.Presets.easeInEaseOut` runs 300ms — visibly slower than
-// iOS's own keyboard show/hide animation (~250ms), so the field's height
-// change was noticeably still finishing after the keyboard had already
-// settled. `'keyboard'` is a real, distinct RN animation type
+// iOS's own keyboard show/hide animation (~250ms), so the Auto row/field
+// height change was noticeably still finishing after the keyboard had
+// already settled. `'keyboard'` is a real, distinct RN animation type
 // (UIKit's own keyboard-curve constant, `Types.keyboard`), not a
 // substitute for `easeInEaseOut` — using it at the keyboard's own duration
 // is what actually keeps the two in sync, not just a shorter number.
@@ -86,51 +72,31 @@ export const SessionComposer = (props: {
   const scheme = useColorScheme();
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
+  const [focused, setFocused] = React.useState(false);
+  const expanded = focused || text.length > 0;
   // iOS multiline TextInput's own intrinsic-size reporting to Yoga doesn't
   // reliably account for its own padding — measuring the actual content
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
-  // `onContentSizeChange` can fire with an unreliable measurement before
-  // real content justifies it (mount, before any typing; possibly more
-  // than once while still settling) — storing that made the field latch
-  // onto an inflated height and stay there, looking permanently expanded
-  // regardless of how much text was actually typed. Skipping only the
-  // very first call wasn't enough on its own; ignoring *every*
-  // measurement that arrives while the field is still empty is the
-  // actual invariant that matters — an empty field has no content to
-  // measure a real height from in the first place.
-  const onContentSizeChange = (height: number): void => {
-    if (text.length === 0) return;
-    LayoutAnimation.configureNext(EXPAND_ANIMATION);
-    setContentHeight(height);
-  };
 
-  // Confirmed against the exact commit where this genuinely worked
-  // (before the controls row moved to always-visible): a real
-  // LayoutAnimation.configureNext call on focus/blur, not just on
-  // onContentSizeChange. onContentSizeChange alone is not a reliable
-  // trigger by itself — it can fire late, more than once, or with a
-  // measurement that doesn't reflect the real change yet — so the field's
-  // height change was landing unanimated even when `contentHeight` itself
-  // was correct. Focus/blur are simple, guaranteed-to-fire-once events;
-  // calling configureNext here too means there's always at least one
-  // reliable trigger queued up for whatever layout change is about to
-  // happen, on top of (not instead of) the content-driven one above.
   const onFocus = (): void => {
     LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    setFocused(true);
   };
 
   const onBlur = (): void => {
-    LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    // Only animate the collapse when it's actually about to happen — typed
+    // text keeps `expanded` true across a blur, so there's no layout change
+    // to animate in that case.
+    if (text.length === 0) LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    setFocused(false);
   };
 
   const send = async (): Promise<void> => {
     const value = text.trim();
     if (value.length === 0 || props.disabled) return;
-    LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setText("");
-    setContentHeight(MIN_INPUT_HEIGHT);
     setError(undefined);
     try {
       await props.onSend(value);
@@ -149,42 +115,37 @@ export const SessionComposer = (props: {
        * while plain RN clipping on a wrapper never did. */}
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-          <TextInput
-            style={[
-              styles.input,
-              // Ignore `contentHeight` entirely while empty — belt and
-              // suspenders alongside `onContentSizeChange`'s own guard
-              // below, since even one stale stored measurement surviving
-              // to render would mean the field never visibly shrinks back
-              // down after a send.
-              { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
-            ]}
-            value={text}
-            onChangeText={setText}
-            onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            editable={!props.disabled}
-            placeholder="Message"
-            placeholderTextColor={colors.placeholderText}
-            multiline
-            // Return inserts a newline instead of sending — matching every
-            // real chat app's multiline composer. `onSubmitEditing` never
-            // fires in this mode, so there's no send-on-enter to wire up
-            // here at all; sending is the send button's job alone.
-            submitBehavior="newline"
-          />
-          <View style={styles.controlsRow}>
+          <View style={styles.mainRow}>
             <Pressable style={styles.chip}>
               <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
             </Pressable>
+            <TextInput
+              style={[styles.input, { height: Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) }]}
+              value={text}
+              onChangeText={setText}
+              onContentSizeChange={(e) => setContentHeight(e.nativeEvent.contentSize.height)}
+              editable={!props.disabled}
+              placeholder="Message"
+              placeholderTextColor={colors.placeholderText}
+              multiline
+              submitBehavior="blurAndSubmit"
+              onSubmitEditing={() => void send()}
+              onFocus={onFocus}
+              onBlur={onBlur}
+            />
+            <Pressable style={styles.sendChip} onPress={() => void send()}>
+              <SystemIcon name="arrow.up" size={15} color={colors.secondaryLabel} />
+            </Pressable>
+          </View>
+          {/* Always rendered, never conditionally mounted — same reasoning
+           * as the main row's icons. Visibility is `height`/`overflow`
+           * clipping (plain RN, no native-bridge involvement) instead of
+           * removing `SystemIcon` from the tree, since that's exactly the
+           * remount this file's whole rewrite was meant to eliminate. */}
+          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
             <Pressable style={styles.autoButton}>
               <Text style={styles.autoText}>Auto</Text>
               <SystemIcon name="chevron.down" size={9} color={colors.secondaryLabel} />
-            </Pressable>
-            <View style={styles.controlsSpacer} />
-            <Pressable style={styles.sendChip} onPress={() => void send()}>
-              <SystemIcon name="arrow.up" size={15} color={colors.secondaryLabel} />
             </Pressable>
           </View>
         </GlassView>
@@ -217,28 +178,30 @@ const styles = StyleSheet.create({
     padding: 10,
     position: "relative",
   },
+  mainRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   input: {
+    flex: 1,
     color: colors.label,
     fontSize: 16,
-    // Explicit, not left to the platform default — MIN_INPUT_HEIGHT is
-    // computed against this same constant, so the two can't drift apart.
-    lineHeight: INPUT_LINE_HEIGHT,
     // height is computed inline from `contentHeight` (see the TextInput
     // element itself) — no min/maxHeight here, that's handled by the
     // Math.min/Math.max clamp around MIN_INPUT_HEIGHT/MAX_INPUT_HEIGHT.
     paddingHorizontal: 4,
     paddingVertical: 8,
   },
-  // Always visible, always at the bottom — fixed, not gated by focus. The
-  // TextInput above is the only thing that grows/shrinks.
-  controlsRow: {
+  autoRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
     paddingTop: 4,
+    paddingLeft: COMPOSER_CHIP_SIZE + 8,
+    overflow: "hidden",
   },
-  controlsSpacer: {
-    flex: 1,
+  autoRowCollapsed: {
+    height: 0,
+    paddingTop: 0,
   },
   chip: {
     width: COMPOSER_CHIP_SIZE,
