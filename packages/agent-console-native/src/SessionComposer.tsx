@@ -20,15 +20,18 @@
  * real, and stays set up for as long as the composer exists.
  *
  * "Idle" and "editing" are now two arrangements of the same content, not
- * two components — the `TextInput` alone on its own row, plus a controls
- * row (+ / Auto / send, grouped together) that's only rendered while
- * `expanded`, its height animated in/out via `LayoutAnimation` triggered
- * from the `TextInput`'s own `onFocus`/`onBlur` — the one mechanism
- * confirmed (against the exact commit where it worked, byte-for-byte)
- * to reliably drive that animation; `onContentSizeChange` alone isn't
- * enough. Tapping to open is just tapping into the `TextInput` directly;
- * there's no separate decoy touch target standing in for it anymore, so
- * there's nothing for that tap to race against.
+ * two components — a main row (+ / TextInput / send, always visible,
+ * never collapses) plus an Auto-picker row below it that's the only thing
+ * gated by `expanded`, its height animated in/out via `LayoutAnimation`
+ * triggered from the `TextInput`'s own `onFocus`/`onBlur` — the one
+ * mechanism confirmed (against the exact commit where it worked, byte-
+ * for-byte) to reliably drive that animation; `onContentSizeChange` alone
+ * isn't enough. An intermediate version moved +/send into the same
+ * collapsible row as Auto (an attempt at "buttons always visible") —
+ * wrong, since it made them disappear when idle instead of the opposite.
+ * Tapping to open is just tapping into the `TextInput` directly; there's
+ * no separate decoy touch target standing in for it, so there's nothing
+ * for that tap to race against.
  *
  * Model switching and the attachment ("+") button are stubs for now — real
  * `client.provider.list()` wiring is the next increment once this shell's
@@ -156,47 +159,55 @@ export const SessionComposer = (props: {
        * while plain RN clipping on a wrapper never did. */}
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-          <TextInput
-            style={[
-              styles.input,
-              // Ignore `contentHeight` entirely while empty — belt and
-              // suspenders alongside `onContentSizeChange`'s own guard
-              // above, since even one stale stored measurement surviving
-              // to render would mean the field never visibly shrinks back
-              // down after a send.
-              { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
-            ]}
-            value={text}
-            onChangeText={setText}
-            onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
-            editable={!props.disabled}
-            placeholder="Message"
-            placeholderTextColor={colors.placeholderText}
-            multiline
-            submitBehavior="blurAndSubmit"
-            onSubmitEditing={() => void send()}
-            onFocus={onFocus}
-            onBlur={onBlur}
-          />
-          {/* Height mechanism (`!expanded && autoRowCollapsed`,
-           * `onFocus`/`onBlur` as the trigger) is exactly the confirmed-
-           * working version, untouched — `opacity`/`pointerEvents` are
-           * purely paint/hit-testing, so they don't affect this row's own
-           * height computation at all. */}
+          {/* + / TextInput / send — always visible, never collapses. This
+           * is the original, confirmed-working structure: only the Auto
+           * row below toggles. Moving +/send into that collapsible row
+           * (an earlier attempt at "buttons always visible") was wrong —
+           * it made them disappear when idle instead, since they were no
+           * longer on a row of their own. */}
+          <View style={styles.mainRow}>
+            <Pressable style={styles.chip}>
+              <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
+            </Pressable>
+            <TextInput
+              style={[
+                styles.input,
+                // Ignore `contentHeight` entirely while empty — belt and
+                // suspenders alongside `onContentSizeChange`'s own guard
+                // above, since even one stale stored measurement surviving
+                // to render would mean the field never visibly shrinks back
+                // down after a send.
+                { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
+              ]}
+              value={text}
+              onChangeText={setText}
+              onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
+              editable={!props.disabled}
+              placeholder="Message"
+              placeholderTextColor={colors.placeholderText}
+              multiline
+              submitBehavior="blurAndSubmit"
+              onSubmitEditing={() => void send()}
+              onFocus={onFocus}
+              onBlur={onBlur}
+            />
+            <Pressable style={styles.sendChip} onPress={() => void send()}>
+              <SystemIcon name="arrow.up" size={15} color={colors.secondaryLabel} />
+            </Pressable>
+          </View>
+          {/* Auto picker only — the one thing that actually collapses.
+           * Height mechanism (`!expanded && autoRowCollapsed`, `onFocus`/
+           * `onBlur` as the trigger) is exactly the confirmed-working
+           * version, untouched — `opacity`/`pointerEvents` are purely
+           * paint/hit-testing, so they don't affect this row's own height
+           * computation at all. */}
           <View
             style={[styles.autoRow, !expanded && styles.autoRowCollapsed, { opacity: controlsReady ? 1 : 0 }]}
             pointerEvents={controlsReady ? "auto" : "none"}
           >
-            <Pressable style={styles.chip}>
-              <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
-            </Pressable>
             <Pressable style={styles.autoButton}>
               <Text style={styles.autoText}>Auto</Text>
               <SystemIcon name="chevron.down" size={9} color={colors.secondaryLabel} />
-            </Pressable>
-            <View style={styles.controlsSpacer} />
-            <Pressable style={styles.sendChip} onPress={() => void send()}>
-              <SystemIcon name="arrow.up" size={15} color={colors.secondaryLabel} />
             </Pressable>
           </View>
         </GlassView>
@@ -229,7 +240,13 @@ const styles = StyleSheet.create({
     padding: 10,
     position: "relative",
   },
+  mainRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   input: {
+    flex: 1,
     color: colors.label,
     fontSize: 16,
     // Explicit, not left to the platform default — MIN_INPUT_HEIGHT is
@@ -243,17 +260,13 @@ const styles = StyleSheet.create({
   },
   autoRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
     paddingTop: 4,
+    paddingLeft: COMPOSER_CHIP_SIZE + 8,
     overflow: "hidden",
   },
   autoRowCollapsed: {
     height: 0,
     paddingTop: 0,
-  },
-  controlsSpacer: {
-    flex: 1,
   },
   chip: {
     width: COMPOSER_CHIP_SIZE,
