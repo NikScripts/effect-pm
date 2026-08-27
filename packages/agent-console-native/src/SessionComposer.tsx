@@ -242,12 +242,7 @@ const styles = StyleSheet.create({
   },
   mainRow: {
     flexDirection: "row",
-    // "flex-end", not "center" — TextInput is the tallest child and grows
-    // with multi-line content, so centering pinned the chips to the
-    // middle of the whole box as it grew (looking like they were near the
-    // top relative to a tall field) instead of the bottom, where a send
-    // button belongs.
-    alignItems: "flex-end",
+    alignItems: "center",
     gap: 8,
   },
   input: {
