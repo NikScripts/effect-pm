@@ -60,6 +60,13 @@ const FIELD_RADIUS = 30;
 const INPUT_LINE_HEIGHT = 20;
 const MIN_INPUT_HEIGHT = INPUT_LINE_HEIGHT + 16;
 const MAX_INPUT_HEIGHT = 120;
+// Matches `field.padding` below — pulled out as a constant because it also
+// feeds the explicit field-height computation, not just the style.
+const FIELD_PADDING = 10;
+// The controls row's own natural height (its tallest child, the send
+// chip, plus the row's own top padding) — fixed, since the row itself
+// never grows or shrinks.
+const CONTROLS_ROW_HEIGHT = COMPOSER_SEND_CHIP_SIZE + 4;
 
 // `LayoutAnimation.Presets.easeInEaseOut` runs 300ms — visibly slower than
 // iOS's own keyboard show/hide animation (~250ms), so the field's height
@@ -124,6 +131,12 @@ export const SessionComposer = (props: {
     }
   };
 
+  // Ignore `contentHeight` entirely while empty — belt and suspenders
+  // alongside `onContentSizeChange`'s own guard above, since even one
+  // stale stored measurement surviving to render would mean the field
+  // never visibly shrinks back down after a send.
+  const inputHeight = text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT);
+
   return (
     <View style={[styles.root, { paddingBottom: Math.max(props.bottomInset, 8) }]}>
       {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
@@ -133,17 +146,28 @@ export const SessionComposer = (props: {
        * custom `setBorderCurve` setter broke the glass effect outright,
        * while plain RN clipping on a wrapper never did. */}
       <View style={styles.fieldClip}>
-        <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+        {/* GlassView gets an explicit, computed height — not left to
+         * "auto" from its children's own layout. Every sizing bug this
+         * component has caused all session (the glass effect not
+         * reapplying, the border radius not reapplying) traced back to
+         * the same pattern: it only reliably reacts to its *first* native
+         * layout pass and doesn't correctly react to later ones. If that
+         * first measurement locked in early — e.g. before the input's own
+         * height style had settled to its real value — GlassView would
+         * never re-measure afterward no matter how correct the
+         * TextInput's own style height later became, which would explain
+         * the field looking permanently stuck regardless of anything
+         * `contentHeight`-side fixes did. Computing the field's total
+         * height in JS from known, fixed pieces (padding + input height +
+         * the controls row's fixed height) sidesteps trusting GlassView's
+         * own remeasurement entirely. */}
+        <GlassView
+          style={[styles.field, { height: FIELD_PADDING * 2 + inputHeight + CONTROLS_ROW_HEIGHT }]}
+          glassEffectStyle="regular"
+          colorScheme={scheme === "dark" ? "dark" : "light"}
+        >
           <TextInput
-            style={[
-              styles.input,
-              // Ignore `contentHeight` entirely while empty — belt and
-              // suspenders alongside `onContentSizeChange`'s own guard
-              // below, since even one stale stored measurement surviving
-              // to render would mean the field never visibly shrinks back
-              // down after a send.
-              { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
-            ]}
+            style={[styles.input, { height: inputHeight }]}
             value={text}
             onChangeText={setText}
             onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
@@ -197,7 +221,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   field: {
-    padding: 10,
+    padding: FIELD_PADDING,
     position: "relative",
   },
   input: {
