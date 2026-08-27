@@ -137,14 +137,17 @@ export const SessionComposer = (props: {
               <SystemIcon name="arrow.up" size={15} color={colors.secondaryLabel} />
             </Pressable>
           </View>
-          {expanded ? (
-            <View style={styles.autoRow}>
-              <Pressable style={styles.autoButton}>
-                <Text style={styles.autoText}>Auto</Text>
-                <SystemIcon name="chevron.down" size={9} color={colors.secondaryLabel} />
-              </Pressable>
-            </View>
-          ) : null}
+          {/* Always rendered, never conditionally mounted — same reasoning
+           * as the main row's icons. Visibility is `height`/`overflow`
+           * clipping (plain RN, no native-bridge involvement) instead of
+           * removing `SystemIcon` from the tree, since that's exactly the
+           * remount this file's whole rewrite was meant to eliminate. */}
+          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
+            <Pressable style={styles.autoButton}>
+              <Text style={styles.autoText}>Auto</Text>
+              <SystemIcon name="chevron.down" size={9} color={colors.secondaryLabel} />
+            </Pressable>
+          </View>
         </GlassView>
       </View>
     </View>
@@ -194,6 +197,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingTop: 4,
     paddingLeft: COMPOSER_CHIP_SIZE + 8,
+    overflow: "hidden",
+  },
+  autoRowCollapsed: {
+    height: 0,
+    paddingTop: 0,
   },
   chip: {
     width: COMPOSER_CHIP_SIZE,
