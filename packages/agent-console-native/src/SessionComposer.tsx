@@ -132,12 +132,15 @@ export const SessionComposer = (props: {
             onFocus={onFocus}
             onBlur={onBlur}
           />
-          {/* Second isolated step: this row no longer collapses when idle
-           * — always visible now, matching the button placement asked
-           * for. `onFocus`/`onBlur` still call `LayoutAnimation` exactly
-           * as in the working commit; only removed the conditional style
-           * that made this row's own height the thing being animated. */}
-          <View style={styles.autoRow}>
+          {/* One incremental step from the confirmed-working baseline:
+           * +/Auto/send grouped into the same row (matching the button
+           * placement asked for), everything else about this row —
+           * `Pressable`+`SystemIcon` structure, the `!expanded &&
+           * autoRowCollapsed` height-animation mechanism, `onFocus`/
+           * `onBlur` as the trigger — left exactly as it was in that
+           * working commit. Nothing about *how* this animates changes
+           * here, only which buttons are in the row. */}
+          <View style={[styles.autoRow, !expanded && styles.autoRowCollapsed]}>
             <Pressable style={styles.chip}>
               <SystemIcon name="plus" size={14} color={colors.secondaryLabel} />
             </Pressable>
@@ -194,6 +197,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingTop: 4,
+    overflow: "hidden",
+  },
+  autoRowCollapsed: {
+    height: 0,
+    paddingTop: 0,
   },
   controlsSpacer: {
     flex: 1,
