@@ -113,7 +113,18 @@ export const SessionComposer = (props: {
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
           <TextInput
-            style={[styles.input, { height: Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) }]}
+            style={[
+              styles.input,
+              // Ignore `contentHeight` entirely while empty — TextInput's
+              // very first `onContentSizeChange` fires on mount, before
+              // any typing, and can over-report its own height (the same
+              // multiline-measurement unreliability that motivated
+              // measuring content height directly in the first place).
+              // Left unguarded, that one bad initial measurement latches
+              // in and the field never shrinks back down after a send, or
+              // never even starts small in the first place.
+              { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
+            ]}
             value={text}
             onChangeText={setText}
             onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
