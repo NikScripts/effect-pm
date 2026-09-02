@@ -10,43 +10,20 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { FlatList, Keyboard, StyleSheet, Text, View } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { MessageBubble } from "./MessageBubble";
 import type { RootStackParamList } from "./RootNavigator";
-import { SessionComposer } from "./SessionComposer";
+import { Composer } from "./Composer";
 import { SessionTopBar, useSessionTopBarHeight } from "./SessionTopBar";
 import { TypingIndicator } from "./TypingIndicator";
+import { useKeyboardHeight } from "./useKeyboardHeight";
 import { useSessionStream } from "./useSessionStream";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
-
-/**
- * Deterministic keyboard-height tracking, in place of `KeyboardAvoidingView`
- * — its "padding" behavior measures its own content's height to compute how
- * much to shrink by, and that measurement was landing wrong here (visible
- * as a large gap between the composer and the keyboard). Suspected cause:
- * the composer's send button is `@expo/ui`'s `Host` with `matchContents`,
- * which resolves its final size asynchronously via a native round-trip —
- * plausibly racing with `KeyboardAvoidingView`'s own layout pass. This
- * sidesteps that entirely by tracking the keyboard's real height from
- * native events and applying it directly, no content measurement involved.
- */
-const useKeyboardHeight = (): number => {
-  const [height, setHeight] = React.useState(0);
-  React.useEffect(() => {
-    const showSub = Keyboard.addListener("keyboardWillShow", (e) => setHeight(e.endCoordinates.height));
-    const hideSub = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-  return height;
-};
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
@@ -63,6 +40,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // appended — the same role the old `scrollToEnd` played pre-inversion.
   const reversedOrder = React.useMemo(() => [...transcript.order].reverse(), [transcript.order]);
   const listRef = React.useRef<FlatList<string>>(null);
+  // The composer floats over the list (see its absolute wrapper below) so
+  // the glass actually has content passing behind it — which means the
+  // list has to reserve that space itself instead of getting it from flex
+  // layout. Measured rather than hardcoded because the composer grows
+  // with multi-line input; onLayout re-fires on every one of those height
+  // changes, so the reserved space tracks it.
+  const [composerHeight, setComposerHeight] = React.useState(0);
 
   React.useEffect(() => {
     if (reversedOrder.length > 0) listRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -92,8 +76,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     }
   };
 
+  // No `paddingBottom: keyboardHeight` on root — the composer is
+  // absolutely positioned, and absolute children weren't being offset by
+  // that padding (they sat behind the keyboard instead), so both the
+  // composer and the list account for the keyboard explicitly below
+  // rather than relying on padding-box positioning semantics.
   return (
-    <View style={[styles.root, { paddingBottom: keyboardHeight }]}>
+    <View style={styles.root}>
       <FlatList
         ref={listRef}
         inverted
@@ -109,13 +98,21 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // the footer, is what renders nearest the (inverted) start of the
         // list, which an inverted list pins to the bottom of the screen.
         ListHeaderComponent={transcript.busy ? <TypingIndicator /> : null}
-        // `inverted` flips the whole content area as a unit, so this
-        // declaration's `paddingBottom` — normally "space after the last
-        // item" — ends up rendering as the reserved space at the screen's
-        // visual TOP (under the floating SessionTopBar), not the bottom.
-        contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16 }]}
+        // `inverted` flips the whole content area as a unit, so these are
+        // swapped from how they read: `paddingBottom` — normally "space
+        // after the last item" — renders as reserved space at the screen's
+        // visual TOP (under the floating SessionTopBar), and `paddingTop`
+        // renders at the visual BOTTOM (under the floating composer).
+        contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: composerHeight + keyboardHeight }]}
       />
-      <SessionComposer onSend={onSend} disabled={transcript.busy} bottomInset={keyboardHeight > 0 ? 0 : insets.bottom} />
+      {/* Absolutely positioned, not a flex sibling — otherwise it takes
+       * layout space away from the list and nothing ever passes behind
+       * it, which defeats the glass. `bottom` tracks the keyboard
+       * explicitly: absolute children here are NOT offset by the parent's
+       * padding (relying on that put the composer behind the keyboard). */}
+      <View style={[styles.composerFloat, { bottom: keyboardHeight }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+        <Composer onSend={onSend} disabled={transcript.busy} bottomInset={keyboardHeight > 0 ? 0 : insets.bottom} placeholder="Message" />
+      </View>
       <SessionTopBar title={title ?? sessionID} connected={connected} onBack={() => props.navigation.goBack()} />
     </View>
   );
@@ -128,6 +125,12 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  composerFloat: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    // `bottom` is set inline from keyboardHeight — see the element itself.
   },
   content: {
     padding: 16,

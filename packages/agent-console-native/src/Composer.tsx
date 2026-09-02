@@ -1,12 +1,21 @@
 /**
- * The real, editable composer at the bottom of a chat session.
+ * The real, editable composer bar — used both at the bottom of a chat
+ * session and on Home. One component rather than a copy per screen: the
+ * glass/`Host` behavior below is full of hard-won ordering and timing
+ * constraints (see the modifier-order note on CHIP_BUTTON_MODIFIERS, and
+ * the glassEffect finding above it), and every one of those would have to
+ * be fixed twice if this were duplicated. Screens vary it through props —
+ * `placeholder`, and `topSection` for extra content inside the bubble
+ * above the input (Home uses that for its repo/worktree/branch pickers;
+ * chat passes nothing).
  *
  * One persistent element for its whole lifetime — a single `GlassView`
  * wrapping a `TextInput` that's always mounted, never a decoy tree swapped
  * for a real one. An earlier version split "idle" and "editing" into two
  * mutually exclusive component trees, matching HomeComposerBar's own decoy
- * pill when idle and swapping to a `TextInput` + a separate controls row
- * once focused/typed into. That produced a long run of native-bridge bugs
+ * pill when idle (that component has since been removed — Home renders
+ * this same Composer now) and swapping to a `TextInput` + a separate
+ * controls row once focused/typed into. That produced a long run of native-bridge bugs
  * — `Host`'s SwiftUI content and `GlassView`'s glass material both turned
  * out to only reliably initialize once, on a component's genuine first
  * mount, with no clean signal or supported hook for "this instance got
@@ -124,9 +133,14 @@ const EXPAND_ANIMATION = {
 // systemGreen base hues as colors.ts's brandTint (green only — gray has
 // no equivalent shared token), defined locally rather than bumping that
 // shared token (also used for the chat bubble elsewhere).
-const mixRgb = (base: readonly [number, number, number], target: readonly [number, number, number], factor: number): string => {
+const mixRgb = (
+  base: readonly [number, number, number],
+  target: readonly [number, number, number],
+  factor: number,
+  alpha = 1,
+): string => {
   const [r, g, b] = base.map((channel, i) => Math.round(channel + (target[i] - channel) * factor));
-  return `rgb(${r},${g},${b})`;
+  return alpha === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alpha})`;
 };
 const SYSTEM_GRAY = { light: [142, 142, 147], dark: [142, 142, 147] } as const;
 const SYSTEM_GREEN = { light: [52, 199, 89], dark: [48, 209, 88] } as const;
@@ -137,11 +151,25 @@ const BLACK: readonly [number, number, number] = [0, 0, 0];
 const GRAY_LIGHTEN_FACTOR = 0.6;
 const GRAY_DARKEN_FACTOR = 0.25;
 const GREEN_MUTE_FACTOR = 0.32;
-const CHIP_FILL = mixRgb(SYSTEM_GRAY.light, WHITE, GRAY_LIGHTEN_FACTOR);
+// Slightly transparent fills, so the composer's own glass shows through a
+// little. Safe to do here: the delayed-alignment bug came from dropping
+// `glassEffect` for a flat `background()`, not from the tint's alpha —
+// the original working version was translucent too. Icons stay fully
+// opaque.
+const FILL_ALPHA = 0.85;
+const CHIP_FILL = mixRgb(SYSTEM_GRAY.light, WHITE, GRAY_LIGHTEN_FACTOR, FILL_ALPHA);
 const CHIP_ICON = mixRgb(SYSTEM_GRAY.light, BLACK, GRAY_DARKEN_FACTOR);
 const SEND_MUTED_FILL = DynamicColorIOS({
-  light: mixRgb(SYSTEM_GREEN.light, WHITE, GREEN_MUTE_FACTOR),
-  dark: mixRgb(SYSTEM_GREEN.dark, WHITE, GREEN_MUTE_FACTOR),
+  light: mixRgb(SYSTEM_GREEN.light, WHITE, GREEN_MUTE_FACTOR, FILL_ALPHA),
+  dark: mixRgb(SYSTEM_GREEN.dark, WHITE, GREEN_MUTE_FACTOR, FILL_ALPHA),
+});
+// systemGreen at the same alpha rather than colors.brand — PlatformColor
+// can't carry an alpha, and leaving send's armed state fully opaque while
+// everything around it is translucent looked inconsistent. Same hue as
+// colors.brand resolves to.
+const SEND_ACTIVE_FILL = DynamicColorIOS({
+  light: mixRgb(SYSTEM_GREEN.light, WHITE, 0, FILL_ALPHA),
+  dark: mixRgb(SYSTEM_GREEN.dark, WHITE, 0, FILL_ALPHA),
 });
 
 // +/send's own background, glass effect, and icon — one native element,
@@ -186,7 +214,7 @@ const sendButtonModifiers = (active: boolean) => [
   imageScale("medium"),
   frame({ width: COMPOSER_SEND_CHIP_SIZE, height: COMPOSER_SEND_CHIP_SIZE }),
   glassEffect({
-    glass: { variant: "regular", interactive: true, tint: active ? colors.brand : SEND_MUTED_FILL },
+    glass: { variant: "regular", interactive: true, tint: active ? SEND_ACTIVE_FILL : SEND_MUTED_FILL },
     shape: "circle",
   }),
   // Last, after glassEffect — see CHIP_BUTTON_MODIFIERS's own note on why
@@ -194,13 +222,18 @@ const sendButtonModifiers = (active: boolean) => [
   foregroundStyle("#FFFFFF"),
 ];
 
-export const SessionComposer = (props: {
+export const Composer = (props: {
   readonly onSend: (text: string) => Promise<void>;
   readonly disabled: boolean;
   /** Home-indicator safe-area inset — the caller knows whether the keyboard
    * is covering it (0) or not (the real inset), so this doesn't read insets
    * itself and risk double-counting against the keyboard height. */
   readonly bottomInset: number;
+  readonly placeholder: string;
+  /** Rendered inside the glass bubble, above the input — Home's
+   * repo/worktree/branch pickers. Sits outside `inputSection`, so it stays
+   * visible when the input collapses. */
+  readonly topSection?: React.ReactNode;
 }): React.ReactElement => {
   const scheme = useColorScheme();
   const inputRef = React.useRef<TextInput>(null);
@@ -263,6 +296,7 @@ export const SessionComposer = (props: {
        * while plain RN clipping on a wrapper never did. */}
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+          {props.topSection}
           {/* inputSection — TextInput alone, grows upward. Collapses to 0
            * height *and* 0 opacity when idle; never unmounts, just goes
            * invisible and zero-sized. `pointerEvents="none"` while
@@ -284,7 +318,7 @@ export const SessionComposer = (props: {
               onChangeText={setText}
               onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
               editable={!props.disabled}
-              placeholder="Message"
+              placeholder={props.placeholder}
               placeholderTextColor={colors.placeholderText}
               multiline
               submitBehavior="blurAndSubmit"
@@ -323,7 +357,7 @@ export const SessionComposer = (props: {
                 onPress={() => inputRef.current?.focus()}
               >
                 <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
-                  {text.length > 0 ? text : "Message"}
+                  {text.length > 0 ? text : props.placeholder}
                 </Text>
               </Pressable>
             </View>

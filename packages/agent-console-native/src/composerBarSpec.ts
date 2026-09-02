@@ -1,15 +1,15 @@
 /**
- * Single source of truth for composer pill sizing — `COMPOSER_BAR_HEIGHT`/
- * `_PADDING`/`_SPACING` size HomeComposerBar.tsx's own decoy pill (a
- * non-editable bar that opens the new-session picker). `COMPOSER_CHIP_SIZE`/
- * `COMPOSER_SEND_CHIP_SIZE` are also shared with SessionComposer.tsx's
- * +/send chips, so its always-editable main row visually matches
- * HomeComposerBar's chip sizing rather than drifting out of sync with it.
+ * Single source of truth for the composer's +/send chip sizing, shared by
+ * every screen that renders `Composer.tsx` (chat and Home both do) so the
+ * two can't drift apart.
+ *
+ * Previously this also carried `COMPOSER_BAR_HEIGHT`/`_PADDING`/`_SPACING`,
+ * which sized `HomeComposerBar.tsx`'s decoy pill — a non-editable bar that
+ * stood in for a composer on Home. That component is gone; Home now renders
+ * the real `Composer` directly, so those constants had no remaining
+ * consumer.
  *
  * @internal
  */
-export const COMPOSER_BAR_HEIGHT = 40;
 export const COMPOSER_CHIP_SIZE = 32;
 export const COMPOSER_SEND_CHIP_SIZE = 38;
-export const COMPOSER_BAR_PADDING = 10;
-export const COMPOSER_BAR_SPACING = 10;

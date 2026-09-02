@@ -34,7 +34,7 @@ import { colors } from "./colors";
 
 const BUTTON_SIZE = 44;
 const BAR_CONTENT_HEIGHT = 56;
-const HORIZONTAL_MARGIN = 20;
+const HORIZONTAL_MARGIN = 28;
 const PIECE_SPACING = 8;
 
 const buttonModifiers = () => [

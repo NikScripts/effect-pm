@@ -39,7 +39,18 @@ export const RootNavigator = (): React.ReactElement => {
   return (
     <NavigationContainer theme={scheme === "dark" ? DARK_THEME : LIGHT_THEME}>
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="Home" component={HomeScreen} />
+        {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
+         * applies it via `useScrollEdgeEffects` after mount instead. See
+         * that hook for why a static option silently does nothing. */}
+        {/* Native prop delivery is confirmed working — a `statusBarStyle`
+         * probe reached RNSScreen's native side and came back with its own
+         * Info.plist warning, so silent no-ops from `scrollEdgeEffects`
+         * are that feature's own problem, not a stale binary.
+         *
+         * `UIScrollEdgeEffect` draws into the scroll view's safe-area inset
+         * region, so the list also needs `contentInsetAdjustmentBehavior`
+         * set — see HomeScreen's own note. */}
+        <Stack.Screen name="Home" component={HomeScreen} options={{ scrollEdgeEffects: { top: "soft", bottom: "soft" } }} />
         <Stack.Screen name="Chat" component={SessionChatScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Navigator>
