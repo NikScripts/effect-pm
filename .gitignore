@@ -8,9 +8,13 @@ AI_CONTEXT.md
 
 # Dependencies
 node_modules
+# The wrong-package-manager lockfiles stay ignored — this repo is pnpm.
 package-lock.json
 yarn.lock
-pnpm-lock.yaml
+# pnpm-lock.yaml is deliberately committed: EAS Build installs with
+# --frozen-lockfile and detects the package manager from the lockfile in the
+# uploaded archive. With it ignored, EAS found no lockfile, defaulted to
+# yarn, and then failed on the root packageManager: pnpm@ field.
 
 # Build outputs
 dist/
