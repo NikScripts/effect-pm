@@ -9,6 +9,9 @@
       "distribution": "internal",
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "env": {
+        "RNS_GAMMA_ENABLED": "1"
       }
     },
     "preview": {

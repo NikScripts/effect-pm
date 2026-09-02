@@ -12,6 +12,7 @@ import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
@@ -123,6 +124,13 @@ export const HomeScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
+      {/* ScrollViewMarker resolves the scroll view from its own direct
+        * subtree, instead of the screen-level `scrollEdgeEffects` option,
+        * which relies on RNSScrollViewFinder walking `subviews[0]` down
+        * from the screen root and silently no-ops if it lands anywhere
+        * else. That screen-level route produced nothing here across every
+        * variation tried, so this marks the list explicitly. */}
+      <ScrollViewMarker style={styles.list} scrollEdgeEffects={{ top: "soft", bottom: "soft" }}>
       <FlatList
         style={styles.list}
         data={rows}
@@ -183,6 +191,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         }}
         contentContainerStyle={[styles.content, { paddingTop: navBarHeight, paddingBottom: composerHeight + keyboardHeight + 16 }]}
       />
+      </ScrollViewMarker>
       <TopBar onSettings={() => props.navigation.navigate("Settings")} />
       {/* Same shared Composer as the chat screen, floated the same way —
        * Home differs only by placeholder for now. `topSection` (the
