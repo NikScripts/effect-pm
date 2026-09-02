@@ -11,6 +11,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
@@ -23,7 +24,6 @@ import type { ScannedRepo } from "./repoScan";
 import { getCachedRepos, isStale, rescan } from "./repoScanCache";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { SystemIcon } from "./SystemIcon";
-import { TopBar, useNavBarHeight } from "./TopBar";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
@@ -113,7 +113,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     ...otherGroups.map((group) => ({ kind: "repo", group }) as const),
   ];
 
-  const navBarHeight = useNavBarHeight();
+  // The header is transparent, so content sits under it and has to pad
+  // itself by the header's real height rather than a hand-rolled constant.
+  const navBarHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
   // Measured, not a fixed height — the composer grows with multi-line
@@ -192,7 +194,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={[styles.content, { paddingTop: navBarHeight, paddingBottom: composerHeight + keyboardHeight + 16 }]}
       />
       </ScrollViewMarker>
-      <TopBar onSettings={() => props.navigation.navigate("Settings")} />
       {/* Same shared Composer as the chat screen, floated the same way —
        * Home differs only by placeholder for now. `topSection` (the
        * repo/worktree/branch pickers) is the next increment; `onSend` is

@@ -50,7 +50,59 @@ export const RootNavigator = (): React.ReactElement => {
          * `UIScrollEdgeEffect` draws into the scroll view's safe-area inset
          * region, so the list also needs `contentInsetAdjustmentBehavior`
          * set — see HomeScreen's own note. */}
-        <Stack.Screen name="Home" component={HomeScreen} options={{ scrollEdgeEffects: { top: "soft", bottom: "soft" } }} />
+        {/* An empty, fully transparent real UINavigationBar — no title, no
+         * back button, nothing drawn. It exists only so iOS 26's scroll
+         * edge effect has a bar edge to anchor against: that effect renders
+         * where scrolling content meets a bar, and with `headerShown: false`
+         * there is no bar, which fits every no-op result so far (the props
+         * demonstrably reach native and ScrollViewMarker resolves the scroll
+         * view without assertion). headerStyle's explicit transparent
+         * background matters — headerTransparent alone let the theme's
+         * `card` color paint it opaque white. */}
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          options={({ navigation }) => ({
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerTitle: "",
+            headerBackVisible: false,
+            headerShadowVisible: false,
+            // Real native header items rather than @expo/ui Hosts dropped
+            // into headerLeft/headerRight. The nav bar then owns their
+            // glass, grouping and spacing — rendering our own glassEffect
+            // inside a slot nested a second capsule in the system's, and
+            // packing two buttons into one slot grouped them wrongly.
+            unstable_headerLeftItems: () => [
+              {
+                type: "button",
+                label: "Settings",
+                icon: { type: "sfSymbol", name: "gearshape" },
+                onPress: () => navigation.navigate("Settings"),
+              },
+            ],
+            unstable_headerRightItems: () => [
+              {
+                type: "button",
+                label: "Search",
+                icon: { type: "sfSymbol", name: "magnifyingglass" },
+                onPress: () => {},
+              },
+              // Adjacent items share one glass capsule; a spacing item
+              // between them breaks that grouping so each gets its own
+              // circle, matching the single left-hand button.
+              { type: "spacing", spacing: 24 },
+              {
+                type: "button",
+                label: "New repo or empty project",
+                icon: { type: "sfSymbol", name: "folder.badge.plus" },
+                onPress: () => {},
+              },
+            ],
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          })}
+        />
         <Stack.Screen name="Chat" component={SessionChatScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Navigator>
