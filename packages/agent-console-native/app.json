@@ -7,7 +7,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nikolasstow.agentconsolenative"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,6 +24,12 @@
     },
     "plugins": [
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "db68cda6-c5b3-4daa-bb09-daeead177a67"
+      }
+    },
+    "owner": "nikolasstow"
   }
 }
