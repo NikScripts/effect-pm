@@ -32,10 +32,10 @@ import { useSessionStream } from "./useSessionStream";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-/** Softer peak — a high radius in a short band reads as a flat wash. */
-const BLUR_RADIUS = 16;
-/** Tall bands; the native ramp eases across most of the height. */
-const TOP_BLUR_HEIGHT = 72;
+/** Light peak — the tall bands carry most of the dissolve. */
+const BLUR_RADIUS = 10;
+/** Top needs more runway than the bottom; bottom height is about right. */
+const TOP_BLUR_HEIGHT = 110;
 const BOTTOM_BLUR_HEIGHT = 80;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
@@ -160,7 +160,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       {Platform.OS === "ios" ? (
         <VariableBlur
           blurRadius={BLUR_RADIUS}
-          direction="down"
+          direction="up"
           style={[styles.edgeBlur, { top: 0, height: TOP_BLUR_HEIGHT }]}
           pointerEvents="none"
         />
@@ -168,7 +168,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       {Platform.OS === "ios" ? (
         <VariableBlur
           blurRadius={BLUR_RADIUS}
-          direction="up"
+          direction="down"
           style={[styles.edgeBlur, { bottom: keyboardHeight, height: BOTTOM_BLUR_HEIGHT }]}
           pointerEvents="none"
         />

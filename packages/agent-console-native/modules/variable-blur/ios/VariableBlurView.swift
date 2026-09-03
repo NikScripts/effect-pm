@@ -125,14 +125,17 @@ private final class VariableBlurUIView: UIVisualEffectView {
     let filter = CIFilter.smoothLinearGradient()
     filter.color0 = CIColor.black
     filter.color1 = CIColor.clear
+    // Match nikstar/VariableBlur CI coordinates: y=height is the solid edge,
+    // y=0 is clear. Our earlier points were inverted, which read as an upside-
+    // down mask on device.
     let ramp = height * 0.96
     switch direction {
     case .blurredTopClearBottom:
-      filter.point0 = CGPoint(x: 0, y: 0)
-      filter.point1 = CGPoint(x: 0, y: ramp)
-    case .blurredBottomClearTop:
       filter.point0 = CGPoint(x: 0, y: height)
       filter.point1 = CGPoint(x: 0, y: height - ramp)
+    case .blurredBottomClearTop:
+      filter.point0 = CGPoint(x: 0, y: 0)
+      filter.point1 = CGPoint(x: 0, y: ramp)
     }
     let rect = CGRect(x: 0, y: 0, width: width, height: height)
     return CIContext().createCGImage(filter.outputImage!, from: rect)!
