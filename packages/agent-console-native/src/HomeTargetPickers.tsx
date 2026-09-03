@@ -393,7 +393,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
                   />
                 );
               })}
-              <Button label="New folder…" systemImage="plus" onPress={promptNewFolder} />
+              <Button label="New workspace…" systemImage="plus" onPress={promptNewFolder} />
             </Section>
           </Menu>
         </Host>
