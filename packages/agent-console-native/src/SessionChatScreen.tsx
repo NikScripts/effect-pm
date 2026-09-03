@@ -35,7 +35,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 /** Light peak — the tall bands carry most of the dissolve. */
 const BLUR_RADIUS = 10;
 /** Top needs more runway than the bottom; bottom height is about right. */
-const TOP_BLUR_HEIGHT = 110;
+const TOP_BLUR_HEIGHT = 140;
 const BOTTOM_BLUR_HEIGHT = 80;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {

@@ -120,23 +120,40 @@ private final class VariableBlurUIView: UIVisualEffectView {
   }
 
   private func makeGradientImage(width: CGFloat, height: CGFloat) -> CGImage {
-    // smoothLinearGradient eases the ramp. Endpoints span nearly the full mask
-    // so the dissolve is long and gentle rather than a short step.
-    let filter = CIFilter.smoothLinearGradient()
-    filter.color0 = CIColor.black
-    filter.color1 = CIColor.clear
-    // Working on-device pairing: JS top uses "down" and bottom uses "up".
-    // Do not invert these points independently of those props.
-    let ramp = height * 0.96
-    switch direction {
-    case .blurredTopClearBottom:
-      filter.point0 = CGPoint(x: 0, y: 0)
-      filter.point1 = CGPoint(x: 0, y: ramp)
-    case .blurredBottomClearTop:
-      filter.point0 = CGPoint(x: 0, y: height)
-      filter.point1 = CGPoint(x: 0, y: height - ramp)
+    // Multi-stop mask with a long tail. Same orientation as the working
+    // on-device pairing (JS top="down", bottom="up") — do not invert this.
+    // CI y=0 is the image bottom. blurredTopClearBottom is black at y=0.
+    let size = CGSize(width: width, height: height)
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    let image = UIGraphicsImageRenderer(size: size, format: format).image { renderer in
+      let colors = [
+        UIColor.black.cgColor,
+        UIColor.black.withAlphaComponent(0.62).cgColor,
+        UIColor.black.withAlphaComponent(0.32).cgColor,
+        UIColor.black.withAlphaComponent(0.12).cgColor,
+        UIColor.clear.cgColor,
+      ] as CFArray
+      let locations: [CGFloat] = [0, 0.28, 0.55, 0.8, 1]
+      guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: locations) else {
+        return
+      }
+      // UIKit y=0 is top. Map the working CI points onto that:
+      // blurredTopClearBottom: black at CI y=0 (bitmap bottom) → start at (0, height)
+      // blurredBottomClearTop: black at CI y=height (bitmap top) → start at (0, 0)
+      let start: CGPoint
+      let end: CGPoint
+      switch direction {
+      case .blurredTopClearBottom:
+        start = CGPoint(x: 0, y: height)
+        end = CGPoint(x: 0, y: 0)
+      case .blurredBottomClearTop:
+        start = CGPoint(x: 0, y: 0)
+        end = CGPoint(x: 0, y: height)
+      }
+      renderer.cgContext.drawLinearGradient(gradient, start: start, end: end, options: [])
     }
-    let rect = CGRect(x: 0, y: 0, width: width, height: height)
-    return CIContext().createCGImage(filter.outputImage!, from: rect)!
+    return image.cgImage!
   }
 }
