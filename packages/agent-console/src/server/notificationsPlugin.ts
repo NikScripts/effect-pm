@@ -40,11 +40,6 @@ const TOKENS_FILE = ".agent-console/push-tokens.json";
  * client already hides them from its lists. */
 const HIDDEN_TITLE_PREFIX = "[worktree-setup]";
 
-/** A run shorter than this finished before you could have looked away, so an
- * alert about it interrupts for nothing. Permission asks ignore this: those
- * block regardless of how quickly they arrive. */
-const MIN_RUN_MS = 8_000;
-
 /** Reconnect backoff for the event stream, capped. */
 const MAX_RECONNECT_MS = 30_000;
 
@@ -83,8 +78,7 @@ export const notificationsPlugin = (): Plugin => {
   const registrations = new Map<string, Registration>();
   /** Sessions mid-run and when they started, so `session.idle` only notifies
    * for a run we actually saw start — without this, every idle event on
-   * connect would fire for work that finished hours ago — and so a run's
-   * duration is known when deciding whether it is worth interrupting for. */
+   * connect would fire for work that finished hours ago. */
   const busySessions = new Map<string, number>();
 
   /** The session currently on screen in a foregrounded app. Notifying about
@@ -295,7 +289,6 @@ export const notificationsPlugin = (): Plugin => {
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
               if (startedAt === undefined) continue;
-              if (Date.now() - startedAt < MIN_RUN_MS) continue;
               if (sessionID === activeSessionID) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
               if (await isHidden(sessionID)) continue;
