@@ -63,8 +63,7 @@ final class VariableBlurView: ExpoView {
       return
     }
     let selector = NSSelectorFromString(String(":epyThtiWretlif".reversed()))
-    guard let variableBlur = filterClass.perform(selector, with: "variableBlur")?
-      .takeUnretainedValue() as? NSObject else {
+    guard let variableBlur = filterClass.perform(selector, with: "variableBlur").takeUnretainedValue() as? NSObject else {
       NSLog("[VariableBlur] variableBlur filter unavailable")
       return
     }
