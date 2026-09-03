@@ -245,7 +245,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
         const fromQuery = query.trim();
         const repoName = fromField.length > 0 ? fromField : isFolderName(fromQuery) ? fromQuery : "";
         if (repoName.length === 0) {
-          setError("Pick a repository to clone, or type a folder name to create one.");
+          setError("Pick a repository to clone, or type a name to create one.");
           return;
         }
         applyFolderName(repoName);
@@ -440,28 +440,6 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                     </DisclosureGroup>
                   </Section>
                 </>
-              ) : null}
-
-              {!hasSelection ? (
-                <Section
-                  title="Or create empty"
-                  footer={
-                    <Text modifiers={[secondaryText]}>
-                      Without a selection, Create Repository inits a new git repo. Folder name
-                      defaults to what you typed when it looks like a simple name.
-                    </Text>
-                  }
-                >
-                  <TextField
-                    text={nameState}
-                    placeholder="Folder name (optional)"
-                    modifiers={[
-                      autocorrectionDisabled(),
-                      textInputAutocapitalization("never"),
-                      onSubmit(submit),
-                    ]}
-                  />
-                </Section>
               ) : null}
 
               {error !== undefined ? (
