@@ -32,11 +32,10 @@ import { useSessionStream } from "./useSessionStream";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-/** Peak blur radius at the status bar. */
-const TOP_BLUR_RADIUS = 36;
-/** Taller band gives the ramp room to dissolve — a short view makes a uniform
- * blur easy to mistake for a failed mask. */
-const TOP_BLUR_FEATHER = 72;
+/** Peak blur radius at each feathered edge. */
+const BLUR_RADIUS = 36;
+/** Extra height past the bar/composer so the ramp can dissolve. */
+const BLUR_FEATHER = 32;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
@@ -153,16 +152,23 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: composerHeight + keyboardHeight }]}
       />
       </ScrollViewMarker>
-      {/* The feathered blur over the status bar / header region. It sits
-       * above the list but below the (transparent) native nav bar, so the
-       * clock, back button and title stay legible over blurred content
-       * with no hard edge where the effect ends. Taller than the header so
-       * the ramp has room to dissolve instead of stopping at the bar. */}
+      {/* Feathered blur at the top (under the nav bar) and bottom (above the
+       * composer). Both sit over the list but under the chrome that must stay
+       * sharp — header items and the glass composer. Heights track the real
+       * header and measured composer so the ramps stay aligned. */}
       {Platform.OS === "ios" ? (
         <VariableBlur
-          blurRadius={TOP_BLUR_RADIUS}
+          blurRadius={BLUR_RADIUS}
           direction="up"
-          style={[styles.topBlur, { height: topBarHeight + TOP_BLUR_FEATHER }]}
+          style={[styles.edgeBlur, { top: 0, height: topBarHeight + BLUR_FEATHER }]}
+          pointerEvents="none"
+        />
+      ) : null}
+      {Platform.OS === "ios" ? (
+        <VariableBlur
+          blurRadius={BLUR_RADIUS}
+          direction="down"
+          style={[styles.edgeBlur, { bottom: keyboardHeight, height: composerHeight + BLUR_FEATHER }]}
           pointerEvents="none"
         />
       ) : null}
@@ -186,12 +192,11 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  topBlur: {
+  edgeBlur: {
     position: "absolute",
-    top: 0,
     left: 0,
     right: 0,
-    // `height` is set inline from the header height — see the element.
+    // `top` / `bottom` / `height` are set inline — see the elements.
   },
   composerFloat: {
     position: "absolute",
