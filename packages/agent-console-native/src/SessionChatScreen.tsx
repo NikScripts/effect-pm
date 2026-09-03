@@ -32,11 +32,10 @@ import { useSessionStream } from "./useSessionStream";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-/** Light peak — the tall bands carry most of the dissolve. */
-const BLUR_RADIUS = 10;
-/** Top needs more runway than the bottom; bottom height is about right. */
-const TOP_BLUR_HEIGHT = 140;
-const BOTTOM_BLUR_HEIGHT = 80;
+const TOP_BLUR_RADIUS = 10;
+const BOTTOM_BLUR_RADIUS = 6;
+const TOP_BLUR_HEIGHT = 112;
+const BOTTOM_BLUR_HEIGHT = 56;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
@@ -159,7 +158,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
        * above the composer; it feathers content scrolling underneath. */}
       {Platform.OS === "ios" ? (
         <VariableBlur
-          blurRadius={BLUR_RADIUS}
+          blurRadius={TOP_BLUR_RADIUS}
           direction="down"
           style={[styles.edgeBlur, { top: 0, height: TOP_BLUR_HEIGHT }]}
           pointerEvents="none"
@@ -167,7 +166,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       ) : null}
       {Platform.OS === "ios" ? (
         <VariableBlur
-          blurRadius={BLUR_RADIUS}
+          blurRadius={BOTTOM_BLUR_RADIUS}
           direction="up"
           style={[styles.edgeBlur, { bottom: keyboardHeight, height: BOTTOM_BLUR_HEIGHT }]}
           pointerEvents="none"
