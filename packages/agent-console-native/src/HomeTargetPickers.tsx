@@ -292,58 +292,58 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         </Host>
 
         <Host
-          style={[styles.pillHost, { width: pillHostWidth(worktreePill) }]}
+          style={[styles.pillHost, { width: pillHostWidth(branchPill) }]}
           matchContents={{ vertical: true }}
           ignoreSafeArea="all"
         >
           <Menu
-            label={<PillLabel text={worktreePill} dimmed={repoOnly} />}
+            label={<PillLabel text={branchPill} dimmed={repoOnly} />}
             modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
           >
-            {worktrees.map((wt) => {
-              const active =
-                props.target?.kind === "repo" && props.target.worktree.path === wt.path;
+            {branches.map((branch) => {
+              const active = props.target?.kind === "repo" && props.target.branch === branch;
               return (
                 <Toggle
-                  key={wt.path}
-                  label={worktreeLabel(wt)}
-                  systemImage={wt.isMain ? "externaldrive" : "square.on.square"}
+                  key={branch}
+                  label={branch}
+                  systemImage="arrow.triangle.branch"
                   isOn={active}
                   onIsOnChange={(on) => {
-                    if (on) pickWorktree(wt);
+                    if (on) pickBranch(branch);
                   }}
                 />
               );
             })}
-            <Divider />
-            <Button label="Create new…" systemImage="plus" onPress={promptNewWorktree} />
           </Menu>
         </Host>
       </View>
 
       <Host
-        style={[styles.pillHost, { width: pillHostWidth(branchPill) }]}
+        style={[styles.pillHost, { width: pillHostWidth(worktreePill) }]}
         matchContents={{ vertical: true }}
         ignoreSafeArea="all"
       >
         <Menu
-          label={<PillLabel text={branchPill} dimmed={repoOnly} />}
+          label={<PillLabel text={worktreePill} dimmed={repoOnly} />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
-          {branches.map((branch) => {
-            const active = props.target?.kind === "repo" && props.target.branch === branch;
+          {worktrees.map((wt) => {
+            const active =
+              props.target?.kind === "repo" && props.target.worktree.path === wt.path;
             return (
               <Toggle
-                key={branch}
-                label={branch}
-                systemImage="arrow.triangle.branch"
+                key={wt.path}
+                label={worktreeLabel(wt)}
+                systemImage={wt.isMain ? "externaldrive" : "square.on.square"}
                 isOn={active}
                 onIsOnChange={(on) => {
-                  if (on) pickBranch(branch);
+                  if (on) pickWorktree(wt);
                 }}
               />
             );
           })}
+          <Divider />
+          <Button label="Create new…" systemImage="plus" onPress={promptNewWorktree} />
         </Menu>
       </Host>
     </View>
