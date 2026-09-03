@@ -29,6 +29,11 @@ import { useAppContext } from "./AppContext";
 import { listLocalBranches, readCurrentBranch } from "./branchScan";
 import type { ScannedRepo, ScannedWorktree } from "./repoScan";
 import { randomSlug } from "./slug";
+import {
+  getDefaultWorktreePreference,
+  getLastWorktreeByRepo,
+  setLastWorktreeForRepo,
+} from "./settings";
 import { createWorktree } from "./worktree";
 
 export type FolderTarget = {
@@ -101,15 +106,23 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
   const [branches, setBranches] = React.useState<ReadonlyArray<string>>([]);
 
-  // Default to first known repo (main worktree) once scan lands.
+  // Default to first known repo once scan lands (respects default-worktree pref).
   React.useEffect(() => {
     if (props.target !== undefined || props.scanned.length === 0) return;
     const repo = props.scanned[0]!;
-    const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
-    if (main === undefined) return;
     void (async () => {
-      const branch = (await readCurrentBranch(client, main.path)) ?? "main";
-      props.onChange({ kind: "repo", repo: repo.repo, worktree: main, branch });
+      const preference = await getDefaultWorktreePreference();
+      const lastByRepo = preference === "last" ? await getLastWorktreeByRepo() : {};
+      const lastKey = lastByRepo[repo.repo];
+      const fromLast =
+        lastKey !== undefined
+          ? repo.worktrees.find((w) => worktreeLabel(w) === lastKey || w.name === lastKey)
+          : undefined;
+      const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
+      const chosen = fromLast ?? main;
+      if (chosen === undefined) return;
+      const branch = (await readCurrentBranch(client, chosen.path)) ?? "main";
+      props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
   }, [props.scanned, props.target, props.onChange, client]);
 
@@ -153,11 +166,19 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   }, [props.target, props.scanned, client]);
 
   const pickRepo = (repo: ScannedRepo): void => {
-    const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
-    if (main === undefined) return;
     void (async () => {
-      const branch = (await readCurrentBranch(client, main.path)) ?? "main";
-      props.onChange({ kind: "repo", repo: repo.repo, worktree: main, branch });
+      const preference = await getDefaultWorktreePreference();
+      const lastByRepo = preference === "last" ? await getLastWorktreeByRepo() : {};
+      const lastKey = lastByRepo[repo.repo];
+      const fromLast =
+        lastKey !== undefined
+          ? repo.worktrees.find((w) => worktreeLabel(w) === lastKey || w.name === lastKey)
+          : undefined;
+      const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
+      const chosen = fromLast ?? main;
+      if (chosen === undefined) return;
+      const branch = (await readCurrentBranch(client, chosen.path)) ?? "main";
+      props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
   };
 
@@ -168,6 +189,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   const pickWorktree = (wt: ScannedWorktree): void => {
     if (props.target?.kind !== "repo") return;
     const previous = props.target;
+    void setLastWorktreeForRepo(previous.repo, worktreeLabel(wt));
     void (async () => {
       const branch = (await readCurrentBranch(client, wt.path)) ?? previous.branch;
       props.onChange({ kind: "repo", repo: previous.repo, worktree: wt, branch });
@@ -198,6 +220,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
               try {
                 const path = await createWorktree(client, rootDir, target.repo, main.path, name);
                 await props.onWorktreesChanged();
+                void setLastWorktreeForRepo(target.repo, name);
                 props.onChange({
                   kind: "repo",
                   repo: target.repo,

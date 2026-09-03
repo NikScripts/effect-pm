@@ -41,11 +41,16 @@ export const getCachedRepos = async (): Promise<ReadonlyArray<ScannedRepo> | und
   }
 };
 
-export const isStale = async (): Promise<boolean> => {
+export const getLastScanAt = async (): Promise<number | undefined> => {
   const raw = await AsyncStorage.getItem(LAST_SCAN_KEY);
-  if (raw === null) return true;
+  if (raw === null) return undefined;
   const parsed = Number(raw);
-  return !Number.isFinite(parsed) || Date.now() - parsed > STALE_AFTER_MS;
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+export const isStale = async (): Promise<boolean> => {
+  const at = await getLastScanAt();
+  return at === undefined || Date.now() - at > STALE_AFTER_MS;
 };
 
 export const rescan = (client: OpencodeClient, rootDir: string): Promise<ReadonlyArray<ScannedRepo>> => {

@@ -6,7 +6,16 @@ import { AppContextProvider } from "./src/AppContext";
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
-import { clearServerAddress, getRootDir, getServerAddress, setRootDir, setServerAddress } from "./src/settings";
+import {
+  clearServerAddress,
+  getDefaultPermissionMode,
+  getRootDir,
+  getServerAddress,
+  getSessionPermissionModes,
+  setRootDir,
+  setServerAddress,
+} from "./src/settings";
+import { primeDefaultPermissionMode, primeSessionPermissionModes } from "./src/sessionPermissions";
 
 /** Only the one-time async bootstrap (resolve a server address, connect,
  * resolve a root folder) lives in this hand-rolled state machine — once
@@ -44,6 +53,10 @@ const AppInner = (): React.ReactElement => {
 
   React.useEffect(() => {
     (async () => {
+      // Primed before any session can open, so the first permission ask is
+      // answered by the user's chosen default rather than the built-in one.
+      primeDefaultPermissionMode(await getDefaultPermissionMode());
+      primeSessionPermissionModes(await getSessionPermissionModes());
       const savedAddress = await getServerAddress();
       if (savedAddress === undefined) {
         setScreen({ step: "server-setup" });
@@ -97,6 +110,16 @@ const AppInner = (): React.ReactElement => {
     setScreen({ step: "server-setup" });
   };
 
+  const onChangeRootDir = (rootDir: string): void => {
+    const trimmed = rootDir.trim();
+    if (trimmed.length === 0) return;
+    void setRootDir(trimmed);
+    setRootDirInput(trimmed);
+    setScreenRaw((current) =>
+      current.step === "ready" ? { ...current, rootDir: trimmed } : current,
+    );
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar style="auto" />
@@ -141,7 +164,15 @@ const AppInner = (): React.ReactElement => {
           <Button title="Continue" onPress={() => onSubmitRootDir(screen.client, screen.address)} />
         </View>
       ) : (
-        <AppContextProvider value={{ client: screen.client, address: screen.address, rootDir: screen.rootDir, onChangeServer }}>
+        <AppContextProvider
+          value={{
+            client: screen.client,
+            address: screen.address,
+            rootDir: screen.rootDir,
+            onChangeRootDir,
+            onChangeServer,
+          }}
+        >
           <RootNavigator />
         </AppContextProvider>
       )}

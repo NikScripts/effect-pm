@@ -15,6 +15,9 @@ type AppContextValue = {
   readonly client: OpencodeClient;
   readonly address: string;
   readonly rootDir: string;
+  /** Persist and apply a new discovery root without tearing down the
+   * connected session (unlike `onChangeServer`). */
+  readonly onChangeRootDir: (rootDir: string) => void;
   /** Clears the saved server address and resets the app back to the
    * server-setup flow — not a normal in-stack navigation, since it tears
    * down the whole connected session, so it's a callback from the root

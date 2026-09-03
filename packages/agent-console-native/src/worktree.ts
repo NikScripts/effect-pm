@@ -7,9 +7,9 @@
  */
 import { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import type { OpencodeClient } from "./client";
+import { DEFAULT_WORKTREE_TEMPLATE, getWorktreeTemplate } from "./settings";
 
-/** Default layout for *new* worktrees — discovery still uses repoScan. */
-export const DEFAULT_WORKTREE_TEMPLATE = "{root}/{repo}/worktrees/{name}";
+export { DEFAULT_WORKTREE_TEMPLATE };
 
 export const resolveWorktreePath = (
   rootDir: string,
@@ -28,7 +28,8 @@ export const createWorktree = async (
   mainCheckoutPath: string,
   name: string,
 ): Promise<string> => {
-  const worktreePath = resolveWorktreePath(rootDir, repo, name);
+  const template = await getWorktreeTemplate();
+  const worktreePath = resolveWorktreePath(rootDir, repo, name, template);
 
   const { data: setupSession } = await client.session.create({
     query: { directory: mainCheckoutPath },
