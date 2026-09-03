@@ -1,7 +1,7 @@
 /**
  * Home — "Recent" (most-recent sessions across every repo/worktree
- * combined) + a Workspaces list below (repos with real git identity),
- * with non-git folders broken out into their own "Other folders" section.
+ * combined) + a Repos list below (checkouts with real git identity),
+ * with non-git session dirs broken out into their own "Workspaces" section.
  * Matches packages/agent-console's Home.tsx information architecture and
  * visual language (card styling, workspace row styling, section headings).
  *
@@ -148,7 +148,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const knownGroups = groups.filter((g) => g.isKnownRepo);
   const otherGroups = groups.filter((g) => !g.isKnownRepo);
 
-  // Picker "Other folders" = session dirs that aren't known repos (same
+  // Picker "Workspaces" = session dirs that aren't known repos (same
   // classification as the Home list). Not a filesystem walk of root.
   const sessionFolders = React.useMemo(
     (): ReadonlyArray<FolderTarget> =>
@@ -172,9 +172,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       const { repo, worktree } = matchSession(session.directory, scanned);
       return { kind: "session", session, repo, worktree: displayWorktree(worktree) } as const;
     }),
-    ...(knownGroups.length > 0 ? [{ kind: "heading", title: "Workspaces" } as const] : []),
+    ...(knownGroups.length > 0 ? [{ kind: "heading", title: "Repos" } as const] : []),
     ...knownGroups.map((group) => ({ kind: "repo", group }) as const),
-    ...(otherGroups.length > 0 ? [{ kind: "heading", title: "Other folders" } as const] : []),
+    ...(otherGroups.length > 0 ? [{ kind: "heading", title: "Workspaces" } as const] : []),
     ...otherGroups.map((group) => ({ kind: "repo", group }) as const),
   ];
 

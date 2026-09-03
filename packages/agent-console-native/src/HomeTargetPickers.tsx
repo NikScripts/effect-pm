@@ -378,7 +378,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
               })}
               <Button label="New repo…" systemImage="plus" onPress={() => setNewRepoOpen(true)} />
             </Section>
-            <Section title="Other folders">
+            <Section title="Workspaces">
               {sortedFolders.map((folder) => {
                 const active = props.target?.kind === "folder" && props.target.path === folder.path;
                 return (

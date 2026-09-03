@@ -4,8 +4,8 @@
  * app's repoScanCache.ts, ported for AsyncStorage's async reads (no
  * synchronous cache read possible here, unlike localStorage).
  *
- * Home Workspaces and the composer picker share this scan for **repos**.
- * Non-git "Other folders" in the picker are session-derived on HomeScreen
+ * Home Repos and the composer picker share this scan for **repos**.
+ * Non-git "Workspaces" in the picker are session-derived on HomeScreen
  * (directories that have sessions but aren't known repos) — not a second
  * filesystem walk.
  *
@@ -75,7 +75,7 @@ export const rescan = (client: OpencodeClient, rootDir: string): Promise<Readonl
   return inFlight;
 };
 
-/** Cached scan (same source Home Workspaces use). */
+/** Cached scan (same source Home Repos use). */
 export const readWorkspace = async (): Promise<ReadonlyArray<ScannedRepo> | undefined> =>
   getCachedRepos();
 
