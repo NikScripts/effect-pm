@@ -1,24 +1,47 @@
 /**
- * Sheet for adding a repo (empty `git init` or clone) under the configured
- * main-checkout template. Clone probes `git ls-remote` so the user can
- * confirm remote metadata and pick a branch before writing anything.
+ * Native sheet for adding a repo — empty `git init` or clone under the
+ * configured main-checkout template. Clone probes `git ls-remote` so the
+ * user can confirm remote metadata and pick a branch before writing.
+ *
+ * Built with `@expo/ui` SwiftUI (`BottomSheet` + `Form` + `TextField` +
+ * `Picker` + `List`) rather than RN `Modal` / `TextInput` chrome.
  *
  * @internal
  */
 import * as React from "react";
+import { StyleSheet } from "react-native";
 import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
+  BottomSheet,
+  Button,
+  Form,
+  Group,
+  Host,
+  HStack,
+  LabeledContent,
+  List,
+  Picker,
+  ProgressView,
+  Section,
+  Spacer,
   Text,
-  TextInput,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+  TextField,
+  useNativeState,
+} from "@expo/ui/swift-ui";
+import {
+  autocorrectionDisabled,
+  bold,
+  disabled,
+  foregroundStyle,
+  keyboardType,
+  listStyle,
+  onSubmit,
+  pickerStyle,
+  presentationDetents,
+  presentationDragIndicator,
+  tag,
+  textInputAutocapitalization,
+} from "@expo/ui/swift-ui/modifiers";
 import { useAppContext } from "./AppContext";
-import { colors } from "./colors";
 import {
   cloneRepo,
   initRepo,
@@ -28,7 +51,6 @@ import {
   type GitHubSearchHit,
   type RemotePreview,
 } from "./repoCreate";
-import { SystemIcon } from "./SystemIcon";
 
 type Mode = "clone" | "create";
 
@@ -38,15 +60,16 @@ type Props = {
   readonly onCreated: (repoName: string, mainPath: string) => void;
 };
 
+const secondaryText = foregroundStyle({ type: "hierarchical", style: "secondary" });
+
 export const NewRepoSheet = (props: Props): React.ReactElement => {
-  const insets = useSafeAreaInsets();
   const { client, rootDir } = useAppContext();
   const [mode, setMode] = React.useState<Mode>("clone");
-  const [url, setUrl] = React.useState("");
-  const [search, setSearch] = React.useState("");
+  const searchState = useNativeState("");
+  const urlState = useNativeState("");
+  const nameState = useNativeState("");
   const [hits, setHits] = React.useState<ReadonlyArray<GitHubSearchHit>>([]);
   const [searching, setSearching] = React.useState(false);
-  const [name, setName] = React.useState("");
   const [preview, setPreview] = React.useState<RemotePreview | undefined>(undefined);
   const [branch, setBranch] = React.useState<string | undefined>(undefined);
   const [probing, setProbing] = React.useState(false);
@@ -56,15 +79,18 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     if (!props.visible) return;
     setMode("clone");
-    setUrl("");
-    setSearch("");
+    searchState.set("");
+    urlState.set("");
+    nameState.set("");
     setHits([]);
-    setName("");
     setPreview(undefined);
     setBranch(undefined);
     setError(undefined);
     setBusy(false);
     setProbing(false);
+    setSearching(false);
+    // Native states are stable refs; only reset when the sheet opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.visible]);
 
   const runProbe = async (raw: string, nameOverride?: string): Promise<RemotePreview | undefined> => {
@@ -73,9 +99,9 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     try {
       const next = await previewRemote(client, rootDir, raw, nameOverride);
       setPreview(next);
-      setName(nameOverride?.trim() || next.remote.name);
+      nameState.set(nameOverride?.trim() || next.remote.name);
       setBranch(next.defaultBranch);
-      setUrl(next.remote.url);
+      urlState.set(next.remote.url);
       return next;
     } catch (err) {
       setPreview(undefined);
@@ -86,13 +112,14 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     }
   };
 
-  const onBlurUrl = (): void => {
-    if (parseRemoteInput(url) === undefined) return;
-    void runProbe(url, name.trim() || undefined);
+  const probeFromUrlField = (): void => {
+    const raw = urlState.get().trim();
+    if (parseRemoteInput(raw) === undefined) return;
+    void runProbe(raw, nameState.get().trim() || undefined);
   };
 
   const onSearch = (): void => {
-    const q = search.trim();
+    const q = searchState.get().trim();
     if (q.length === 0) return;
     setSearching(true);
     setError(undefined);
@@ -111,7 +138,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
   };
 
   const submit = (): void => {
-    const repoName = name.trim();
+    const repoName = nameState.get().trim();
     if (repoName.length === 0) {
       setError("Give the repo a name.");
       return;
@@ -128,7 +155,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
         }
         let ready = preview;
         if (ready === undefined) {
-          ready = await runProbe(url, repoName);
+          ready = await runProbe(urlState.get(), repoName);
           if (ready === undefined) return;
         }
         const path = await cloneRepo(client, rootDir, ready.remote.url, repoName, branch);
@@ -144,345 +171,207 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
 
   const destinationPreview =
     preview !== undefined
-      ? preview.destination.replace(/\/[^/]+$/, `/${name.trim() || preview.remote.name}`)
+      ? preview.destination.replace(/\/[^/]+$/, `/${nameState.get().trim() || preview.remote.name}`)
       : undefined;
 
+  const primaryLabel = busy
+    ? "Working…"
+    : mode === "create"
+      ? "Create"
+      : preview === undefined
+        ? "Look up"
+        : "Clone";
+
   return (
-    <Modal visible={props.visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={props.onClose}>
-      <View style={[styles.root, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.header}>
-          <Pressable onPress={props.onClose} hitSlop={12} accessibilityLabel="Close">
-            <Text style={styles.headerAction}>Cancel</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>New repo</Text>
-          <Pressable onPress={submit} disabled={busy || probing} hitSlop={12} accessibilityLabel="Create">
-            <Text style={[styles.headerAction, styles.headerActionStrong, (busy || probing) && styles.disabled]}>
-              {busy ? "…" : mode === "create" ? "Create" : preview === undefined ? "Look up" : "Clone"}
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.modeRow}>
-          {(["clone", "create"] as const).map((value) => (
-            <Pressable
-              key={value}
-              style={[styles.modeChip, mode === value && styles.modeChipActive]}
-              onPress={() => {
-                setMode(value);
-                setError(undefined);
-              }}
-            >
-              <Text style={[styles.modeChipText, mode === value && styles.modeChipTextActive]}>
-                {value === "clone" ? "Clone" : "Empty repo"}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+    <Host style={styles.host} ignoreSafeArea="all" pointerEvents="box-none">
+      <BottomSheet
+        isPresented={props.visible}
+        onIsPresentedChange={(presented) => {
+          if (!presented) props.onClose();
+        }}
+      >
+        <Group
+          modifiers={[
+            presentationDetents(["large", "medium"]),
+            presentationDragIndicator("visible"),
+          ]}
         >
-          {mode === "clone" ? (
-            <>
-              <Text style={styles.label}>GitHub search</Text>
-              <View style={styles.searchRow}>
-                <TextInput
-                  style={[styles.input, styles.searchInput]}
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Find repos by name…"
-                  placeholderTextColor={colors.placeholderText}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onSubmitEditing={onSearch}
+          <Form>
+            <Section>
+              <HStack>
+                <Button label="Cancel" role="cancel" onPress={props.onClose} />
+                <Spacer />
+                <Text modifiers={[bold()]}>New repo</Text>
+                <Spacer />
+                <Button
+                  label={primaryLabel}
+                  onPress={submit}
+                  modifiers={[disabled(busy || probing)]}
                 />
-                <Pressable style={styles.searchButton} onPress={onSearch} disabled={searching}>
-                  {searching ? (
-                    <ActivityIndicator color={colors.tint} />
-                  ) : (
-                    <SystemIcon name="magnifyingglass" size={16} color={colors.tint} />
-                  )}
-                </Pressable>
-              </View>
-              {hits.length > 0 ? (
-                <View style={styles.hits}>
-                  {hits.map((hit) => (
-                    <Pressable
-                      key={hit.fullName}
-                      style={styles.hitRow}
-                      onPress={() => {
-                        const short = hit.fullName.split("/")[1] ?? hit.fullName;
-                        setUrl(hit.url);
-                        setName(short);
-                        void runProbe(hit.url, short);
-                      }}
-                    >
-                      <Text style={styles.hitTitle}>{hit.fullName}</Text>
-                      {hit.description !== undefined ? (
-                        <Text style={styles.hitDetail} numberOfLines={2}>
-                          {hit.description}
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
+              </HStack>
+            </Section>
 
-              <Text style={styles.label}>Clone URL</Text>
-              <Text style={styles.hint}>Paste a URL, SSH remote, or owner/repo.</Text>
-              <TextInput
-                style={styles.input}
-                value={url}
-                onChangeText={setUrl}
-                onBlur={onBlurUrl}
-                onSubmitEditing={onBlurUrl}
-                placeholder="https://github.com/org/repo.git"
-                placeholderTextColor={colors.placeholderText}
-                autoCapitalize="none"
-                autoCorrect={false}
-                spellCheck={false}
-              />
-              {probing ? <ActivityIndicator style={styles.probeSpinner} color={colors.tint} /> : null}
+            <Section>
+              <Picker
+                selection={mode}
+                onSelectionChange={(value) => {
+                  if (value === "clone" || value === "create") {
+                    setMode(value);
+                    setError(undefined);
+                  }
+                }}
+                modifiers={[pickerStyle("segmented")]}
+              >
+                <Text modifiers={[tag("clone")]}>Clone</Text>
+                <Text modifiers={[tag("create")]}>Empty repo</Text>
+              </Picker>
+            </Section>
 
-              {preview !== undefined ? (
-                <View style={styles.previewCard}>
-                  <Text style={styles.previewTitle}>Remote</Text>
-                  <Text style={styles.previewLine}>
-                    {preview.remote.host !== undefined ? `${preview.remote.host}/` : ""}
-                    {preview.remote.owner !== undefined ? `${preview.remote.owner}/` : ""}
-                    {preview.remote.name}
-                  </Text>
-                  <Text style={styles.previewMeta} numberOfLines={2} ellipsizeMode="head">
-                    {preview.remote.url}
-                  </Text>
-                  {destinationPreview !== undefined ? (
-                    <>
-                      <Text style={[styles.previewTitle, styles.previewSpaced]}>Destination</Text>
-                      <Text style={styles.previewMeta} numberOfLines={2} ellipsizeMode="head">
-                        {destinationPreview}
+            {mode === "clone" ? (
+              <>
+                <Section
+                  title="GitHub search"
+                  footer={
+                    <Text modifiers={[secondaryText]}>Find repos by name, then confirm the remote below.</Text>
+                  }
+                >
+                  <TextField
+                    text={searchState}
+                    placeholder="owner/repo or keywords"
+                    modifiers={[
+                      autocorrectionDisabled(),
+                      textInputAutocapitalization("never"),
+                      onSubmit(onSearch),
+                    ]}
+                  />
+                  <Button
+                    label={searching ? "Searching…" : "Search"}
+                    systemImage="magnifyingglass"
+                    onPress={onSearch}
+                    modifiers={[disabled(searching)]}
+                  />
+                </Section>
+
+                {hits.length > 0 ? (
+                  <Section title="Results">
+                    <List modifiers={[listStyle("plain")]}>
+                      {hits.map((hit) => (
+                        <Button
+                          key={hit.fullName}
+                          label={hit.fullName}
+                          onPress={() => {
+                            const short = hit.fullName.split("/")[1] ?? hit.fullName;
+                            urlState.set(hit.url);
+                            nameState.set(short);
+                            void runProbe(hit.url, short);
+                          }}
+                        />
+                      ))}
+                    </List>
+                  </Section>
+                ) : null}
+
+                <Section
+                  title="Clone URL"
+                  footer={
+                    <Text modifiers={[secondaryText]}>Paste a URL, SSH remote, or owner/repo.</Text>
+                  }
+                >
+                  <TextField
+                    text={urlState}
+                    placeholder="https://github.com/org/repo.git"
+                    onFocusChange={(focused) => {
+                      if (!focused) probeFromUrlField();
+                    }}
+                    modifiers={[
+                      keyboardType("url"),
+                      autocorrectionDisabled(),
+                      textInputAutocapitalization("never"),
+                      onSubmit(probeFromUrlField),
+                    ]}
+                  />
+                  {probing ? <ProgressView /> : null}
+                </Section>
+
+                {preview !== undefined ? (
+                  <Section title="Remote">
+                    <LabeledContent label="Repo">
+                      <Text>
+                        {preview.remote.host !== undefined ? `${preview.remote.host}/` : ""}
+                        {preview.remote.owner !== undefined ? `${preview.remote.owner}/` : ""}
+                        {preview.remote.name}
                       </Text>
-                    </>
-                  ) : null}
+                    </LabeledContent>
+                    <LabeledContent label="URL">
+                      <Text modifiers={[secondaryText]}>{preview.remote.url}</Text>
+                    </LabeledContent>
+                    {destinationPreview !== undefined ? (
+                      <LabeledContent label="Destination">
+                        <Text modifiers={[secondaryText]}>{destinationPreview}</Text>
+                      </LabeledContent>
+                    ) : null}
+                    <Picker
+                      label="Branch"
+                      selection={branch ?? preview.defaultBranch}
+                      onSelectionChange={(value) => {
+                        if (typeof value === "string") setBranch(value);
+                      }}
+                      modifiers={[pickerStyle("menu")]}
+                    >
+                      {preview.branches.map((b) => (
+                        <Text key={b} modifiers={[tag(b)]}>
+                          {b}
+                        </Text>
+                      ))}
+                    </Picker>
+                  </Section>
+                ) : null}
+              </>
+            ) : null}
 
-                  <Text style={[styles.previewTitle, styles.previewSpaced]}>Branch</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.branchRow}>
-                    {preview.branches.map((b) => (
-                      <Pressable
-                        key={b}
-                        style={[styles.branchChip, branch === b && styles.branchChipActive]}
-                        onPress={() => setBranch(b)}
-                      >
-                        <Text style={[styles.branchChipText, branch === b && styles.branchChipTextActive]}>{b}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-              ) : null}
-            </>
-          ) : null}
+            <Section
+              title="Local name"
+              footer={
+                <Text modifiers={[secondaryText]}>
+                  Folder name used in the path template under your root.
+                </Text>
+              }
+            >
+              <TextField
+                text={nameState}
+                placeholder="my-project"
+                modifiers={[
+                  autocorrectionDisabled(),
+                  textInputAutocapitalization("never"),
+                  onSubmit(submit),
+                ]}
+              />
+            </Section>
 
-          <Text style={styles.label}>Local name</Text>
-          <Text style={styles.hint}>Folder name used in the path template under your root.</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="my-project"
-            placeholderTextColor={colors.placeholderText}
-            autoCapitalize="none"
-            autoCorrect={false}
-            spellCheck={false}
-          />
+            {error !== undefined ? (
+              <Section>
+                <Text modifiers={[foregroundStyle("#FF3B30")]}>{error}</Text>
+              </Section>
+            ) : null}
 
-          {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
-        </ScrollView>
-      </View>
-    </Modal>
+            {busy ? (
+              <Section>
+                <ProgressView />
+              </Section>
+            ) : null}
+          </Form>
+        </Group>
+      </BottomSheet>
+    </Host>
   );
 };
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-    paddingTop: 12,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.separator,
-  },
-  headerTitle: {
-    color: colors.label,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  headerAction: {
-    color: colors.tint,
-    fontSize: 17,
-    minWidth: 64,
-  },
-  headerActionStrong: {
-    fontWeight: "600",
-    textAlign: "right",
-  },
-  disabled: {
-    opacity: 0.4,
-  },
-  modeRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
-  },
-  modeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.fillBackground,
-  },
-  modeChipActive: {
-    backgroundColor: colors.accentTint,
-  },
-  modeChipText: {
-    color: colors.secondaryLabel,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  modeChipTextActive: {
-    color: colors.tint,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 40,
-    gap: 8,
-  },
-  label: {
-    color: colors.label,
-    fontSize: 15,
-    fontWeight: "600",
-    marginTop: 10,
-  },
-  hint: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  input: {
-    color: colors.label,
-    fontSize: 15,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: colors.fillBackground,
-  },
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-  },
-  searchButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accentTint,
-  },
-  hits: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    overflow: "hidden",
-    backgroundColor: colors.cardBackground,
-  },
-  hitRow: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.separator,
-    gap: 2,
-  },
-  hitTitle: {
-    color: colors.label,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  hitDetail: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-  },
-  probeSpinner: {
-    marginVertical: 8,
-  },
-  previewCard: {
-    marginTop: 4,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: colors.cardBackground,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    gap: 4,
-  },
-  previewTitle: {
-    color: colors.secondaryLabel,
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  previewSpaced: {
-    marginTop: 10,
-  },
-  previewLine: {
-    color: colors.label,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  previewMeta: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-    fontFamily: "Menlo",
-  },
-  branchRow: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  branchChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: colors.fillBackground,
-  },
-  branchChipActive: {
-    backgroundColor: colors.accentTint,
-  },
-  branchChipText: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  branchChipTextActive: {
-    color: colors.tint,
-  },
-  error: {
-    color: colors.destructive,
-    fontSize: 13,
-    marginTop: 8,
+  // Tiny host — the sheet presents modally; this only anchors SwiftUI.
+  host: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0,
   },
 });
