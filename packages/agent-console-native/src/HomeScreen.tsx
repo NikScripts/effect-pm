@@ -59,7 +59,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
-  const [otherFolders, setOtherFolders] = React.useState<ReadonlyArray<FolderTarget>>([]);
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -77,49 +76,41 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     void setCachedSessions(visible);
   }, [client]);
 
-  const applyWorkspace = React.useCallback((index: { repos: ReadonlyArray<ScannedRepo>; otherFolders: ReadonlyArray<FolderTarget> }): void => {
-    setScanned(index.repos);
-    setOtherFolders(index.otherFolders);
-  }, []);
-
   const loadScan = React.useCallback(
     async (force: boolean): Promise<void> => {
       const stale = force || (await isStale());
       if (!stale) {
-        const cached = await readWorkspace(client, rootDir);
-        if (cached !== undefined) applyWorkspace(cached);
+        const cached = await readWorkspace();
+        if (cached !== undefined) setScanned(cached);
         return;
       }
       try {
-        applyWorkspace(await refreshWorkspace(client, rootDir));
+        setScanned(await refreshWorkspace(client, rootDir));
         setError(undefined);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
       }
     },
-    [applyWorkspace, client, rootDir],
+    [client, rootDir],
   );
 
   const refreshWorktrees = React.useCallback(async (): Promise<void> => {
     try {
-      applyWorkspace(await refreshWorkspace(client, rootDir));
+      setScanned(await refreshWorkspace(client, rootDir));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
     }
-  }, [applyWorkspace, client, rootDir]);
+  }, [client, rootDir]);
 
   React.useEffect(() => {
     (async () => {
-      const [cachedSessions, cachedWorkspace] = await Promise.all([
-        getCachedSessions(),
-        readWorkspace(client, rootDir),
-      ]);
+      const [cachedSessions, cachedScan] = await Promise.all([getCachedSessions(), readWorkspace()]);
       if (cachedSessions !== undefined) setSessions(cachedSessions);
-      if (cachedWorkspace !== undefined) applyWorkspace(cachedWorkspace);
+      if (cachedScan !== undefined) setScanned(cachedScan);
       setLoading(false);
-      await Promise.all([loadSessions(), loadScan(cachedWorkspace === undefined)]);
+      await Promise.all([loadSessions(), loadScan(cachedScan === undefined)]);
     })();
-  }, [applyWorkspace, loadSessions, loadScan, client, rootDir]);
+  }, [loadSessions, loadScan, client, rootDir]);
 
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     if (target === undefined || sending) return;
@@ -156,6 +147,24 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const groups = groupByRepo(sessions, scanned);
   const knownGroups = groups.filter((g) => g.isKnownRepo);
   const otherGroups = groups.filter((g) => !g.isKnownRepo);
+
+  // Picker "Other folders" = session dirs that aren't known repos (same
+  // classification as the Home list). Not a filesystem walk of root.
+  const sessionFolders = React.useMemo(
+    (): ReadonlyArray<FolderTarget> =>
+      otherGroups.flatMap((group) => {
+        const session = group.sessions[0];
+        if (session === undefined) return [];
+        return [{ kind: "folder" as const, name: group.repo, path: session.directory }];
+      }),
+    [otherGroups],
+  );
+
+  const activityByName = React.useMemo((): ReadonlyMap<string, number> => {
+    const map = new Map<string, number>();
+    for (const group of groups) map.set(group.repo, group.mostRecentUpdate);
+    return map;
+  }, [groups]);
 
   const rows: Array<Row> = [
     ...(recent.length > 0 ? [{ kind: "heading", title: "Recent" } as const] : []),
@@ -264,7 +273,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           topSection={
             <HomeTargetPickers
               scanned={scanned}
-              otherFolders={otherFolders}
+              otherFolders={sessionFolders}
+              activityByName={activityByName}
               target={target}
               onChange={setTarget}
               onWorkspaceChanged={refreshWorktrees}

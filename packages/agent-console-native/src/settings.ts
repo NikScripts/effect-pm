@@ -28,8 +28,14 @@ const WORKTREE_TEMPLATE_KEY = "agent-console-native:worktreeTemplate";
 const LAST_MODEL_KEY = "agent-console-native:lastModel";
 const DEFAULT_WORKTREE_PREF_KEY = "agent-console-native:defaultWorktreePreference";
 const LAST_WORKTREE_BY_REPO_KEY = "agent-console-native:lastWorktreeByRepo";
+const REPO_MENU_SORT_KEY = "agent-console-native:repoMenuSort";
 const DEFAULT_PERMISSION_MODE_KEY = "agent-console-native:defaultPermissionMode";
 const SESSION_PERMISSION_MODES_KEY = "agent-console-native:sessionPermissionModes";
+const BACKEND_ADDRESS_KEY = "agent-console-native:backendAddress";
+/** The vite dev server's port. Same host as opencode in every setup so far,
+ * so the backend address is derived rather than asked for — one address to
+ * type stays one address to type. */
+const DEFAULT_BACKEND_PORT = 5195;
 
 /** Placeholders: `{root}`, `{repo}`. Destination for clone / `git init`
  * (the main checkout). Kept as a *sibling* of linked worktrees under the
@@ -43,6 +49,9 @@ export const DEFAULT_WORKTREE_TEMPLATE = "{root}/{repo}/worktrees/{name}";
 
 /** Which worktree to select when the user picks a repo in the composer. */
 export type DefaultWorktreePreference = "main" | "last";
+
+/** Order of repos / other folders inside the Home composer target menu. */
+export type RepoMenuSort = "recent" | "alphabetical";
 
 export const resolveRepoPath = (
   rootDir: string,
@@ -122,6 +131,14 @@ export const getDefaultWorktreePreference = async (): Promise<DefaultWorktreePre
 export const setDefaultWorktreePreference = (value: DefaultWorktreePreference): Promise<void> =>
   AsyncStorage.setItem(DEFAULT_WORKTREE_PREF_KEY, value);
 
+export const getRepoMenuSort = async (): Promise<RepoMenuSort> => {
+  const value = await AsyncStorage.getItem(REPO_MENU_SORT_KEY);
+  return value === "alphabetical" ? "alphabetical" : "recent";
+};
+
+export const setRepoMenuSort = (value: RepoMenuSort): Promise<void> =>
+  AsyncStorage.setItem(REPO_MENU_SORT_KEY, value);
+
 export const getLastWorktreeByRepo = async (): Promise<Record<string, string>> => {
   const raw = await AsyncStorage.getItem(LAST_WORKTREE_BY_REPO_KEY);
   if (raw === null) return {};
@@ -175,3 +192,19 @@ export const getSessionPermissionModes = async (): Promise<Record<string, Permis
 
 export const setSessionPermissionModes = (value: Record<string, PermissionMode>): Promise<void> =>
   AsyncStorage.setItem(SESSION_PERMISSION_MODES_KEY, JSON.stringify(value));
+
+/** Backend base URL: an explicit override if set, otherwise the opencode
+ * host with the dev server's port. */
+export const getBackendAddress = async (serverAddress: string): Promise<string> => {
+  const override = await AsyncStorage.getItem(BACKEND_ADDRESS_KEY);
+  if (override !== null && override !== "") return override;
+  try {
+    const url = new URL(serverAddress);
+    return `${url.protocol}//${url.hostname}:${DEFAULT_BACKEND_PORT}`;
+  } catch {
+    return serverAddress;
+  }
+};
+
+export const setBackendAddress = (value: string): Promise<void> =>
+  AsyncStorage.setItem(BACKEND_ADDRESS_KEY, value);

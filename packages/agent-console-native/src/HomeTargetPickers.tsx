@@ -34,7 +34,10 @@ import { NewRepoSheet } from "./NewRepoSheet";
 import {
   getDefaultWorktreePreference,
   getLastWorktreeByRepo,
+  getRepoMenuSort,
   setLastWorktreeForRepo,
+  setRepoMenuSort,
+  type RepoMenuSort,
 } from "./settings";
 import { createWorktree } from "./worktree";
 
@@ -61,9 +64,11 @@ export const worktreeLabel = (wt: ScannedWorktree): string => (wt.isMain ? "main
 type Props = {
   readonly scanned: ReadonlyArray<ScannedRepo>;
   readonly otherFolders: ReadonlyArray<FolderTarget>;
+  /** Most-recent session time per repo / folder name — drives "Recent" sort. */
+  readonly activityByName: ReadonlyMap<string, number>;
   readonly target: SessionTarget | undefined;
   readonly onChange: (target: SessionTarget) => void;
-  /** Rescan repos + other folders after create/clone/mkdir/worktree. */
+  /** Rescan repos after create/clone/mkdir/worktree. */
   readonly onWorkspaceChanged: () => Promise<void>;
 };
 
@@ -109,11 +114,42 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
   const [branches, setBranches] = React.useState<ReadonlyArray<string>>([]);
   const [newRepoOpen, setNewRepoOpen] = React.useState(false);
+  const [sort, setSort] = React.useState<RepoMenuSort>("recent");
+
+  React.useEffect(() => {
+    void getRepoMenuSort().then(setSort);
+  }, []);
+
+  const toggleSort = (): void => {
+    const next: RepoMenuSort = sort === "recent" ? "alphabetical" : "recent";
+    setSort(next);
+    void setRepoMenuSort(next);
+  };
+
+  const sortedRepos = React.useMemo((): ReadonlyArray<ScannedRepo> => {
+    const list = [...props.scanned];
+    if (sort === "alphabetical") {
+      return list.sort((a, b) => a.repo.localeCompare(b.repo));
+    }
+    return list.sort(
+      (a, b) => (props.activityByName.get(b.repo) ?? 0) - (props.activityByName.get(a.repo) ?? 0),
+    );
+  }, [props.scanned, props.activityByName, sort]);
+
+  const sortedFolders = React.useMemo((): ReadonlyArray<FolderTarget> => {
+    const list = [...props.otherFolders];
+    if (sort === "alphabetical") {
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return list.sort(
+      (a, b) => (props.activityByName.get(b.name) ?? 0) - (props.activityByName.get(a.name) ?? 0),
+    );
+  }, [props.otherFolders, props.activityByName, sort]);
 
   // Default to first known repo once scan lands (respects default-worktree pref).
   React.useEffect(() => {
-    if (props.target !== undefined || props.scanned.length === 0) return;
-    const repo = props.scanned[0]!;
+    if (props.target !== undefined || sortedRepos.length === 0) return;
+    const repo = sortedRepos[0]!;
     void (async () => {
       const preference = await getDefaultWorktreePreference();
       const lastByRepo = preference === "last" ? await getLastWorktreeByRepo() : {};
@@ -128,7 +164,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       const branch = (await readCurrentBranch(client, chosen.path)) ?? "main";
       props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
-  }, [props.scanned, props.target, props.onChange, client]);
+  }, [sortedRepos, props.target, props.onChange, client]);
 
   // Keep branch label in sync when the worktree changes.
   React.useEffect(() => {
@@ -320,8 +356,13 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
             label={<PillLabel text={repoLabel} />}
             modifiers={[...MENU_MODIFIERS]}
           >
+            <Button
+              label={sort === "recent" ? "Sort: Recent" : "Sort: A–Z"}
+              systemImage="arrow.up.arrow.down"
+              onPress={toggleSort}
+            />
             <Section title="Repos">
-              {props.scanned.map((repo) => {
+              {sortedRepos.map((repo) => {
                 const active = props.target?.kind === "repo" && props.target.repo === repo.repo;
                 return (
                   <Toggle
@@ -337,8 +378,8 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
               })}
               <Button label="New repo…" systemImage="plus" onPress={() => setNewRepoOpen(true)} />
             </Section>
-            <Section title="Folders">
-              {props.otherFolders.map((folder) => {
+            <Section title="Other folders">
+              {sortedFolders.map((folder) => {
                 const active = props.target?.kind === "folder" && props.target.path === folder.path;
                 return (
                   <Toggle

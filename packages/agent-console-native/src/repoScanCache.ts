@@ -4,18 +4,16 @@
  * app's repoScanCache.ts, ported for AsyncStorage's async reads (no
  * synchronous cache read possible here, unlike localStorage).
  *
- * Home Workspaces and the composer picker share one pipeline: expand root →
- * scanRepos → subtract unclaimed folders under that same expanded root.
- * Repo labels are always `ScannedRepo.repo` from the scan (git remote name).
- * Folders never supply repo names.
+ * Home Workspaces and the composer picker share this scan for **repos**.
+ * Non-git "Other folders" in the picker are session-derived on HomeScreen
+ * (directories that have sessions but aren't known repos) — not a second
+ * filesystem walk.
  *
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { OpencodeClient } from "./client";
-import type { FolderTarget } from "./HomeTargetPickers";
 import { expandHome } from "./homeDir";
-import { listOtherFolders } from "./otherFolders";
 import { type ScannedRepo, scanRepos } from "./repoScan";
 
 const STORAGE_KEY = "agent-console-native:repoScan";
@@ -30,11 +28,6 @@ const SCAN_VERSION = 4;
 const STALE_AFTER_MS = 30 * 60 * 1000;
 
 type Persisted = { readonly version: number; readonly repos: ReadonlyArray<ScannedRepo> };
-
-export type WorkspaceIndex = {
-  readonly repos: ReadonlyArray<ScannedRepo>;
-  readonly otherFolders: ReadonlyArray<FolderTarget>;
-};
 
 let inMemory: ReadonlyArray<ScannedRepo> | undefined;
 let inFlight: Promise<ReadonlyArray<ScannedRepo>> | undefined;
@@ -82,31 +75,12 @@ export const rescan = (client: OpencodeClient, rootDir: string): Promise<Readonl
   return inFlight;
 };
 
-const indexFromRepos = async (
-  client: OpencodeClient,
-  rootDir: string,
-  repos: ReadonlyArray<ScannedRepo>,
-): Promise<WorkspaceIndex> => {
-  const expanded = await expandHome(client, rootDir);
-  const otherFolders = await listOtherFolders(client, expanded, repos);
-  return { repos, otherFolders };
-};
+/** Cached scan (same source Home Workspaces use). */
+export const readWorkspace = async (): Promise<ReadonlyArray<ScannedRepo> | undefined> =>
+  getCachedRepos();
 
-/** Cached scan + folder subtract under the same expanded root. */
-export const readWorkspace = async (
-  client: OpencodeClient,
-  rootDir: string,
-): Promise<WorkspaceIndex | undefined> => {
-  const repos = await getCachedRepos();
-  if (repos === undefined) return undefined;
-  return indexFromRepos(client, rootDir, repos);
-};
-
-/** Fresh scan + folder subtract — single source for Home + composer picker. */
+/** Fresh scan — single source for Home + composer picker repos. */
 export const refreshWorkspace = async (
   client: OpencodeClient,
   rootDir: string,
-): Promise<WorkspaceIndex> => {
-  const repos = await rescan(client, rootDir);
-  return indexFromRepos(client, rootDir, repos);
-};
+): Promise<ReadonlyArray<ScannedRepo>> => rescan(client, rootDir);
