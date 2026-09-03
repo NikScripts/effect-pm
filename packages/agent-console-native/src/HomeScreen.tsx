@@ -18,6 +18,7 @@ import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
+import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
 import type { ScannedRepo } from "./repoScan";
@@ -194,6 +195,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={[styles.content, { paddingTop: navBarHeight, paddingBottom: composerHeight + keyboardHeight + 16 }]}
       />
       </ScrollViewMarker>
+      <EdgeBlurBars bottomInset={keyboardHeight} />
       {/* Same shared Composer as the chat screen, floated the same way —
        * Home differs only by placeholder for now. `topSection` (the
        * repo/worktree/branch pickers) is the next increment; `onSend` is
