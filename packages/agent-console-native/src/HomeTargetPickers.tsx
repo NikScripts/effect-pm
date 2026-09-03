@@ -13,8 +13,14 @@ import {
   Host,
   Menu,
   Section,
+  Toggle,
 } from "@expo/ui/swift-ui";
-import { buttonStyle, controlSize, disabled as disabledModifier } from "@expo/ui/swift-ui/modifiers";
+import {
+  buttonStyle,
+  controlSize,
+  disabled as disabledModifier,
+  menuIndicator,
+} from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { useAppContext } from "./AppContext";
@@ -51,7 +57,13 @@ type Props = {
   readonly onWorktreesChanged: () => Promise<void>;
 };
 
-const MENU_MODIFIERS = [buttonStyle("bordered"), controlSize("small")] as const;
+/** Trigger chrome inside the glass composer — `glass` matches the field;
+ * swap to `bordered` / `plain` / `glassProminent` if the look fights the bubble. */
+const MENU_MODIFIERS = [
+  buttonStyle("glass"),
+  controlSize("small"),
+  menuIndicator("visible"),
+] as const;
 
 export const HomeTargetPickers = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
@@ -197,7 +209,6 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
         <Menu
           label={repoLabel}
-          systemImage="chevron.down"
           modifiers={[...MENU_MODIFIERS, ...(repoDisabled ? [disabledModifier(true)] : [])]}
         >
           {props.scanned.length > 0 ? (
@@ -205,11 +216,14 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
               {props.scanned.map((repo) => {
                 const active = props.target?.kind === "repo" && props.target.repo === repo.repo;
                 return (
-                  <Button
+                  <Toggle
                     key={repo.repo}
                     label={repo.repo}
-                    systemImage={active ? "checkmark" : "folder"}
-                    onPress={() => pickRepo(repo)}
+                    systemImage="folder"
+                    isOn={active}
+                    onIsOnChange={(on) => {
+                      if (on) pickRepo(repo);
+                    }}
                   />
                 );
               })}
@@ -220,11 +234,14 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
               {props.otherFolders.map((folder) => {
                 const active = props.target?.kind === "folder" && props.target.path === folder.path;
                 return (
-                  <Button
+                  <Toggle
                     key={folder.path}
                     label={folder.name}
-                    systemImage={active ? "checkmark" : "folder"}
-                    onPress={() => pickFolder(folder)}
+                    systemImage="folder.badge.gearshape"
+                    isOn={active}
+                    onIsOnChange={(on) => {
+                      if (on) pickFolder(folder);
+                    }}
                   />
                 );
               })}
@@ -236,18 +253,20 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
         <Menu
           label={worktreePill}
-          systemImage="chevron.down"
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
           {worktrees.map((wt) => {
             const active =
               props.target?.kind === "repo" && props.target.worktree.path === wt.path;
             return (
-              <Button
+              <Toggle
                 key={wt.path}
                 label={worktreeLabel(wt)}
-                systemImage={active ? "checkmark" : undefined}
-                onPress={() => pickWorktree(wt)}
+                systemImage={wt.isMain ? "externaldrive" : "square.on.square"}
+                isOn={active}
+                onIsOnChange={(on) => {
+                  if (on) pickWorktree(wt);
+                }}
               />
             );
           })}
@@ -259,17 +278,19 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
         <Menu
           label={branchPill}
-          systemImage="chevron.down"
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
           {branches.map((branch) => {
             const active = props.target?.kind === "repo" && props.target.branch === branch;
             return (
-              <Button
+              <Toggle
                 key={branch}
                 label={branch}
-                systemImage={active ? "checkmark" : undefined}
-                onPress={() => pickBranch(branch)}
+                systemImage="arrow.triangle.branch"
+                isOn={active}
+                onIsOnChange={(on) => {
+                  if (on) pickBranch(branch);
+                }}
               />
             );
           })}
