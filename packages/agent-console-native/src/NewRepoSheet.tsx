@@ -5,9 +5,10 @@
  * One field accepts GitHub search text or a pasteable remote URL. Typing
  * searches; a parseable remote auto-probes. Selecting a hit or resolving a
  * URL shows preview + collapsed preferences (folder name defaults to the
- * remote repo name). Header glass `xmark` / `plus` sit outside the `Form`; the Create / Clone
- * CTA is the last Form section so it scrolls with content (same action as `plus`).
- * The sheet is painted with `systemGroupedBackground` for a shared backdrop.
+ * remote repo name). Header glass `xmark` / `plus` stay outside the scroll.
+ * Form fields and the Create / Clone CTA share one `ScrollView` (Form's own
+ * scroll disabled) so the CTA scrolls with content without a Section well —
+ * same action as `plus`. Sheet backdrop is `systemGroupedBackground`.
  *
  * @internal
  */
@@ -24,6 +25,7 @@ import {
   LabeledContent,
   Picker,
   ProgressView,
+  ScrollView,
   Section,
   Spacer,
   Text,
@@ -47,6 +49,7 @@ import {
   onSubmit,
   padding,
   pickerStyle,
+  scrollDisabled,
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
@@ -345,7 +348,10 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
               />
             </HStack>
 
-            <Form>
+            <ScrollView>
+              <Form
+                modifiers={[scrollDisabled(true)]}
+              >
               <Section
                 title="Repository"
                 footer={
@@ -484,7 +490,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                   <Text modifiers={[foregroundStyle("#FF3B30")]}>{error}</Text>
                 </Section>
               ) : null}
-              <Section>
+            </Form>
+              <VStack spacing={8} modifiers={[padding({ horizontal: 20 })]}>
                 <Button
                   label={primaryLabel}
                   onPress={submit}
@@ -496,8 +503,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                   ]}
                 />
                 {busy ? <ProgressView /> : null}
-              </Section>
-            </Form>
+              </VStack>
+            </ScrollView>
           </VStack>
         </Group>
       </BottomSheet>
