@@ -1,7 +1,8 @@
 /**
  * Composer model selector — SwiftUI `Menu` of connected providers/models.
  * Label is the model name (or “Model” while loading); not “Auto” (Cursor’s
- * routing feature, which we don’t replicate).
+ * routing feature, which we don’t replicate). Section titles use the
+ * server’s provider `name` as-is — no client-side title-casing.
  *
  * @internal
  */
@@ -22,17 +23,30 @@ type Props = {
   readonly onChange: (model: ModelOption) => void;
 };
 
+type ProviderGroup = {
+  readonly providerID: string;
+  readonly title: string;
+  readonly models: ReadonlyArray<ModelOption>;
+};
+
 export const ModelPicker = (props: Props): React.ReactElement => {
   const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
 
-  const byProvider = React.useMemo(() => {
-    const map = new Map<string, Array<ModelOption>>();
+  const groups = React.useMemo((): ReadonlyArray<ProviderGroup> => {
+    const map = new Map<string, { title: string; models: Array<ModelOption> }>();
     for (const model of props.models) {
-      const list = map.get(model.providerID);
-      if (list === undefined) map.set(model.providerID, [model]);
-      else list.push(model);
+      const existing = map.get(model.providerID);
+      if (existing === undefined) {
+        map.set(model.providerID, { title: model.providerName, models: [model] });
+      } else {
+        existing.models.push(model);
+      }
     }
-    return map;
+    return Array.from(map.entries()).map(([providerID, group]) => ({
+      providerID,
+      title: group.title,
+      models: group.models,
+    }));
   }, [props.models]);
 
   return (
@@ -50,16 +64,15 @@ export const ModelPicker = (props: Props): React.ReactElement => {
         }
         modifiers={[...MENU_MODIFIERS]}
       >
-        {Array.from(byProvider.entries()).map(([providerID, models]) => (
-          <Section key={providerID} title={providerID}>
-            {models.map((model) => {
+        {groups.map((group) => (
+          <Section key={group.providerID} title={group.title}>
+            {group.models.map((model) => {
               const active =
                 props.selected !== undefined && modelKey(props.selected) === modelKey(model);
               return (
                 <Toggle
                   key={modelKey(model)}
                   label={model.name}
-                  systemImage="cpu"
                   isOn={active}
                   onIsOnChange={(on) => {
                     if (on) props.onChange(model);

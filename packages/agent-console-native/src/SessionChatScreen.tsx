@@ -232,6 +232,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       }
       return {
         providerID: message.providerID,
+        providerName: message.providerID,
         modelID: message.modelID,
         name: message.modelID,
       };

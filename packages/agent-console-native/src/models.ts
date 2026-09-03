@@ -9,6 +9,8 @@ import type { OpencodeClient } from "./client";
 
 export type ModelOption = {
   readonly providerID: string;
+  /** Provider display name from the server (`provider.name`), not reformatted. */
+  readonly providerName: string;
   readonly modelID: string;
   readonly name: string;
 };
@@ -33,7 +35,12 @@ const load = async (client: OpencodeClient): Promise<Cache> => {
   for (const provider of data.all) {
     if (!connected.has(provider.id)) continue;
     for (const model of Object.values(provider.models)) {
-      options.push({ providerID: provider.id, modelID: model.id, name: model.name });
+      options.push({
+        providerID: provider.id,
+        providerName: provider.name,
+        modelID: model.id,
+        name: model.name,
+      });
     }
   }
 
