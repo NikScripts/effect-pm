@@ -108,10 +108,6 @@ private final class VariableBlurUIView: UIVisualEffectView {
       return
     }
 
-    // nikstar uses a small mask bitmap + inputNormalizeEdges; full-bounds masks
-    // were read as uniform on device during earlier probes.
-    let gradientImage = makeGradientImage(width: 100, height: 100)
-
     variableBlur.setValue(maxBlurRadius, forKey: "inputRadius")
     variableBlur.setValue(gradientImage, forKey: "inputMaskImage")
     variableBlur.setValue(true, forKey: "inputNormalizeEdges")
@@ -122,14 +118,20 @@ private final class VariableBlurUIView: UIVisualEffectView {
   }
 
   private func makeGradientImage(width: CGFloat, height: CGFloat) -> CGImage {
-    let filter = CIFilter.linearGradient()
+    // smoothLinearGradient eases the ramp vs a hard linear step. Endpoints are
+    // pulled inward so full blur / full clear each occupy only a thin cap and
+    // most of the (short) band is gradual transition.
+    let filter = CIFilter.smoothLinearGradient()
     filter.color0 = CIColor.black
     filter.color1 = CIColor.clear
-    filter.point0 = CGPoint(x: 0, y: height)
-    filter.point1 = CGPoint(x: 0, y: 0)
-    if direction == .blurredBottomClearTop {
+    let ramp = height * 0.82
+    switch direction {
+    case .blurredTopClearBottom:
       filter.point0 = CGPoint(x: 0, y: 0)
-      filter.point1 = CGPoint(x: 0, y: height)
+      filter.point1 = CGPoint(x: 0, y: ramp)
+    case .blurredBottomClearTop:
+      filter.point0 = CGPoint(x: 0, y: height)
+      filter.point1 = CGPoint(x: 0, y: height - ramp)
     }
     let rect = CGRect(x: 0, y: 0, width: width, height: height)
     return CIContext().createCGImage(filter.outputImage!, from: rect)!
