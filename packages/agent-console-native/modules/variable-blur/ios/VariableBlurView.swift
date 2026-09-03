@@ -108,6 +108,8 @@ private final class VariableBlurUIView: UIVisualEffectView {
       return
     }
 
+    let gradientImage = makeGradientImage(width: 128, height: 128)
+
     variableBlur.setValue(maxBlurRadius, forKey: "inputRadius")
     variableBlur.setValue(gradientImage, forKey: "inputMaskImage")
     variableBlur.setValue(true, forKey: "inputNormalizeEdges")
@@ -118,13 +120,12 @@ private final class VariableBlurUIView: UIVisualEffectView {
   }
 
   private func makeGradientImage(width: CGFloat, height: CGFloat) -> CGImage {
-    // smoothLinearGradient eases the ramp vs a hard linear step. Endpoints are
-    // pulled inward so full blur / full clear each occupy only a thin cap and
-    // most of the (short) band is gradual transition.
+    // smoothLinearGradient eases the ramp. Endpoints span nearly the full mask
+    // so the dissolve is long and gentle rather than a short step.
     let filter = CIFilter.smoothLinearGradient()
     filter.color0 = CIColor.black
     filter.color1 = CIColor.clear
-    let ramp = height * 0.82
+    let ramp = height * 0.96
     switch direction {
     case .blurredTopClearBottom:
       filter.point0 = CGPoint(x: 0, y: 0)

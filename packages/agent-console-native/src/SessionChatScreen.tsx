@@ -33,10 +33,10 @@ import { useSessionStream } from "./useSessionStream";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 /** Softer peak — a high radius in a short band reads as a flat wash. */
-const BLUR_RADIUS = 18;
-/** Short bands; the native ramp spreads most of this height in gradual transition. */
-const TOP_BLUR_HEIGHT = 22;
-const BOTTOM_BLUR_HEIGHT = 18;
+const BLUR_RADIUS = 16;
+/** Tall bands; the native ramp eases across most of the height. */
+const TOP_BLUR_HEIGHT = 72;
+const BOTTOM_BLUR_HEIGHT = 80;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
@@ -153,10 +153,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: composerHeight + keyboardHeight }]}
       />
       </ScrollViewMarker>
-      {/* Feathered blur at the top (under the nav bar) and bottom (above the
-       * composer). Both sit over the list but under the chrome that must stay
-       * sharp — header items and the glass composer. Heights track the real
-       * header and measured composer so the ramps stay aligned. */}
+      {/* Feathered blur at the top (under the nav bar) and bottom (screen
+       * edge). Both sit over the list but under the chrome — header items
+       * and the glass composer. Bottom anchors to `keyboardHeight`, not
+       * above the composer; it feathers content scrolling underneath. */}
       {Platform.OS === "ios" ? (
         <VariableBlur
           blurRadius={BLUR_RADIUS}
@@ -169,7 +169,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         <VariableBlur
           blurRadius={BLUR_RADIUS}
           direction="up"
-          style={[styles.edgeBlur, { bottom: keyboardHeight + composerHeight, height: BOTTOM_BLUR_HEIGHT }]}
+          style={[styles.edgeBlur, { bottom: keyboardHeight, height: BOTTOM_BLUR_HEIGHT }]}
           pointerEvents="none"
         />
       ) : null}
