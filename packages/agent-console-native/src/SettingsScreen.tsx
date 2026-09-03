@@ -1,8 +1,7 @@
 /**
- * Full Settings — workspace organization (where repos live, where new
- * worktrees are created, which worktree opens by default), session
- * permission defaults, and server connection. Mirrors the web Settings
- * information architecture in an iOS grouped-list layout.
+ * Full Settings — workspace organization (root, where clone/create puts
+ * the main checkout, where linked worktrees go, which worktree opens by
+ * default), session permission defaults, and server connection.
  *
  * @internal
  */
@@ -28,16 +27,20 @@ import {
   type PermissionMode,
 } from "./sessionPermissions";
 import {
+  DEFAULT_REPO_TEMPLATE,
   DEFAULT_WORKTREE_TEMPLATE,
   getDefaultPermissionMode,
   getDefaultWorktreePreference,
+  getRepoTemplate,
   getWorktreeTemplate,
+  resolveRepoPath,
+  resolveWorktreePath,
   setDefaultPermissionMode,
   setDefaultWorktreePreference,
+  setRepoTemplate,
   setWorktreeTemplate,
   type DefaultWorktreePreference,
 } from "./settings";
-import { resolveWorktreePath } from "./worktree";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
@@ -58,7 +61,8 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const { client, address, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
   const [rootDirDraft, setRootDirDraft] = React.useState(rootDir);
-  const [templateDraft, setTemplateDraft] = React.useState(DEFAULT_WORKTREE_TEMPLATE);
+  const [repoTemplateDraft, setRepoTemplateDraft] = React.useState(DEFAULT_REPO_TEMPLATE);
+  const [worktreeTemplateDraft, setWorktreeTemplateDraft] = React.useState(DEFAULT_WORKTREE_TEMPLATE);
   const [worktreePref, setWorktreePref] = React.useState<DefaultWorktreePreference>("main");
   const [defaultMode, setDefaultMode] = React.useState<PermissionMode>(getDefaultPermissionModeSync);
   const [lastScanAt, setLastScanAt] = React.useState<number | undefined>(undefined);
@@ -71,13 +75,15 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
   React.useEffect(() => {
     void (async () => {
-      const [template, pref, mode, scannedAt] = await Promise.all([
+      const [repoTemplate, worktreeTemplate, pref, mode, scannedAt] = await Promise.all([
+        getRepoTemplate(),
         getWorktreeTemplate(),
         getDefaultWorktreePreference(),
         getDefaultPermissionMode(),
         getLastScanAt(),
       ]);
-      setTemplateDraft(template);
+      setRepoTemplateDraft(repoTemplate);
+      setWorktreeTemplateDraft(worktreeTemplate);
       setWorktreePref(pref);
       setDefaultMode(mode);
       setLastScanAt(scannedAt);
@@ -93,10 +99,17 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
     onChangeRootDir(trimmed);
   };
 
-  const saveTemplate = (): void => {
-    const trimmed = templateDraft.trim();
+  const saveRepoTemplate = (): void => {
+    const trimmed = repoTemplateDraft.trim();
+    const next = trimmed.length === 0 ? DEFAULT_REPO_TEMPLATE : trimmed;
+    setRepoTemplateDraft(next);
+    void setRepoTemplate(next);
+  };
+
+  const saveWorktreeTemplate = (): void => {
+    const trimmed = worktreeTemplateDraft.trim();
     const next = trimmed.length === 0 ? DEFAULT_WORKTREE_TEMPLATE : trimmed;
-    setTemplateDraft(next);
+    setWorktreeTemplateDraft(next);
     void setWorktreeTemplate(next);
   };
 
@@ -124,11 +137,17 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
     }
   };
 
-  const previewPath = resolveWorktreePath(
-    rootDirDraft.trim() || rootDir,
+  const rootForPreview = rootDirDraft.trim() || rootDir;
+  const repoPreview = resolveRepoPath(
+    rootForPreview,
+    "Hyperlink",
+    repoTemplateDraft.trim() || DEFAULT_REPO_TEMPLATE,
+  );
+  const worktreePreview = resolveWorktreePath(
+    rootForPreview,
     "Hyperlink",
     "feature-branch",
-    templateDraft.trim() || DEFAULT_WORKTREE_TEMPLATE,
+    worktreeTemplateDraft.trim() || DEFAULT_WORKTREE_TEMPLATE,
   );
 
   return (
@@ -150,10 +169,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Workspace</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Root folder</Text>
-          <Text style={styles.hint}>
-            Where we look for repos. A repo’s main checkout is whatever directory under here already
-            owns the real .git — we don’t move or create that; we find it.
-          </Text>
+          <Text style={styles.hint}>Base path for discovery, new clones, and new worktrees.</Text>
           <TextInput
             style={styles.input}
             value={rootDirDraft}
@@ -166,15 +182,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             autoCorrect={false}
             spellCheck={false}
           />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Main vs linked worktrees</Text>
-          <Text style={styles.hint}>
-            Main is the primary checkout (e.g. {"{root}"}/Hyperlink or {"{root}"}/packages/effect-pm).
-            Linked worktrees — what “Create new…” adds — are extra checkouts of that same repo, and
-            only those follow the path template below.
-          </Text>
         </View>
 
         <View style={styles.card}>
@@ -201,19 +208,42 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           {scanError !== undefined ? <Text style={styles.errorText}>{scanError}</Text> : null}
         </View>
 
+        <Text style={styles.sectionLabel}>New repos (main checkout)</Text>
+        <View style={styles.card}>
+          <Text style={styles.fieldLabel}>Path template</Text>
+          <Text style={styles.hint}>
+            Where clone / create puts the main checkout. Placeholders: {"{root}"}, {"{repo}"}.
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={repoTemplateDraft}
+            onChangeText={setRepoTemplateDraft}
+            onBlur={saveRepoTemplate}
+            onSubmitEditing={saveRepoTemplate}
+            placeholder={DEFAULT_REPO_TEMPLATE}
+            placeholderTextColor={colors.placeholderText}
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+          />
+          <Text style={styles.previewLabel}>Preview</Text>
+          <Text style={styles.previewPath} numberOfLines={2} ellipsizeMode="head">
+            {repoPreview}
+          </Text>
+        </View>
+
         <Text style={styles.sectionLabel}>Linked worktrees</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Path template</Text>
           <Text style={styles.hint}>
-            Used only when creating a linked worktree. Placeholders: {"{root}"}, {"{repo}"}, {"{name}"}.
-            Does not relocate the main checkout.
+            Where “Create new…” puts extra checkouts. Placeholders: {"{root}"}, {"{repo}"}, {"{name}"}.
           </Text>
           <TextInput
             style={styles.input}
-            value={templateDraft}
-            onChangeText={setTemplateDraft}
-            onBlur={saveTemplate}
-            onSubmitEditing={saveTemplate}
+            value={worktreeTemplateDraft}
+            onChangeText={setWorktreeTemplateDraft}
+            onBlur={saveWorktreeTemplate}
+            onSubmitEditing={saveWorktreeTemplate}
             placeholder={DEFAULT_WORKTREE_TEMPLATE}
             placeholderTextColor={colors.placeholderText}
             autoCapitalize="none"
@@ -222,7 +252,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           />
           <Text style={styles.previewLabel}>Preview</Text>
           <Text style={styles.previewPath} numberOfLines={2} ellipsizeMode="head">
-            {previewPath}
+            {worktreePreview}
           </Text>
         </View>
 

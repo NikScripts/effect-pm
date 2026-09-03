@@ -7,17 +7,13 @@
  */
 import { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import type { OpencodeClient } from "./client";
-import { DEFAULT_WORKTREE_TEMPLATE, getWorktreeTemplate } from "./settings";
+import {
+  DEFAULT_WORKTREE_TEMPLATE,
+  getWorktreeTemplate,
+  resolveWorktreePath,
+} from "./settings";
 
-export { DEFAULT_WORKTREE_TEMPLATE };
-
-export const resolveWorktreePath = (
-  rootDir: string,
-  repo: string,
-  name: string,
-  template: string = DEFAULT_WORKTREE_TEMPLATE,
-): string =>
-  template.replaceAll("{root}", rootDir).replaceAll("{repo}", repo).replaceAll("{name}", name);
+export { DEFAULT_WORKTREE_TEMPLATE, resolveWorktreePath };
 
 export class WorktreeCreateError extends Error {}
 

@@ -7,10 +7,14 @@
  * need a loading state while this resolves — there's no synchronous
  * equivalent here.
  *
- * Organization prefs (root folder, new-worktree path template, default
- * worktree when opening a repo) live here too — the scan is still the
- * source of truth for what exists; these only control discovery root,
- * where *new* worktrees are created, and which worktree is selected first.
+ * Workspace layout prefs:
+ * - root folder — discovery base
+ * - repo template — where clone/create puts the **main** checkout
+ * - worktree template — where “Create new…” puts **linked** worktrees
+ * - default worktree — which checkout the composer picks first
+ *
+ * Existing checkouts are still discovered by scanning; templates only
+ * decide where *new* paths are written.
  *
  * @internal
  */
@@ -19,18 +23,35 @@ import type { PermissionMode } from "./sessionPermissions";
 
 const SERVER_ADDRESS_KEY = "agent-console-native:serverAddress";
 const ROOT_DIR_KEY = "agent-console-native:rootDir";
+const REPO_TEMPLATE_KEY = "agent-console-native:repoTemplate";
 const WORKTREE_TEMPLATE_KEY = "agent-console-native:worktreeTemplate";
 const DEFAULT_WORKTREE_PREF_KEY = "agent-console-native:defaultWorktreePreference";
 const LAST_WORKTREE_BY_REPO_KEY = "agent-console-native:lastWorktreeByRepo";
 const DEFAULT_PERMISSION_MODE_KEY = "agent-console-native:defaultPermissionMode";
 const SESSION_PERMISSION_MODES_KEY = "agent-console-native:sessionPermissionModes";
 
-/** Placeholders: `{root}`, `{repo}`, `{name}`. Only used when *creating* a
- * new worktree — existing checkouts are discovered by scanning. */
+/** Placeholders: `{root}`, `{repo}`. Destination for clone / `git init`. */
+export const DEFAULT_REPO_TEMPLATE = "{root}/{repo}";
+
+/** Placeholders: `{root}`, `{repo}`, `{name}`. Destination for linked worktrees. */
 export const DEFAULT_WORKTREE_TEMPLATE = "{root}/{repo}/worktrees/{name}";
 
 /** Which worktree to select when the user picks a repo in the composer. */
 export type DefaultWorktreePreference = "main" | "last";
+
+export const resolveRepoPath = (
+  rootDir: string,
+  repo: string,
+  template: string = DEFAULT_REPO_TEMPLATE,
+): string => template.replaceAll("{root}", rootDir).replaceAll("{repo}", repo);
+
+export const resolveWorktreePath = (
+  rootDir: string,
+  repo: string,
+  name: string,
+  template: string = DEFAULT_WORKTREE_TEMPLATE,
+): string =>
+  template.replaceAll("{root}", rootDir).replaceAll("{repo}", repo).replaceAll("{name}", name);
 
 export const getServerAddress = async (): Promise<string | undefined> => {
   const value = await AsyncStorage.getItem(SERVER_ADDRESS_KEY);
@@ -49,6 +70,14 @@ export const getRootDir = async (): Promise<string | undefined> => {
 };
 
 export const setRootDir = (value: string): Promise<void> => AsyncStorage.setItem(ROOT_DIR_KEY, value);
+
+export const getRepoTemplate = async (): Promise<string> => {
+  const value = await AsyncStorage.getItem(REPO_TEMPLATE_KEY);
+  return value !== null && value.length > 0 ? value : DEFAULT_REPO_TEMPLATE;
+};
+
+export const setRepoTemplate = (value: string): Promise<void> =>
+  AsyncStorage.setItem(REPO_TEMPLATE_KEY, value.trim().length === 0 ? DEFAULT_REPO_TEMPLATE : value.trim());
 
 export const getWorktreeTemplate = async (): Promise<string> => {
   const value = await AsyncStorage.getItem(WORKTREE_TEMPLATE_KEY);
