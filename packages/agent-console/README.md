@@ -34,6 +34,15 @@ Vite dev server needs exposing, never the agent server itself. Point at a
 different opencode instance via `VITE_OPENCODE_BASE_URL` (see `.env.example`)
 if you're not using the proxy.
 
+## GitHub search / repo metadata
+
+New-repo search and preview hit the Vite middleware at `/github/*`, which
+proxies to `https://api.github.com`. Optional but recommended: set
+`GITHUB_TOKEN` or `GH_TOKEN` in the environment that runs `pnpm -C packages/agent-console dev`
+so authenticated rate limits apply (anonymous is 60 req/hr). The native app
+never shells `gh` through OpenCode for this.
+
+
 ## Verify the no-edit permission is actually enforced
 
 Don't just trust the config — confirm the server rejects an edit attempt,

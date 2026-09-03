@@ -181,35 +181,35 @@ export const createWorkspaceFolder = async (
   return path;
 };
 
-/** Best-effort GitHub search via `gh`. Returns [] if gh isn't available. */
+/** GitHub search via the Vite `/github` proxy (api.github.com), not `gh`/OpenCode. */
 export const searchGitHubRepos = async (
-  client: OpencodeClient,
-  rootDir: string,
+  backendAddress: string,
   query: string,
 ): Promise<ReadonlyArray<GitHubSearchHit>> => {
   const q = query.trim();
   if (q.length === 0) return [];
-  const expanded = await expandHome(client, rootDir);
+  const url =
+    `${backendAddress.replace(/\/$/, "")}/github/search/repositories` +
+    `?q=${encodeURIComponent(q)}&per_page=8`;
   try {
-    const output = await runRepoAdmin(
-      client,
-      expanded,
-      `gh search repos ${JSON.stringify(q)} --limit 8 --json fullName,url,description 2>/dev/null || true`,
-      "gh search",
-    );
-    if (output.length === 0 || output.startsWith("[" ) === false) return [];
-    const parsed: unknown = JSON.parse(output);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((row) => {
+    const response = await fetch(url, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!response.ok) return [];
+    const parsed: unknown = await response.json();
+    if (typeof parsed !== "object" || parsed === null) return [];
+    const items = (parsed as { items?: unknown }).items;
+    if (!Array.isArray(items)) return [];
+    return items.flatMap((row) => {
       if (typeof row !== "object" || row === null) return [];
-      const fullName = (row as { fullName?: unknown }).fullName;
-      const url = (row as { url?: unknown }).url;
+      const fullName = (row as { full_name?: unknown }).full_name;
+      const htmlUrl = (row as { html_url?: unknown }).html_url;
       const description = (row as { description?: unknown }).description;
-      if (typeof fullName !== "string" || typeof url !== "string") return [];
+      if (typeof fullName !== "string" || typeof htmlUrl !== "string") return [];
       return [
         {
           fullName,
-          url,
+          url: htmlUrl.endsWith(".git") ? htmlUrl : `${htmlUrl}.git`,
           description: typeof description === "string" ? description : undefined,
         },
       ];
@@ -255,59 +255,54 @@ const isInterestingPath = (name: string): boolean => {
 };
 
 /**
- * Best-effort GitHub metadata (description, language, root rule/docs files).
- * Returns undefined when `gh` can't resolve the repo.
+ * GitHub metadata via the Vite `/github` proxy (description, language, root
+ * rule/docs files). Returns undefined when the API cannot resolve the repo.
  */
 export const fetchRepoMeta = async (
-  client: OpencodeClient,
-  rootDir: string,
+  backendAddress: string,
   owner: string | undefined,
   name: string,
 ): Promise<RepoMeta | undefined> => {
   if (owner === undefined || owner.length === 0 || name.length === 0) return undefined;
-  const expanded = await expandHome(client, rootDir);
-  const repo = `${owner}/${name}`;
+  const base = `${backendAddress.replace(/\/$/, "")}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   try {
-    const infoOut = await runRepoAdmin(
-      client,
-      expanded,
-      `gh api ${JSON.stringify(`repos/${owner}/${name}`)} --jq '{description,language,stargazers_count,topics}' 2>/dev/null || true`,
-      `meta ${repo}`,
-    );
+    const infoResponse = await fetch(base, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!infoResponse.ok) return undefined;
+    const info: unknown = await infoResponse.json();
     let description: string | undefined;
     let language: string | undefined;
     let stars: number | undefined;
     let topics: ReadonlyArray<string> = [];
-    if (infoOut.length > 0 && infoOut.startsWith("{")) {
-      const info: unknown = JSON.parse(infoOut);
-      if (typeof info === "object" && info !== null) {
-        const row = info as {
-          description?: unknown;
-          language?: unknown;
-          stargazers_count?: unknown;
-          topics?: unknown;
-        };
-        description = typeof row.description === "string" ? row.description : undefined;
-        language = typeof row.language === "string" ? row.language : undefined;
-        stars = typeof row.stargazers_count === "number" ? row.stargazers_count : undefined;
-        topics = Array.isArray(row.topics)
-          ? row.topics.filter((t): t is string => typeof t === "string")
-          : [];
-      }
+    if (typeof info === "object" && info !== null) {
+      const row = info as {
+        description?: unknown;
+        language?: unknown;
+        stargazers_count?: unknown;
+        topics?: unknown;
+      };
+      description = typeof row.description === "string" ? row.description : undefined;
+      language = typeof row.language === "string" ? row.language : undefined;
+      stars = typeof row.stargazers_count === "number" ? row.stargazers_count : undefined;
+      topics = Array.isArray(row.topics)
+        ? row.topics.filter((t): t is string => typeof t === "string")
+        : [];
     }
 
-    const contentsOut = await runRepoAdmin(
-      client,
-      expanded,
-      `gh api ${JSON.stringify(`repos/${owner}/${name}/contents`)} --jq '[.[].name]' 2>/dev/null || true`,
-      `contents ${repo}`,
-    );
+    const contentsResponse = await fetch(`${base}/contents`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
     let ruleFiles: ReadonlyArray<string> = [];
-    if (contentsOut.length > 0 && contentsOut.startsWith("[")) {
-      const names: unknown = JSON.parse(contentsOut);
+    if (contentsResponse.ok) {
+      const names: unknown = await contentsResponse.json();
       if (Array.isArray(names)) {
         ruleFiles = names
-          .filter((n): n is string => typeof n === "string")
+          .flatMap((entry) => {
+            if (typeof entry !== "object" || entry === null) return [];
+            const n = (entry as { name?: unknown }).name;
+            return typeof n === "string" ? [n] : [];
+          })
           .filter(isInterestingPath)
           .slice(0, 12);
       }

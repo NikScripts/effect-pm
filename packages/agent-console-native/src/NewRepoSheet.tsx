@@ -54,6 +54,7 @@ import {
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAppContext } from "./AppContext";
+import { getBackendAddress } from "./settings";
 import { colors } from "./colors";
 import {
   cloneRepo,
@@ -97,7 +98,7 @@ const isFolderName = (raw: string): boolean =>
   raw.length > 0 && !raw.includes("/") && !raw.includes(":") && !/\s/.test(raw);
 
 export const NewRepoSheet = (props: Props): React.ReactElement => {
-  const { client, rootDir } = useAppContext();
+  const { client, address, rootDir } = useAppContext();
   const colorScheme = useColorScheme();
   const queryState = useNativeState("");
   const nameState = useNativeState("");
@@ -111,6 +112,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [prefsOpen, setPrefsOpen] = React.useState(false);
+  const [backendAddress, setBackendAddress] = React.useState<string | undefined>(undefined);
   const probeSeq = React.useRef(0);
   const searchSeq = React.useRef(0);
 
@@ -134,6 +136,17 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.visible]);
 
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void getBackendAddress(address).then((backend) => {
+      if (!cancelled) setBackendAddress(backend);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+
   const applyFolderName = (repoName: string): void => {
     nameState.set(repoName);
   };
@@ -151,9 +164,11 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
       setBranch(next.defaultBranch);
       queryState.set(next.remote.url);
       setQuery(next.remote.url);
-      void fetchRepoMeta(client, rootDir, next.remote.owner, next.remote.name).then((m) => {
-        if (seq === probeSeq.current) setMeta(m);
-      });
+      if (backendAddress !== undefined) {
+        void fetchRepoMeta(backendAddress, next.remote.owner, next.remote.name).then((m) => {
+          if (seq === probeSeq.current) setMeta(m);
+        });
+      }
       return next;
     } catch (err) {
       if (seq !== probeSeq.current) return undefined;
@@ -205,10 +220,16 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
       return () => clearTimeout(handle);
     }
 
+    if (backendAddress === undefined) {
+      setHits([]);
+      setSearching(false);
+      return;
+    }
+
     const seq = ++searchSeq.current;
     setSearching(true);
     const handle = setTimeout(() => {
-      void searchGitHubRepos(client, rootDir, trimmed)
+      void searchGitHubRepos(backendAddress, trimmed)
         .then((results) => {
           if (seq !== searchSeq.current) return;
           setHits(results);
@@ -223,7 +244,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, props.visible, client, rootDir]);
+  }, [query, props.visible, backendAddress]);
 
   const submit = (): void => {
     setBusy(true);
