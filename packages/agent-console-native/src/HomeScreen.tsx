@@ -234,7 +234,11 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           return (
             <TouchableOpacity style={styles.card} activeOpacity={0.7}>
               <View style={styles.repoCardHeader}>
-                <SystemIcon name="folder" size={16} color={colors.secondaryLabel} />
+                <SystemIcon
+                  name={item.group.isKnownRepo ? "shippingbox" : "folder"}
+                  size={16}
+                  color={colors.secondaryLabel}
+                />
                 <Text style={[styles.cardTitle, styles.repoCardTitle]} numberOfLines={1}>
                   {item.group.repo}
                 </Text>
