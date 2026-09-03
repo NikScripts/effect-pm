@@ -20,7 +20,11 @@ const EDGE_LIGHT_STOPS = [
   DynamicColorIOS({ light: "rgba(255,255,255,0.55)", dark: "rgba(0,0,0,0.5)" }),
   DynamicColorIOS({ light: "rgba(255,255,255,0.28)", dark: "rgba(0,0,0,0.26)" }),
   DynamicColorIOS({ light: "rgba(255,255,255,0.1)", dark: "rgba(0,0,0,0.1)" }),
-  "transparent",
+  // NOT "transparent": that is rgba(0,0,0,0) — transparent *black*. The
+  // gradient interpolates every channel, so fading white into it ramps the
+  // RGB toward black as the alpha drops and leaves a visible dark band right
+  // where the wash should disappear. Zero-alpha white changes only the alpha.
+  DynamicColorIOS({ light: "rgba(255,255,255,0)", dark: "rgba(0,0,0,0)" }),
 ] as const;
 
 /** System blue at falling alpha — same #007AFF / #0A84FF pair as colors.accentTint. */
@@ -28,7 +32,9 @@ const EDGE_BUSY_STOPS = [
   DynamicColorIOS({ light: "rgba(0,122,255,0.42)", dark: "rgba(10,132,255,0.38)" }),
   DynamicColorIOS({ light: "rgba(0,122,255,0.22)", dark: "rgba(10,132,255,0.2)" }),
   DynamicColorIOS({ light: "rgba(0,122,255,0.08)", dark: "rgba(10,132,255,0.08)" }),
-  "transparent",
+  // Zero-alpha blue for the same reason as above — fading to "transparent"
+  // would drag the tint through black on its way out.
+  DynamicColorIOS({ light: "rgba(0,122,255,0)", dark: "rgba(10,132,255,0)" }),
 ] as const;
 
 const EDGE_LOCATIONS = [0, 0.35, 0.7, 1] as const;

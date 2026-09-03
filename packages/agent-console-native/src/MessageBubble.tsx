@@ -14,7 +14,10 @@
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
 import { colors } from "./colors";
+import { ROW_GUTTER } from "./layout";
 import { Markdown } from "./Markdown";
+import { MessageActions } from "./MessageActions";
+import { ReasoningBlock } from "./ReasoningBlock";
 import { ToolCallBubble } from "./ToolCallBubble";
 import type { TranscriptMessage } from "./useSessionStream";
 
@@ -23,13 +26,19 @@ const MessageBubbleImpl = (props: { readonly message: TranscriptMessage }): Reac
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
-        {Array.from(props.message.parts.values()).map((part) =>
-          part.type === "text" ? (
-            <Markdown key={part.id} text={part.text} />
-          ) : (
-            <ToolCallBubble key={part.id} part={part} />
-          ),
-        )}
+        {Array.from(props.message.parts.values()).map((part) => {
+          switch (part.type) {
+            case "text":
+              return <Markdown key={part.id} text={part.text} />;
+            case "reasoning":
+              return <ReasoningBlock key={part.id} part={part} />;
+            default:
+              return <ToolCallBubble key={part.id} part={part} />;
+          }
+        })}
+        {/* Assistant only: there is nothing to copy back out of your own
+          * message, and a row of controls under every sent line is noise. */}
+        {isUser ? null : <MessageActions message={props.message} />}
       </View>
     </View>
   );
@@ -42,17 +51,22 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     marginBottom: 14,
+    paddingHorizontal: ROW_GUTTER,
   },
   rowUser: {
     justifyContent: "flex-end",
   },
-  bubble: {
-    maxWidth: "88%",
-  },
+  bubble: {},
   bubbleAssistant: {
+    // Full width: assistant replies are prose, code and tool output, and the
+    // right-hand gutter a chat bubble normally reserves just wraps them
+    // earlier for no benefit.
     flex: 1,
   },
   bubbleUser: {
+    // Still inset — a sent message reads as a bubble, and the asymmetry is
+    // what distinguishes the two sides now that replies run edge to edge.
+    maxWidth: "88%",
     backgroundColor: colors.brandTint,
     borderRadius: 18,
     paddingHorizontal: 14,

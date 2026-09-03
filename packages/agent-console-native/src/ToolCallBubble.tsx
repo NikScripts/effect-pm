@@ -7,20 +7,25 @@
  * mechanism with no native equivalent short of a WebView; output renders as
  * plain monospace text here (a real, scoped v1 cut, not a placeholder).
  *
- * Edits/writes/patches start open (that's the content worth reading, the
- * diff); everything else starts collapsed once its output passes a line
- * count. Tap the header to toggle.
+ * Open/closed comes from `useCollapsible`: the transcript auto-expands only
+ * its newest collapsible, so a finished call folds away when the next one
+ * starts. Tap the header to pin it either way.
  *
  * @internal
  */
 import * as React from "react";
 import type { ToolPart } from "@opencode-ai/sdk";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { colors } from "./colors";
+import { asHtmlPayload, HtmlToolBlock } from "./HtmlToolBlock";
+import { useCollapsible } from "./CollapsibleParts";
 import { SystemIcon } from "./SystemIcon";
 
 const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
-const COLLAPSE_LINE_THRESHOLD = 12;
+/** Same timings as ReasoningBlock, so the two read as one system. */
+const COLLAPSE_MS = 180;
+const EXIT_MS = 120;
 
 const filePathOf = (input: Record<string, unknown>): string | undefined => {
   for (const key of ["filePath", "file_path", "path"]) {
@@ -35,9 +40,18 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
   const path = filePathOf(part.state.input);
   const isEditFamily = EDIT_FAMILY.has(part.tool);
   const lineCount = part.state.status === "completed" ? part.state.output.split("\n").length : 0;
-  const [open, setOpen] = React.useState(part.state.status !== "completed" || isEditFamily || lineCount <= COLLAPSE_LINE_THRESHOLD);
+  const { open, toggle } = useCollapsible(part.id);
+
+  // `render_html` returns a page, not text. Its own output string is a short
+  // summary meant for the model's next turn — showing it here instead of the
+  // page would be strictly worse than useless.
+  const htmlPayload =
+    part.tool === "render_html" && part.state.status === "completed"
+      ? asHtmlPayload(part.state.metadata)
+      : undefined;
 
   const body = (() => {
+    if (htmlPayload !== undefined) return <HtmlToolBlock payload={htmlPayload} />;
     switch (part.state.status) {
       case "pending":
         return null;
@@ -59,8 +73,8 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
   })();
 
   return (
-    <View style={styles.root}>
-      <TouchableOpacity style={styles.header} activeOpacity={0.6} onPress={() => setOpen((o) => !o)}>
+    <Animated.View style={styles.root} layout={LinearTransition.duration(COLLAPSE_MS)}>
+      <TouchableOpacity style={styles.header} activeOpacity={0.6} onPress={toggle}>
         <Text style={styles.toolName}>{part.tool}</Text>
         {path !== undefined ? (
           <Text style={styles.path} numberOfLines={1}>
@@ -70,8 +84,12 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
         {part.state.status === "completed" && !isEditFamily ? <Text style={styles.meta}>{lineCount} lines</Text> : null}
         <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={colors.secondaryLabel} />
       </TouchableOpacity>
-      {open ? body : null}
-    </View>
+      {open ? (
+        <Animated.View entering={FadeIn.duration(COLLAPSE_MS)} exiting={FadeOut.duration(EXIT_MS)}>
+          {body}
+        </Animated.View>
+      ) : null}
+    </Animated.View>
   );
 };
 
