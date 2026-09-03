@@ -23,6 +23,7 @@ import { AGENT } from "./client";
 import { BusyRow } from "./BusyRow";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
+import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { MessageBubble } from "./MessageBubble";
 import { PermissionPrompt } from "./PermissionPrompt";
@@ -41,10 +42,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 /** Sentinel row id for the pending-permission bubble. Prefixed so it can
  * never collide with a real message id (`msg_…`). */
 const PERMISSION_ROW_ID = "__permission__";
-
-/** Horizontal inset shared by every row in the transcript. Exported so rows
- * own their own gutter rather than inheriting one from the scroll view. */
-export const ROW_GUTTER = 22;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client, address } = useAppContext();

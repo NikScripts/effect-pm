@@ -26,9 +26,11 @@ import {
   primeDefaultPermissionMode,
   type PermissionMode,
 } from "./sessionPermissions";
+import { registerForPush } from "./push";
 import {
   DEFAULT_REPO_TEMPLATE,
   DEFAULT_WORKTREE_TEMPLATE,
+  getBackendAddress,
   getDefaultPermissionMode,
   getDefaultWorktreePreference,
   getRepoTemplate,
@@ -116,6 +118,29 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const chooseWorktreePref = (pref: DefaultWorktreePreference): void => {
     setWorktreePref(pref);
     void setDefaultWorktreePreference(pref);
+  };
+
+  const [pushStatus, setPushStatus] = React.useState<string | undefined>(undefined);
+  const [pushBusy, setPushBusy] = React.useState(false);
+
+  // Explicit retry. iOS only ever shows the permission dialog once per
+  // install, so once it has been dismissed or denied the automatic attempt at
+  // launch can never surface it again — this reports exactly which step
+  // stopped, including "denied in iOS settings", where the only fix is the
+  // Settings app.
+  const enablePush = async (): Promise<void> => {
+    setPushBusy(true);
+    setPushStatus(undefined);
+    const backend = await getBackendAddress(address);
+    const result = await registerForPush(backend);
+    setPushBusy(false);
+    setPushStatus(
+      result.ok
+        ? result.registered
+          ? `Registered with ${backend}`
+          : `Got a token, but ${backend} did not accept it — is the dev server running?`
+        : result.reason,
+    );
   };
 
   const chooseDefault = (mode: PermissionMode): void => {
@@ -318,6 +343,25 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <TouchableOpacity style={styles.destructiveRow} activeOpacity={0.6} onPress={onChangeServer}>
             <Text style={styles.destructiveText}>Change server…</Text>
           </TouchableOpacity>
+        </View>
+        <Text style={styles.sectionLabel}>Notifications</Text>
+        <View style={styles.card}>
+          <Text style={styles.hint}>
+            Alerts when a run finishes or needs approval while the app is closed. iOS only shows its permission
+            prompt once per install, so if it was dismissed, this is the way back to it.
+          </Text>
+          <TouchableOpacity
+            disabled={pushBusy}
+            activeOpacity={0.6}
+            onPress={() => {
+              void enablePush();
+            }}
+          >
+            <Text style={[styles.fieldLabel, { color: colors.tint }]}>
+              {pushBusy ? "Enabling…" : "Enable notifications"}
+            </Text>
+          </TouchableOpacity>
+          {pushStatus === undefined ? null : <Text style={styles.hint}>{pushStatus}</Text>}
         </View>
       </ScrollView>
     </View>

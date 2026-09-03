@@ -11,11 +11,13 @@ import {
   getDefaultPermissionMode,
   getRootDir,
   getServerAddress,
+  getBackendAddress,
   getSessionPermissionModes,
   setRootDir,
   setServerAddress,
 } from "./src/settings";
 import { primeDefaultPermissionMode, primeSessionPermissionModes } from "./src/sessionPermissions";
+import { registerForPush } from "./src/push";
 
 /** Only the one-time async bootstrap (resolve a server address, connect,
  * resolve a root folder) lives in this hand-rolled state machine — once
@@ -63,6 +65,9 @@ const AppInner = (): React.ReactElement => {
         return;
       }
       setAddressInput(savedAddress);
+      // Fire and forget: the backend may be down, permission may be denied,
+      // and neither should delay or block getting to the session list.
+      void getBackendAddress(savedAddress).then((backend) => registerForPush(backend));
       setScreen({ step: "connecting", address: savedAddress });
       try {
         const client = await connectToServer(savedAddress);

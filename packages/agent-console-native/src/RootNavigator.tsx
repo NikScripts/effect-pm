@@ -7,11 +7,12 @@
  *
  * @internal
  */
-import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
 import { useColorScheme } from "react-native";
 import { colors } from "./colors";
+import { loadNotifications, payloadOfResponse } from "./push";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
@@ -36,8 +37,44 @@ const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "#
 
 export const RootNavigator = (): React.ReactElement => {
   const scheme = useColorScheme();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
+  // Tapping a notification opens the session it is about. Handled here rather
+  // than in a screen because the tap usually arrives with no screen mounted —
+  // the app was closed, which is the case the notification exists for.
+  React.useEffect(() => {
+    // Loaded with require, not import(): a dynamic import in React Native
+    // fetches an async chunk through the dev server and fails with
+    // "Expected HMRClient.setup() call at startup".
+    const notifications = loadNotifications();
+    if (notifications === undefined) return;
+
+    let cancelled = false;
+    const open = (response: unknown): void => {
+      const payload = payloadOfResponse(response);
+      if (payload?.sessionID === undefined) return;
+      navigationRef.navigate("Chat", { sessionID: payload.sessionID });
+    };
+
+    // A cold launch from a tap delivers its response before any listener can
+    // attach — the app was closed, which is the case notifications exist for —
+    // so the last response is replayed explicitly.
+    void notifications
+      .getLastNotificationResponseAsync()
+      .then((last) => {
+        if (last !== null && last !== undefined && !cancelled) open(last);
+      })
+      .catch(() => undefined);
+
+    const subscription = notifications.addNotificationResponseReceivedListener(open);
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [navigationRef]);
+
   return (
-    <NavigationContainer theme={scheme === "dark" ? DARK_THEME : LIGHT_THEME}>
+    <NavigationContainer ref={navigationRef} theme={scheme === "dark" ? DARK_THEME : LIGHT_THEME}>
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
          * applies it via `useScrollEdgeEffects` after mount instead. See
