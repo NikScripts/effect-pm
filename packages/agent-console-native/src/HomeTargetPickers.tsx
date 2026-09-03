@@ -20,6 +20,7 @@ import {
 import {
   buttonStyle,
   disabled as disabledModifier,
+  menuActionDismissBehavior,
   menuIndicator,
   menuStyle,
 } from "@expo/ui/swift-ui/modifiers";
@@ -360,6 +361,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
               label={sort === "recent" ? "Sort: Recent" : "Sort: A–Z"}
               systemImage="arrow.up.arrow.down"
               onPress={toggleSort}
+              modifiers={[menuActionDismissBehavior("disabled")]}
             />
             <Section title="Repos">
               {sortedRepos.map((repo) => {
