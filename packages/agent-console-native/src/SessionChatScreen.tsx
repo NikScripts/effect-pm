@@ -32,8 +32,7 @@ import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { MessageBubble } from "./MessageBubble";
 import { PermissionPrompt } from "./PermissionPrompt";
-import { reportActiveSession } from "./push";
-import { getBackendAddress } from "./settings";
+import { setViewedSession } from "./push";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
@@ -61,21 +60,14 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const topBarHeight = useHeaderHeight();
   const streamEnabled = useStreamEnabled();
 
-  // The backend suppresses notifications for whatever is on screen. Tied to
-  // `streamEnabled` because it already means exactly "this chat is focused and
-  // the app is foregrounded" — the same condition under which a notification
-  // about this session would be redundant.
+  // A banner for the session you are looking at is noise. Synchronous module
+  // state, so it cannot race the way a reported-to-the-server flag did.
+  // `streamEnabled` already means "this chat is focused and the app is
+  // foregrounded", which is exactly when the banner is redundant.
   React.useEffect(() => {
-    let cancelled = false;
-    void getBackendAddress(address).then((backend) => {
-      if (cancelled) return;
-      reportActiveSession(backend, streamEnabled ? sessionID : undefined);
-    });
-    return () => {
-      cancelled = true;
-      void getBackendAddress(address).then((backend) => reportActiveSession(backend, undefined));
-    };
-  }, [streamEnabled, sessionID, address]);
+    setViewedSession(streamEnabled ? sessionID : undefined);
+    return () => setViewedSession(undefined);
+  }, [streamEnabled, sessionID]);
   const { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected } =
     useSessionStream(client, sessionID, address, streamEnabled);
   // Mirrors the module-level store so the menu re-renders with the choice.

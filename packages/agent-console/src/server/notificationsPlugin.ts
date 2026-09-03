@@ -81,9 +81,6 @@ export const notificationsPlugin = (): Plugin => {
    * connect would fire for work that finished hours ago. */
   const busySessions = new Map<string, number>();
 
-  /** The session currently on screen in a foregrounded app. Notifying about
-   * the thing you are already watching is the most annoying case of all. */
-  let activeSessionID: string | undefined;
   /** Suppresses a duplicate push when the same session is answered and
    * re-blocks quickly. */
   const lastNotifiedAt = new Map<string, number>();
@@ -268,7 +265,6 @@ export const notificationsPlugin = (): Plugin => {
 
             if (event.type === "permission.asked" || event.type === "permission.v2.asked") {
               if (sessionID === undefined || !shouldNotify(`ask:${sessionID}`)) continue;
-              if (sessionID === activeSessionID) continue;
               if (await isHidden(sessionID)) continue;
               const action =
                 typeof properties.permission === "string"
@@ -289,7 +285,6 @@ export const notificationsPlugin = (): Plugin => {
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
               if (startedAt === undefined) continue;
-              if (sessionID === activeSessionID) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
               if (await isHidden(sessionID)) continue;
               await send({
@@ -352,16 +347,6 @@ export const notificationsPlugin = (): Plugin => {
           data: { kind: "test" },
         });
         json(200, { attempted, remaining: registrations.size });
-        return;
-      }
-
-      if (path === "/push/active" && req.method === "POST") {
-        const body = await readJson(req);
-        activeSessionID =
-          isRecord(body) && typeof body.sessionID === "string" && body.sessionID !== ""
-            ? body.sessionID
-            : undefined;
-        json(200, { activeSessionID: activeSessionID ?? null });
         return;
       }
 

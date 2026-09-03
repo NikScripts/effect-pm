@@ -48,6 +48,16 @@ const REQUIRED_MEMBERS = [
 const isNotificationsApi = (value: unknown): value is NotificationsApi =>
   isRecord(value) && REQUIRED_MEMBERS.every((member) => typeof value[member] === "function");
 
+/** The session on screen right now, or undefined. Module state rather than
+ * something the server tracks: the notification is delivered to this app, so
+ * the app is the right place to decide whether to show it — and that needs no
+ * endpoint, no network round trip, and cannot race with itself. */
+let viewedSessionID: string | undefined;
+
+export const setViewedSession = (sessionID: string | undefined): void => {
+  viewedSessionID = sessionID;
+};
+
 let cached: NotificationsApi | undefined;
 let attempted = false;
 /** Why the last load failed, verbatim. Reported in Settings — a generic
@@ -80,12 +90,22 @@ export const loadNotifications = (): NotificationsApi | undefined => {
     // entire point of it. Presentation only — a failure here does not stop
     // registration or delivery, so it must not fail the load.
     loaded.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-      }),
+      handleNotification: async (notification: unknown) => {
+        // Suppressed only for the session already on screen. Anything else —
+        // another session, or this one while you are elsewhere in the app —
+        // is still worth a banner. This handler runs only while the app is
+        // foregrounded; backgrounded delivery is the system's call, which is
+        // correct, because then you are not watching anything.
+        const payload = payloadOfNotification(notification);
+        const showing =
+          payload?.sessionID === undefined || payload.sessionID !== viewedSessionID;
+        return {
+          shouldShowBanner: showing,
+          shouldShowList: showing,
+          shouldPlaySound: showing,
+          shouldSetBadge: false,
+        };
+      },
     });
   } catch (error: unknown) {
     loadError = `handler setup failed (non-fatal): ${String(error)}`;
@@ -107,6 +127,16 @@ export const asPushPayload = (data: unknown): PushPayload | undefined => {
   const kind = data.kind;
   if (kind !== "idle" && kind !== "permission" && kind !== "test") return undefined;
   return { kind, sessionID: typeof data.sessionID === "string" ? data.sessionID : undefined };
+};
+
+/** Digs the payload out of a notification without assuming its shape. */
+export const payloadOfNotification = (notification: unknown): PushPayload | undefined => {
+  if (!isRecord(notification)) return undefined;
+  const request = notification.request;
+  if (!isRecord(request)) return undefined;
+  const content = request.content;
+  if (!isRecord(content)) return undefined;
+  return asPushPayload(content.data);
 };
 
 /** Digs the payload out of a notification response without assuming its shape. */
@@ -188,20 +218,4 @@ export const registerForPush = async (backendAddress: string): Promise<PushResul
   }).catch(() => undefined);
 
   return { ok: true, token, registered: response?.ok === true };
-};
-
-/**
- * Tells the backend which session is on screen, so it does not notify about
- * the one you are already watching. Cleared (null) when the chat closes or
- * the app backgrounds — at that point a notification is useful again.
- *
- * Fire and forget: the backend being unreachable only costs a redundant
- * notification, never a broken screen.
- */
-export const reportActiveSession = (backendAddress: string, sessionID: string | undefined): void => {
-  void fetch(`${backendAddress}/push/active`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ sessionID: sessionID ?? null }),
-  }).catch(() => undefined);
 };
