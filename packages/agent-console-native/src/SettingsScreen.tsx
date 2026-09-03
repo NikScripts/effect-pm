@@ -150,7 +150,10 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Workspace</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Root folder</Text>
-          <Text style={styles.hint}>Repos are discovered under this path (and one level deeper).</Text>
+          <Text style={styles.hint}>
+            Where we look for repos. A repo’s main checkout is whatever directory under here already
+            owns the real .git — we don’t move or create that; we find it.
+          </Text>
           <TextInput
             style={styles.input}
             value={rootDirDraft}
@@ -163,6 +166,15 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             autoCorrect={false}
             spellCheck={false}
           />
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.fieldLabel}>Main vs linked worktrees</Text>
+          <Text style={styles.hint}>
+            Main is the primary checkout (e.g. {"{root}"}/Hyperlink or {"{root}"}/packages/effect-pm).
+            Linked worktrees — what “Create new…” adds — are extra checkouts of that same repo, and
+            only those follow the path template below.
+          </Text>
         </View>
 
         <View style={styles.card}>
@@ -189,12 +201,12 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           {scanError !== undefined ? <Text style={styles.errorText}>{scanError}</Text> : null}
         </View>
 
-        <Text style={styles.sectionLabel}>New worktrees</Text>
+        <Text style={styles.sectionLabel}>Linked worktrees</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Path template</Text>
           <Text style={styles.hint}>
-            Only used when creating a worktree. Placeholders: {"{root}"}, {"{repo}"}, {"{name}"}. Existing
-            checkouts are found by scanning, not by this pattern.
+            Used only when creating a linked worktree. Placeholders: {"{root}"}, {"{repo}"}, {"{name}"}.
+            Does not relocate the main checkout.
           </Text>
           <TextInput
             style={styles.input}
