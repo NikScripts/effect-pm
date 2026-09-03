@@ -32,8 +32,8 @@ import { useSessionStream } from "./useSessionStream";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-const TOP_BLUR_RADIUS = 10;
-const BOTTOM_BLUR_RADIUS = 6;
+const TOP_BLUR_RADIUS = 5;
+const BOTTOM_BLUR_RADIUS = 3;
 const TOP_BLUR_HEIGHT = 140;
 const BOTTOM_BLUR_HEIGHT = 80;
 
