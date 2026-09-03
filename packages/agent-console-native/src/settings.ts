@@ -30,10 +30,14 @@ const LAST_WORKTREE_BY_REPO_KEY = "agent-console-native:lastWorktreeByRepo";
 const DEFAULT_PERMISSION_MODE_KEY = "agent-console-native:defaultPermissionMode";
 const SESSION_PERMISSION_MODES_KEY = "agent-console-native:sessionPermissionModes";
 
-/** Placeholders: `{root}`, `{repo}`. Destination for clone / `git init`. */
-export const DEFAULT_REPO_TEMPLATE = "{root}/{repo}";
+/** Placeholders: `{root}`, `{repo}`. Destination for clone / `git init`
+ * (the main checkout). Kept as a *sibling* of linked worktrees under the
+ * repo folder — not the repo folder itself — so worktrees never land
+ * inside the main working tree. */
+export const DEFAULT_REPO_TEMPLATE = "{root}/{repo}/main";
 
-/** Placeholders: `{root}`, `{repo}`, `{name}`. Destination for linked worktrees. */
+/** Placeholders: `{root}`, `{repo}`, `{name}`. Destination for linked
+ * worktrees — sibling of `main`, not nested under it. */
 export const DEFAULT_WORKTREE_TEMPLATE = "{root}/{repo}/worktrees/{name}";
 
 /** Which worktree to select when the user picks a repo in the composer. */

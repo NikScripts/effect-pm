@@ -212,7 +212,8 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Path template</Text>
           <Text style={styles.hint}>
-            Where clone / create puts the main checkout. Placeholders: {"{root}"}, {"{repo}"}.
+            Where clone / create puts the main checkout. Default keeps it beside linked worktrees
+            ({"{root}/{repo}/main"}), not as the parent of them. Placeholders: {"{root}"}, {"{repo}"}.
           </Text>
           <TextInput
             style={styles.input}
@@ -236,7 +237,8 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Path template</Text>
           <Text style={styles.hint}>
-            Where “Create new…” puts extra checkouts. Placeholders: {"{root}"}, {"{repo}"}, {"{name}"}.
+            Where “Create new…” puts extra checkouts. Default is a sibling of main
+            ({"{root}/{repo}/worktrees/{name}"}). Placeholders: {"{root}"}, {"{repo}"}, {"{name}"}.
           </Text>
           <TextInput
             style={styles.input}
