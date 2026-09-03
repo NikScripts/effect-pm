@@ -36,6 +36,7 @@ import {
   autocorrectionDisabled,
   background,
   bold,
+  buttonBorderShape,
   buttonStyle,
   controlSize,
   disabled,
@@ -84,6 +85,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 
 const glassIconButton = [
   buttonStyle("glass"),
+  buttonBorderShape("circle"),
   labelStyle("iconOnly"),
   imageScale("medium"),
   frame({ width: 36, height: 36 }),
