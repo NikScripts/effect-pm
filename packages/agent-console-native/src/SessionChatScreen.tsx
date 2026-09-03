@@ -14,7 +14,7 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { FlatList, Platform, StyleSheet, Text, Vibration, View } from "react-native";
+import { DynamicColorIOS, FlatList, Platform, StyleSheet, Text, Vibration, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,7 +30,6 @@ import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { TypingIndicator } from "./TypingIndicator";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { useSessionStream } from "./useSessionStream";
-import { DynamicColorIOS } from "react-native";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
