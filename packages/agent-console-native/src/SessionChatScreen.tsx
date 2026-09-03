@@ -160,7 +160,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       {Platform.OS === "ios" ? (
         <VariableBlur
           blurRadius={BLUR_RADIUS}
-          direction="up"
+          direction="down"
           style={[styles.edgeBlur, { top: 0, height: TOP_BLUR_HEIGHT }]}
           pointerEvents="none"
         />
