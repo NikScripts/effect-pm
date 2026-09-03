@@ -16,6 +16,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { FlatList, Platform, StyleSheet, Text, Vibration, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { VariableBlur } from "../modules/variable-blur";
@@ -29,6 +30,7 @@ import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { TypingIndicator } from "./TypingIndicator";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { useSessionStream } from "./useSessionStream";
+import { DynamicColorIOS } from "react-native";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -36,6 +38,16 @@ const TOP_BLUR_RADIUS = 5;
 const BOTTOM_BLUR_RADIUS = 3;
 const TOP_BLUR_HEIGHT = 140;
 const BOTTOM_BLUR_HEIGHT = 80;
+
+/** Same ramp shape as the blur mask — solid at the screen edge, clear inward.
+ * Lightens as it blurs so the chrome reads soft rather than muddy. */
+const EDGE_LIGHT_STOPS = [
+  DynamicColorIOS({ light: "rgba(255,255,255,0.55)", dark: "rgba(0,0,0,0.5)" }),
+  DynamicColorIOS({ light: "rgba(255,255,255,0.28)", dark: "rgba(0,0,0,0.26)" }),
+  DynamicColorIOS({ light: "rgba(255,255,255,0.1)", dark: "rgba(0,0,0,0.1)" }),
+  "transparent",
+] as const;
+const EDGE_LIGHT_LOCATIONS = [0, 0.35, 0.7, 1] as const;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
@@ -152,25 +164,33 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: composerHeight + keyboardHeight }]}
       />
       </ScrollViewMarker>
-      {/* Feathered blur at the top (under the nav bar) and bottom (screen
-       * edge). Both sit over the list but under the chrome — header items
-       * and the glass composer. Bottom anchors to `keyboardHeight`, not
-       * above the composer; it feathers content scrolling underneath. */}
+      {/* Feathered blur + light wash at the top (under the nav bar) and
+       * bottom (screen edge). Directions are the working on-device pair —
+       * top=down, bottom=up. Do not flip. Light wash uses the same ramp so
+       * the edge gets lighter as it gets blurrier. */}
       {Platform.OS === "ios" ? (
-        <VariableBlur
-          blurRadius={TOP_BLUR_RADIUS}
-          direction="down"
-          style={[styles.edgeBlur, { top: 0, height: TOP_BLUR_HEIGHT }]}
-          pointerEvents="none"
-        />
+        <View style={[styles.edgeBlur, { top: 0, height: TOP_BLUR_HEIGHT }]} pointerEvents="none">
+          <VariableBlur blurRadius={TOP_BLUR_RADIUS} direction="down" style={StyleSheet.absoluteFill} />
+          <LinearGradient
+            colors={[...EDGE_LIGHT_STOPS]}
+            locations={[...EDGE_LIGHT_LOCATIONS]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
       ) : null}
       {Platform.OS === "ios" ? (
-        <VariableBlur
-          blurRadius={BOTTOM_BLUR_RADIUS}
-          direction="up"
-          style={[styles.edgeBlur, { bottom: keyboardHeight, height: BOTTOM_BLUR_HEIGHT }]}
-          pointerEvents="none"
-        />
+        <View style={[styles.edgeBlur, { bottom: keyboardHeight, height: BOTTOM_BLUR_HEIGHT }]} pointerEvents="none">
+          <VariableBlur blurRadius={BOTTOM_BLUR_RADIUS} direction="up" style={StyleSheet.absoluteFill} />
+          <LinearGradient
+            colors={[...EDGE_LIGHT_STOPS]}
+            locations={[...EDGE_LIGHT_LOCATIONS]}
+            start={{ x: 0.5, y: 1 }}
+            end={{ x: 0.5, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
       ) : null}
       {/* Absolutely positioned, not a flex sibling — otherwise it takes
        * layout space away from the list and nothing ever passes behind
