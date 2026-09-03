@@ -72,21 +72,14 @@ private final class VariableBlurUIView: UIVisualEffectView {
 
   /// iOS 26 routes effect updates through here; calling `super` reinstalls the
   /// stock gaussian blur and wipes `variableBlur`.
+  @available(iOS 26.0, *)
   override func updateProperties() {
-    if #available(iOS 26.0, *) {
-      installVariableBlur()
-    } else {
-      super.updateProperties()
-      installVariableBlur()
-    }
+    installVariableBlur()
   }
 
+  @available(iOS 26.0, *)
   override func setNeedsUpdateProperties() {
-    if #available(iOS 26.0, *) {
-      installVariableBlur()
-    } else {
-      super.setNeedsUpdateProperties()
-    }
+    installVariableBlur()
   }
 
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
