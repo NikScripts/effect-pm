@@ -1,6 +1,8 @@
 /**
- * Directories under `rootDir` that aren't part of a scanned git repo —
- * shown in the Home repo picker as "Other folders".
+ * Root children the repo scan did not claim. Not a second discovery path —
+ * only subtracts against an already-scanned result, under the **same**
+ * expanded `rootDir` the scan used. Repo identity stays on `ScannedRepo.repo`
+ * (git remote name); this never invents names from folder basenames.
  *
  * @internal
  */
@@ -10,6 +12,7 @@ import type { ScannedRepo } from "./repoScan";
 
 export const listOtherFolders = async (
   client: OpencodeClient,
+  /** Expanded root — identical string passed to `scanRepos`. */
   rootDir: string,
   scanned: ReadonlyArray<ScannedRepo>,
 ): Promise<ReadonlyArray<FolderTarget>> => {
@@ -19,7 +22,9 @@ export const listOtherFolders = async (
     for (const repo of scanned) {
       for (const wt of repo.worktrees) {
         claimed.add(wt.path);
-        // Also claim the immediate child of rootDir that contains this path.
+        // Claim the immediate child of rootDir that contains this checkout
+        // (`{root}/{repo}/main` → claim `{root}/{repo}` so it isn't listed
+        // again as a plain folder).
         if (wt.path.startsWith(`${rootDir}/`)) {
           const rest = wt.path.slice(rootDir.length + 1);
           const top = rest.split("/")[0];

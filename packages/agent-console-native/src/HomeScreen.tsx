@@ -27,11 +27,10 @@ import {
   type SessionTarget,
 } from "./HomeTargetPickers";
 import type { ModelOption } from "./models";
-import { listOtherFolders } from "./otherFolders";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
 import type { ScannedRepo } from "./repoScan";
-import { getCachedRepos, isStale, rescan } from "./repoScanCache";
+import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { SystemIcon } from "./SystemIcon";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -78,50 +77,49 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     void setCachedSessions(visible);
   }, [client]);
 
+  const applyWorkspace = React.useCallback((index: { repos: ReadonlyArray<ScannedRepo>; otherFolders: ReadonlyArray<FolderTarget> }): void => {
+    setScanned(index.repos);
+    setOtherFolders(index.otherFolders);
+  }, []);
+
   const loadScan = React.useCallback(
     async (force: boolean): Promise<void> => {
       const stale = force || (await isStale());
       if (!stale) {
-        const cached = await getCachedRepos();
-        if (cached !== undefined) {
-          setOtherFolders(await listOtherFolders(client, rootDir, cached));
-        }
+        const cached = await readWorkspace(client, rootDir);
+        if (cached !== undefined) applyWorkspace(cached);
         return;
       }
       try {
-        const repos = await rescan(client, rootDir);
-        setScanned(repos);
-        setOtherFolders(await listOtherFolders(client, rootDir, repos));
+        applyWorkspace(await refreshWorkspace(client, rootDir));
         setError(undefined);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
       }
     },
-    [client, rootDir],
+    [applyWorkspace, client, rootDir],
   );
 
   const refreshWorktrees = React.useCallback(async (): Promise<void> => {
     try {
-      const repos = await rescan(client, rootDir);
-      setScanned(repos);
-      setOtherFolders(await listOtherFolders(client, rootDir, repos));
+      applyWorkspace(await refreshWorkspace(client, rootDir));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
     }
-  }, [client, rootDir]);
+  }, [applyWorkspace, client, rootDir]);
 
   React.useEffect(() => {
     (async () => {
-      const [cachedSessions, cachedScan] = await Promise.all([getCachedSessions(), getCachedRepos()]);
+      const [cachedSessions, cachedWorkspace] = await Promise.all([
+        getCachedSessions(),
+        readWorkspace(client, rootDir),
+      ]);
       if (cachedSessions !== undefined) setSessions(cachedSessions);
-      if (cachedScan !== undefined) {
-        setScanned(cachedScan);
-        setOtherFolders(await listOtherFolders(client, rootDir, cachedScan));
-      }
+      if (cachedWorkspace !== undefined) applyWorkspace(cachedWorkspace);
       setLoading(false);
-      await Promise.all([loadSessions(), loadScan(cachedScan === undefined)]);
+      await Promise.all([loadSessions(), loadScan(cachedWorkspace === undefined)]);
     })();
-  }, [loadSessions, loadScan, client, rootDir]);
+  }, [applyWorkspace, loadSessions, loadScan, client, rootDir]);
 
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     if (target === undefined || sending) return;
