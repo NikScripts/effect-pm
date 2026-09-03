@@ -29,8 +29,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar",
-      "react-native-reanimated/plugin"
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
