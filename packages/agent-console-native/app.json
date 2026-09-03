@@ -31,6 +31,9 @@
     "plugins": [
       "expo-status-bar"
     ],
+    "experiments": {
+      "autolinkingModuleResolution": true
+    },
     "extra": {
       "eas": {
         "projectId": "db68cda6-c5b3-4daa-bb09-daeead177a67"
