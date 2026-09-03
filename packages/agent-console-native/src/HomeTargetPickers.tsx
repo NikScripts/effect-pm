@@ -70,6 +70,18 @@ const MENU_MODIFIERS = [
   menuIndicator("hidden"),
 ] as const;
 
+const PILL_HEIGHT = 32;
+const PILL_MAX_WIDTH = 160;
+const PILL_MIN_WIDTH = 56;
+
+/**
+ * Host `matchContents` (horizontal) races RNHostView Yoga measurement and
+ * can settle at width 0 — that emptied the worktree trigger. Size the Host
+ * from the label string instead (same idea as SystemIcon’s explicit box).
+ */
+const pillHostWidth = (text: string): number =>
+  Math.min(PILL_MAX_WIDTH, Math.max(PILL_MIN_WIDTH, Math.ceil(text.length * 7.8) + 40));
+
 const PillLabel = (props: { readonly text: string; readonly dimmed?: boolean }): React.ReactElement => {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
@@ -211,8 +223,13 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         ? props.target.name
         : props.target.repo;
   const worktreePill =
-    props.target?.kind === "repo" ? worktreeLabel(props.target.worktree) : "Worktree";
-  const branchPill = props.target?.kind === "repo" ? props.target.branch : "Branch";
+    props.target?.kind === "repo"
+      ? worktreeLabel(props.target.worktree) || props.target.worktree.name || "Worktree"
+      : "Worktree";
+  const branchPill =
+    props.target?.kind === "repo"
+      ? props.target.branch || "Branch"
+      : "Branch";
 
   const worktrees = (() => {
     if (props.target?.kind !== "repo") return [] as ReadonlyArray<ScannedWorktree>;
@@ -226,7 +243,11 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   return (
     <View style={styles.row}>
       <View style={styles.leading}>
-        <Host style={styles.pillHost} matchContents ignoreSafeArea="all">
+        <Host
+          style={[styles.pillHost, { width: pillHostWidth(repoLabel) }]}
+          matchContents={{ vertical: true }}
+          ignoreSafeArea="all"
+        >
           <Menu
             label={<PillLabel text={repoLabel} dimmed={repoDisabled} />}
             modifiers={[...MENU_MODIFIERS, ...(repoDisabled ? [disabledModifier(true)] : [])]}
@@ -270,7 +291,11 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           </Menu>
         </Host>
 
-        <Host style={styles.pillHost} matchContents ignoreSafeArea="all">
+        <Host
+          style={[styles.pillHost, { width: pillHostWidth(worktreePill) }]}
+          matchContents={{ vertical: true }}
+          ignoreSafeArea="all"
+        >
           <Menu
             label={<PillLabel text={worktreePill} dimmed={repoOnly} />}
             modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
@@ -296,7 +321,11 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         </Host>
       </View>
 
-      <Host style={styles.pillHost} matchContents ignoreSafeArea="all">
+      <Host
+        style={[styles.pillHost, { width: pillHostWidth(branchPill) }]}
+        matchContents={{ vertical: true }}
+        ignoreSafeArea="all"
+      >
         <Menu
           label={<PillLabel text={branchPill} dimmed={repoOnly} />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
@@ -326,28 +355,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 6,
+    gap: 8,
     marginBottom: 6,
   },
   leading: {
     flexDirection: "row",
     alignItems: "center",
-    flexShrink: 1,
-    gap: 6,
-  },
-  pillHost: {
     flexGrow: 0,
     flexShrink: 1,
+    gap: 8,
+    minWidth: 0,
+  },
+  pillHost: {
+    height: PILL_HEIGHT,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
+    justifyContent: "center",
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    height: PILL_HEIGHT,
+    width: "100%",
+    paddingHorizontal: 12,
+    borderRadius: PILL_HEIGHT / 2,
     borderCurve: "continuous",
+    overflow: "hidden",
     backgroundColor: PILL_BG,
   },
   pillDimmed: {
