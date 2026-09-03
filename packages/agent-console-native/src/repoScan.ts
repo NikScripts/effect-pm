@@ -86,16 +86,32 @@ const findGitEntries = async (client: OpencodeClient, rootDir: string): Promise<
 
       const level2 = ownEntries.filter((e) => e.type === "directory");
       const nested = await Promise.all(
-        level2.map(async (sub): Promise<GitEntry | undefined> => {
+        level2.map(async (sub): Promise<ReadonlyArray<GitEntry>> => {
           const subPath = `${entry.name}/${sub.name}`;
           const subEntries = await listDirectoryEntries(client, rootDir, subPath);
           const nestedDotGit = subEntries.find((e) => e.name === ".git");
-          return nestedDotGit === undefined
-            ? undefined
-            : { checkoutDir: `${rootDir}/${subPath}`, gitType: nestedDotGit.type };
+          if (nestedDotGit !== undefined) {
+            return [{ checkoutDir: `${rootDir}/${subPath}`, gitType: nestedDotGit.type }];
+          }
+
+          // Third level — covers `{root}/{repo}/worktrees/{name}` linked
+          // checkouts when they appear before we resolve them via the main
+          // `.git/worktrees` table (and any deeper nest we still want).
+          const level3 = subEntries.filter((e) => e.type === "directory");
+          const deeper = await Promise.all(
+            level3.map(async (leaf): Promise<GitEntry | undefined> => {
+              const leafPath = `${subPath}/${leaf.name}`;
+              const leafEntries = await listDirectoryEntries(client, rootDir, leafPath);
+              const leafDotGit = leafEntries.find((e) => e.name === ".git");
+              return leafDotGit === undefined
+                ? undefined
+                : { checkoutDir: `${rootDir}/${leafPath}`, gitType: leafDotGit.type };
+            }),
+          );
+          return deeper.filter((e): e is GitEntry => e !== undefined);
         }),
       );
-      return nested.filter((e): e is GitEntry => e !== undefined);
+      return nested.flat();
     }),
   );
 
@@ -140,7 +156,17 @@ const listLinkedWorktrees = async (client: OpencodeClient, mainCheckoutDir: stri
 const resolveRepoName = async (client: OpencodeClient, mainCheckoutDir: string): Promise<string> => {
   const config = await readFileText(client, mainCheckoutDir, ".git/config");
   const fromRemote = config === undefined ? undefined : repoNameFromConfig(config);
-  return fromRemote ?? basename(mainCheckoutDir);
+  if (fromRemote !== undefined) return fromRemote;
+
+  // Main checkouts live at `{root}/{repo}/main` by default — basename alone
+  // would report every repo as "main". Prefer the parent folder name in that
+  // case (and for a bare "master" checkout folder too).
+  const base = basename(mainCheckoutDir);
+  if (base === "main" || base === "master") {
+    const parent = basename(mainCheckoutDir.replace(/\/[^/]+\/?$/, ""));
+    if (parent.length > 0 && parent !== base) return parent;
+  }
+  return base;
 };
 
 const repoNameFromConfig = (config: string): string | undefined => {
@@ -183,5 +209,20 @@ export const scanRepos = async (client: OpencodeClient, rootDir: string): Promis
     }),
   );
 
-  return groups;
+  // Merge checkouts that share a repo identity (e.g. remote-derived name).
+  const merged = new Map<string, ScannedRepo>();
+  for (const group of groups) {
+    const existing = merged.get(group.repo);
+    if (existing === undefined) {
+      merged.set(group.repo, group);
+      continue;
+    }
+    const paths = new Set(existing.worktrees.map((w) => w.path));
+    merged.set(group.repo, {
+      repo: group.repo,
+      worktrees: [...existing.worktrees, ...group.worktrees.filter((w) => !paths.has(w.path))],
+    });
+  }
+
+  return Array.from(merged.values()).sort((a, b) => a.repo.localeCompare(b.repo));
 };

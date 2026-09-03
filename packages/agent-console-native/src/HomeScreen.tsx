@@ -265,7 +265,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
               otherFolders={otherFolders}
               target={target}
               onChange={setTarget}
-              onWorktreesChanged={refreshWorktrees}
+              onWorkspaceChanged={refreshWorktrees}
             />
           }
         />

@@ -29,6 +29,8 @@ import { useAppContext } from "./AppContext";
 import { listLocalBranches, readCurrentBranch } from "./branchScan";
 import type { ScannedRepo, ScannedWorktree } from "./repoScan";
 import { randomSlug } from "./slug";
+import { createWorkspaceFolder } from "./repoCreate";
+import { NewRepoSheet } from "./NewRepoSheet";
 import {
   getDefaultWorktreePreference,
   getLastWorktreeByRepo,
@@ -61,7 +63,8 @@ type Props = {
   readonly otherFolders: ReadonlyArray<FolderTarget>;
   readonly target: SessionTarget | undefined;
   readonly onChange: (target: SessionTarget) => void;
-  readonly onWorktreesChanged: () => Promise<void>;
+  /** Rescan repos + other folders after create/clone/mkdir/worktree. */
+  readonly onWorkspaceChanged: () => Promise<void>;
 };
 
 /** Filled chip — systemGray5 / gray4, not the translucent bordered default. */
@@ -105,6 +108,7 @@ const PillLabel = (props: { readonly text: string; readonly dimmed?: boolean }):
 export const HomeTargetPickers = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
   const [branches, setBranches] = React.useState<ReadonlyArray<string>>([]);
+  const [newRepoOpen, setNewRepoOpen] = React.useState(false);
 
   // Default to first known repo once scan lands (respects default-worktree pref).
   React.useEffect(() => {
@@ -219,7 +223,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
               const name = (value ?? "").trim() || randomSlug();
               try {
                 const path = await createWorktree(client, rootDir, target.repo, main.path, name);
-                await props.onWorktreesChanged();
+                await props.onWorkspaceChanged();
                 void setLastWorktreeForRepo(target.repo, name);
                 props.onChange({
                   kind: "repo",
@@ -236,6 +240,46 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       ],
       "plain-text",
     );
+  };
+
+  const promptNewFolder = (): void => {
+    Alert.prompt(
+      "New workspace folder",
+      "A non-git folder under your root.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Create",
+          onPress: (value?: string) => {
+            void (async () => {
+              const name = (value ?? "").trim();
+              if (name.length === 0) return;
+              try {
+                const path = await createWorkspaceFolder(client, rootDir, name);
+                await props.onWorkspaceChanged();
+                props.onChange({ kind: "folder", name, path });
+              } catch {
+                Alert.alert("Couldn't create folder", `Failed to create "${name}".`);
+              }
+            })();
+          },
+        },
+      ],
+      "plain-text",
+    );
+  };
+
+  const onRepoCreated = (repoName: string, mainPath: string): void => {
+    void (async () => {
+      await props.onWorkspaceChanged();
+      const branch = (await readCurrentBranch(client, mainPath)) ?? "main";
+      props.onChange({
+        kind: "repo",
+        repo: repoName,
+        worktree: { name: "(main)", path: mainPath, isMain: true },
+        branch,
+      });
+    })();
   };
 
   const repoLabel =
@@ -261,10 +305,10 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     return props.scanned.find((r) => r.repo === target.repo)?.worktrees ?? [target.worktree];
   })();
 
-  const repoDisabled = props.scanned.length === 0 && props.otherFolders.length === 0;
   const repoOnly = props.target?.kind !== "repo";
 
   return (
+    <>
     <View style={styles.row}>
       <View style={styles.leading}>
         <Host
@@ -273,45 +317,43 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           ignoreSafeArea="all"
         >
           <Menu
-            label={<PillLabel text={repoLabel} dimmed={repoDisabled} />}
-            modifiers={[...MENU_MODIFIERS, ...(repoDisabled ? [disabledModifier(true)] : [])]}
+            label={<PillLabel text={repoLabel} />}
+            modifiers={[...MENU_MODIFIERS]}
           >
-            {props.scanned.length > 0 ? (
-              <Section title="Workspaces">
-                {props.scanned.map((repo) => {
-                  const active = props.target?.kind === "repo" && props.target.repo === repo.repo;
-                  return (
-                    <Toggle
-                      key={repo.repo}
-                      label={repo.repo}
-                      systemImage="folder"
-                      isOn={active}
-                      onIsOnChange={(on) => {
-                        if (on) pickRepo(repo);
-                      }}
-                    />
-                  );
-                })}
-              </Section>
-            ) : null}
-            {props.otherFolders.length > 0 ? (
-              <Section title="Other folders">
-                {props.otherFolders.map((folder) => {
-                  const active = props.target?.kind === "folder" && props.target.path === folder.path;
-                  return (
-                    <Toggle
-                      key={folder.path}
-                      label={folder.name}
-                      systemImage="folder.badge.gearshape"
-                      isOn={active}
-                      onIsOnChange={(on) => {
-                        if (on) pickFolder(folder);
-                      }}
-                    />
-                  );
-                })}
-              </Section>
-            ) : null}
+            <Section title="Repos">
+              {props.scanned.map((repo) => {
+                const active = props.target?.kind === "repo" && props.target.repo === repo.repo;
+                return (
+                  <Toggle
+                    key={repo.repo}
+                    label={repo.repo}
+                    systemImage="shippingbox"
+                    isOn={active}
+                    onIsOnChange={(on) => {
+                      if (on) pickRepo(repo);
+                    }}
+                  />
+                );
+              })}
+              <Button label="New repo…" systemImage="plus" onPress={() => setNewRepoOpen(true)} />
+            </Section>
+            <Section title="Folders">
+              {props.otherFolders.map((folder) => {
+                const active = props.target?.kind === "folder" && props.target.path === folder.path;
+                return (
+                  <Toggle
+                    key={folder.path}
+                    label={folder.name}
+                    systemImage="folder"
+                    isOn={active}
+                    onIsOnChange={(on) => {
+                      if (on) pickFolder(folder);
+                    }}
+                  />
+                );
+              })}
+              <Button label="New folder…" systemImage="plus" onPress={promptNewFolder} />
+            </Section>
           </Menu>
         </Host>
 
@@ -371,6 +413,12 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         </Menu>
       </Host>
     </View>
+    <NewRepoSheet
+      visible={newRepoOpen}
+      onClose={() => setNewRepoOpen(false)}
+      onCreated={onRepoCreated}
+    />
+    </>
   );
 };
 
