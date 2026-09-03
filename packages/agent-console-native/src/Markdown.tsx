@@ -119,12 +119,11 @@ export const Markdown = (props: { readonly text: string }): React.ReactElement =
   const elements = useMarkdown(props.text, {
     colorScheme: colorScheme ?? "light",
     styles: MARKDOWN_STYLES,
-    selectable: true,
   });
 
   return (
     <View style={styles.root}>
-      {elements.map((element, index) => (
+      {elements.filter(Boolean).map((element, index) => (
         <Fragment key={`md-${index}`}>{element}</Fragment>
       ))}
     </View>

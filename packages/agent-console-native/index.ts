@@ -1,7 +1,8 @@
-import { registerRootComponent } from 'expo';
-import { fetch as expoFetch } from 'expo/fetch';
+import "react-native-gesture-handler";
+import { registerRootComponent } from "expo";
+import { fetch as expoFetch } from "expo/fetch";
 
-import App from './App';
+import App from "./App";
 
 // The OpenCode SDK's SSE helper (client.event.subscribe, used by
 // useSessionStream.ts for live chat updates) calls the bare `fetch`
