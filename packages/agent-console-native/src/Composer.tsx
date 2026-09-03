@@ -232,8 +232,10 @@ export const Composer = (props: {
   readonly bottomInset: number;
   readonly placeholder: string;
   /** Rendered inside the glass bubble, above the input — Home's
-   * repo/worktree/branch pickers. Sits outside `inputSection`, so it stays
-   * visible when the input collapses. */
+   * repo/worktree/branch pickers. Only shown while expanded (focused or
+   * typing); collapsed Home stays the compact `+` / mirror / send pill.
+   * Stays mounted when hidden — same Host/GlassView first-mount rule as
+   * everything else in this tree. */
   readonly topSection?: React.ReactNode;
 }): React.ReactElement => {
   const scheme = useColorScheme();
@@ -297,7 +299,16 @@ export const Composer = (props: {
        * while plain RN clipping on a wrapper never did. */}
       <View style={styles.fieldClip}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-          {props.topSection}
+          {/* topSection collapses with the input — never unmounts (Hosts
+           * inside must keep their first-mount setup). */}
+          {props.topSection !== undefined ? (
+            <View
+              style={[styles.topSection, !expanded && styles.topSectionCollapsed]}
+              pointerEvents={expanded ? "auto" : "none"}
+            >
+              {props.topSection}
+            </View>
+          ) : null}
           {/* inputSection — TextInput alone, grows upward. Collapses to 0
            * height *and* 0 opacity when idle; never unmounts, just goes
            * invisible and zero-sized. `pointerEvents="none"` while
@@ -395,6 +406,14 @@ const styles = StyleSheet.create({
   field: {
     padding: 10,
     position: "relative",
+  },
+  topSection: {
+    overflow: "hidden",
+  },
+  topSectionCollapsed: {
+    height: 0,
+    opacity: 0,
+    marginBottom: 0,
   },
   inputSection: {
     overflow: "hidden",
