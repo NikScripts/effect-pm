@@ -19,10 +19,12 @@ import {
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
+  foregroundStyle,
   menuIndicator,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { Alert, DynamicColorIOS, StyleSheet, View } from "react-native";
 import { useAppContext } from "./AppContext";
 import { listLocalBranches, readCurrentBranch } from "./branchScan";
 import type { ScannedRepo, ScannedWorktree } from "./repoScan";
@@ -57,14 +59,24 @@ type Props = {
   readonly onWorktreesChanged: () => Promise<void>;
 };
 
-/** Trigger chrome inside the glass composer. Tried `glass` then `plain`;
- * `bordered` is the middle weight — outlined control without a second glass
- * capsule. Other options: `automatic` / `plain` / `borderedProminent` /
- * `glass` / `glassProminent` / `borderless`. */
+/** Trigger chrome inside the glass composer. `bordered` + explicit tint/
+ * foreground so we don't inherit the accent-blue default — fill tracks
+ * tertiarySystemFill-ish gray, label tracks secondaryLabel. */
+const PILL_FILL = DynamicColorIOS({
+  light: "rgba(120, 120, 128, 0.16)",
+  dark: "rgba(120, 120, 128, 0.28)",
+});
+const PILL_LABEL = DynamicColorIOS({
+  light: "rgba(60, 60, 67, 0.85)",
+  dark: "rgba(235, 235, 245, 0.7)",
+});
 const MENU_MODIFIERS = [
   buttonStyle("bordered"),
   controlSize("small"),
   menuIndicator("visible"),
+  tint(PILL_FILL),
+  // After tint — same ordering lesson as Composer's chip glyphs.
+  foregroundStyle(PILL_LABEL),
 ] as const;
 
 export const HomeTargetPickers = (props: Props): React.ReactElement => {
