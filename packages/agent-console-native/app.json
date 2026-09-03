@@ -14,7 +14,14 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": true
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.nikolasstow.agentconsolenative"
+        ]
       }
     },
     "android": {
@@ -30,7 +37,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "autolinkingModuleResolution": true

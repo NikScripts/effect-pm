@@ -56,6 +56,10 @@ export type TranscriptMessage = {
   /** Present on assistant messages once the server reports them. */
   readonly providerID?: string;
   readonly modelID?: string;
+  /** Assistant runs only. `completed` is absent while the run is in flight —
+   * it is the server's own record of whether work is still happening, which
+   * survives a dropped stream in a way a local `busy` flag cannot. */
+  readonly time?: { readonly created: number; readonly completed?: number };
 };
 
 export type Transcript = {
@@ -65,6 +69,36 @@ export type Transcript = {
 };
 
 export const EMPTY: Transcript = { messages: new Map(), order: [], busy: false };
+
+/**
+ * Whether the newest assistant run is still in flight, according to the
+ * server. A local `busy` flag only clears on a live `session.idle`, and the
+ * stream is deliberately dropped while the app is backgrounded — so a run
+ * that finished out of view left the indicator spinning forever, and the
+ * cache persisted it across launches.
+ */
+export const busyFromHistory = (transcript: Transcript): boolean => {
+  for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
+    const message = transcript.messages.get(transcript.order[i]);
+    if (message === undefined || message.role !== "assistant") continue;
+    return message.time !== undefined && message.time.completed === undefined;
+  }
+  return false;
+};
+
+/** When the in-flight run started, for the elapsed clock. Taken from the
+ * server's own timestamp so reopening the chat does not restart it. */
+export const runStartedAt = (transcript: Transcript): number | undefined => {
+  for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
+    const message = transcript.messages.get(transcript.order[i]);
+    if (message === undefined || message.role !== "assistant") continue;
+    if (message.time === undefined || message.time.completed !== undefined) return undefined;
+    // opencode reports epoch milliseconds; a value small enough to be seconds
+    // would put the clock decades out.
+    return message.time.created < 1e12 ? message.time.created * 1000 : message.time.created;
+  }
+  return undefined;
+};
 const MAX_RECONNECT_DELAY_MS = 10_000;
 const LOCAL_ID_PREFIX = "local-";
 
@@ -76,6 +110,7 @@ export const withRole = (
   messageID: string,
   role: "user" | "assistant",
   model?: { readonly providerID: string; readonly modelID: string },
+  time?: { readonly created: number; readonly completed?: number },
 ): Transcript => {
   const existing = transcript.messages.get(messageID);
   const messages = new Map(transcript.messages);
@@ -85,6 +120,7 @@ export const withRole = (
     parts: existing?.parts ?? new Map(),
     providerID: model?.providerID ?? existing?.providerID,
     modelID: model?.modelID ?? existing?.modelID,
+    time: time ?? existing?.time,
   });
   const order = existing === undefined ? [...transcript.order, messageID] : transcript.order;
   return { ...transcript, messages, order };
@@ -218,12 +254,15 @@ export const useSessionStream = (
             info.role === "assistant"
               ? { providerID: info.providerID, modelID: info.modelID }
               : undefined,
+            info.role === "assistant" ? info.time : undefined,
           );
           for (const part of parts) {
             if (isRenderablePart(part)) next = withPart(next, part);
           }
         }
-        return next;
+        // Reconciled against the server on every load and reconnect, rather
+        // than trusting whatever `busy` the cache carried in.
+        return { ...next, busy: busyFromHistory(next) };
       });
     };
 

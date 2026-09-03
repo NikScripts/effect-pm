@@ -21,6 +21,11 @@ import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scro
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { BusyRow } from "./BusyRow";
+import {
+  endLiveActivity,
+  startLiveActivity,
+  updateLiveActivity,
+} from "../modules/live-activity";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
@@ -34,7 +39,7 @@ import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { useKeyboardHeight } from "./useKeyboardHeight";
-import { useSessionStream } from "./useSessionStream";
+import { runStartedAt, useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
@@ -106,11 +111,50 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // same one the closed-app notification will use.
   const wasBusy = React.useRef(false);
   React.useEffect(() => {
+    if (transcript.busy && !wasBusy.current) {
+      // Repo/worktree are not tracked on this screen yet, so the activity
+      // carries the session title alone rather than inventing a location.
+      void startLiveActivity({
+        sessionID,
+        repo: "",
+        worktree: "",
+        title: title ?? "Session",
+        action: "Working…",
+      });
+    }
     if (wasBusy.current && !transcript.busy) {
       Vibration.vibrate();
+      void endLiveActivity(sessionID, "done");
     }
     wasBusy.current = transcript.busy;
-  }, [transcript.busy]);
+  }, [transcript.busy, sessionID, title]);
+
+  // Mirror the newest tool call into the activity, so the island says what the
+  // agent is doing rather than just that it is busy. Only while running: an
+  // update after the run ends would revive a finished activity.
+  const latestAction = React.useMemo(() => {
+    for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
+      const message = transcript.messages.get(transcript.order[i]);
+      if (message === undefined) continue;
+      const parts = Array.from(message.parts.values());
+      for (let j = parts.length - 1; j >= 0; j -= 1) {
+        const part = parts[j];
+        if (part.type === "tool") return part.tool;
+        if (part.type === "reasoning") return "Thinking…";
+      }
+    }
+    return "Working…";
+  }, [transcript]);
+
+  React.useEffect(() => {
+    if (!transcript.busy) return;
+    void updateLiveActivity({
+      sessionID,
+      status: "working",
+      action: latestAction,
+      messageCount: transcript.order.length,
+    });
+  }, [latestAction, transcript.busy, transcript.order.length, sessionID]);
 
   const applyPermissionMode = React.useCallback(
     (next: PermissionMode) => {
@@ -293,7 +337,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // Below the newest message, not above the oldest — the header, not
         // the footer, is what renders nearest the (inverted) start of the
         // list, which an inverted list pins to the bottom of the screen.
-        ListHeaderComponent={transcript.busy ? <BusyRow onStop={onStop} /> : null}
+        ListHeaderComponent={transcript.busy ? <BusyRow onStop={onStop} startedAt={runStartedAt(transcript)} /> : null}
         // `inverted` flips the whole content area as a unit, so these are
         // swapped from how they read: `paddingBottom` — normally "space
         // after the last item" — renders as reserved space at the screen's

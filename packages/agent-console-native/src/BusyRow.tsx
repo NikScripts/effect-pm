@@ -27,10 +27,15 @@ const elapsedLabel = (sinceMs: number): string => {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 };
 
-export const BusyRow = (props: { readonly onStop: () => void }): React.ReactElement => {
-  // Captured once per busy period rather than read from a part's timestamp —
-  // this row outlives any individual part.
-  const startedAt = React.useRef(Date.now()).current;
+export const BusyRow = (props: {
+  readonly onStop: () => void;
+  /** When the run began, from the server's own timestamp. Falls back to mount
+   * time only if the server has not reported one yet — capturing it at mount
+   * restarted the clock every time the chat was reopened. */
+  readonly startedAt?: number;
+}): React.ReactElement => {
+  const mountedAt = React.useRef(Date.now()).current;
+  const startedAt = props.startedAt ?? mountedAt;
   const [, forceTick] = React.useReducer((n: number) => n + 1, 0);
 
   React.useEffect(() => {
