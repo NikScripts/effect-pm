@@ -1,36 +1,56 @@
 /**
  * A session's chat transcript — ported from
- * packages/agent-console/src/pages/SessionChat.tsx. The header is now
- * `SessionTopBar` — three separate glass pieces (back, a wide title/status
- * center piece, a "more" stub), the same floating-overlay pattern
- * `TopBar.tsx`/`useNavBarHeight` already establishes for Home, not the
- * plain RN row this screen started with.
+ * packages/agent-console/src/pages/SessionChat.tsx.
+ *
+ * The header is the real UINavigationBar (see RootNavigator), transparent
+ * and empty apart from the system back button, a title set from this
+ * screen's own state, and a native "more" item. It exists so iOS 26's
+ * scroll edge effect has a bar to anchor to — that blur only renders where
+ * scrolling content meets a bar. An earlier version floated custom glass
+ * pieces over the screen with the header hidden, which meant no blur was
+ * possible at all.
  *
  * @internal
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, Platform, StyleSheet, Text, Vibration, View } from "react-native";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
+import { VariableBlur } from "react-native-variable-blur";
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { MessageBubble } from "./MessageBubble";
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
-import { SessionTopBar, useSessionTopBarHeight } from "./SessionTopBar";
+import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { TypingIndicator } from "./TypingIndicator";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { useSessionStream } from "./useSessionStream";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
+/** How far past the status bar the ramp keeps dissolving. Measured from the
+ * safe-area inset rather than the full header height: header height includes
+ * the whole nav bar, which made the blurred band roughly twice as tall as the
+ * region it needs to cover. */
+const TOP_BLUR_FEATHER = 44;
+
+/** Peak blur radius at the status bar. `react-native-variable-blur` uses the
+ * same private `variableBlur` CAFilter path the custom module was probing. */
+const TOP_BLUR_RADIUS = 36;
+
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
-  const topBarHeight = useSessionTopBarHeight();
+  // Transparent header, so content sits under it and pads itself by the
+  // header's real height. On this inverted list that padding is
+  // `paddingBottom` — see the contentContainerStyle note below.
+  const topBarHeight = useHeaderHeight();
   const { transcript, markBusy, clearBusy, sendOptimistic, connected } = useSessionStream(client, sessionID);
   const [title, setTitle] = React.useState<string | undefined>(undefined);
   // Newest-first — paired with `inverted` below, which should anchor the
@@ -51,6 +71,29 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     if (reversedOrder.length > 0) listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [reversedOrder.length]);
+
+  // Buzz when the agent finishes replying, not on every streamed part —
+  // parts arrive continuously while it types, which would vibrate
+  // nonstop. `busy` going true -> false is the completion signal, and the
+  // same one the closed-app notification will use.
+  const wasBusy = React.useRef(false);
+  React.useEffect(() => {
+    if (wasBusy.current && !transcript.busy) {
+      Vibration.vibrate();
+    }
+    wasBusy.current = transcript.busy;
+  }, [transcript.busy]);
+
+  // Title and connection state are screen state, so they reach the header
+  // through setOptions rather than static screen options.
+  React.useEffect(() => {
+    props.navigation.setOptions({
+      headerTitle: () => <SessionHeaderTitle title={title ?? sessionID} connected={connected} />,
+      unstable_headerRightItems: () => [
+        { type: "button", label: "More", icon: { type: "sfSymbol", name: "ellipsis" }, onPress: () => {} },
+      ],
+    });
+  }, [props.navigation, title, sessionID, connected]);
 
   React.useEffect(() => {
     setTitle(undefined);
@@ -83,6 +126,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // rather than relying on padding-box positioning semantics.
   return (
     <View style={styles.root}>
+      {/* Marks this list for iOS 26's scroll edge effect. Both edges are
+        * set because the list is `inverted` (a scaleY(-1) transform), so
+        * its native top edge is the visual bottom — targeting one edge
+        * would mean guessing at that mapping. */}
+      <ScrollViewMarker style={styles.flex} scrollEdgeEffects={{ top: "soft", bottom: "soft" }}>
       <FlatList
         ref={listRef}
         inverted
@@ -101,10 +149,24 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // `inverted` flips the whole content area as a unit, so these are
         // swapped from how they read: `paddingBottom` — normally "space
         // after the last item" — renders as reserved space at the screen's
-        // visual TOP (under the floating SessionTopBar), and `paddingTop`
+        // visual TOP (under the header), and `paddingTop`
         // renders at the visual BOTTOM (under the floating composer).
         contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: composerHeight + keyboardHeight }]}
       />
+      </ScrollViewMarker>
+      {/* The feathered blur over the status bar / header region. It sits
+       * above the list but below the (transparent) native nav bar, so the
+       * clock, back button and title stay legible over blurred content
+       * with no hard edge where the effect ends. Taller than the header so
+       * the ramp has room to dissolve instead of stopping at the bar. */}
+      {Platform.OS === "ios" ? (
+        <VariableBlur
+          blurRadius={TOP_BLUR_RADIUS}
+          direction="up"
+          style={[styles.topBlur, { height: insets.top + TOP_BLUR_FEATHER }]}
+          pointerEvents="none"
+        />
+      ) : null}
       {/* Absolutely positioned, not a flex sibling — otherwise it takes
        * layout space away from the list and nothing ever passes behind
        * it, which defeats the glass. `bottom` tracks the keyboard
@@ -113,7 +175,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       <View style={[styles.composerFloat, { bottom: keyboardHeight }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer onSend={onSend} disabled={transcript.busy} bottomInset={keyboardHeight > 0 ? 0 : insets.bottom} placeholder="Message" />
       </View>
-      <SessionTopBar title={title ?? sessionID} connected={connected} onBack={() => props.navigation.goBack()} />
     </View>
   );
 };
@@ -125,6 +186,13 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  topBlur: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    // `height` is set inline from the header height — see the element.
   },
   composerFloat: {
     position: "absolute",

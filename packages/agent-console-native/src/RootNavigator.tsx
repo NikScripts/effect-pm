@@ -103,7 +103,27 @@ export const RootNavigator = (): React.ReactElement => {
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           })}
         />
-        <Stack.Screen name="Chat" component={SessionChatScreen} />
+        {/* Same treatment as Home — a real but invisible header, so iOS
+         * 26's scroll edge effect has a bar to anchor to. Back is the
+         * system's own (free swipe-back), "more" is a native item, and the
+         * title/connection dot is set from the screen itself via
+         * setOptions, since both are screen state. */}
+        <Stack.Screen
+          name="Chat"
+          component={SessionChatScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            headerTitle: "",
+            // No headerBlurEffect: the nav bar's own material is uniform
+            // with a hard bottom edge, which would paint over the feathered
+            // VariableBlur this screen renders itself.
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          }}
+        />
         <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
