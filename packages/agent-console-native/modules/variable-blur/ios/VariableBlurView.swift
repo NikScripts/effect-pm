@@ -1,6 +1,5 @@
 import ExpoModulesCore
 import UIKit
-import CoreImage.CIFilterBuiltins
 import QuartzCore
 
 /// Progressive backdrop blur via private `CAFilter.variableBlur`.

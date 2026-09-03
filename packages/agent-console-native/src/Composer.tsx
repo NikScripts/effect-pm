@@ -173,7 +173,8 @@ const SEND_ACTIVE_FILL = DynamicColorIOS({
 });
 
 // +/send's own background, glass effect, and icon — one native element,
-// same recipe as SessionTopBar.tsx's back/more buttons.
+// same recipe the session header's own buttons used before they became
+// native header items.
 //
 // Confirmed by a real test, not assumption: swapping this `glassEffect`
 // for `background(color, shapes.circle())` — everything else held

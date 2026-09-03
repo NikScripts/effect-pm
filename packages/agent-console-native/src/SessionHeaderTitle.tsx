@@ -1,104 +1,72 @@
 /**
- * A session's own nav bar — three separate glass pieces (back button, a wide
- * center piece with the title + live connection status, a right-side "more"
- * button) grouped in one `GlassEffectContainer`, the same proven recipe
- * Home's own `TopBar.tsx` uses (real SwiftUI via `@expo/ui`, not
- * `expo-glass-effect`'s `GlassView` — that component is what caused
- * SessionComposer's whole run of sizing/timing bugs today; this bar
- * deliberately stays on the mechanism that hasn't shown those problems).
+ * A session's header title — the session name plus a live connection dot,
+ * in its own glass capsule — rendered into the real `UINavigationBar`'s
+ * `headerTitle` slot.
  *
- * The center piece is given an explicit width computed from the screen
- * width, not SwiftUI's own flexible-width sizing (`frame({maxWidth:
- * Infinity})` doesn't survive this bridge's JSON serialization, and every
- * "let native figure out the size" attempt elsewhere in this composer today
- * turned out unreliable) — same "compute it synchronously on the RN side"
- * approach that fixed the composer's decoy touch target and controls row.
+ * This was previously a floating overlay of three glass pieces (back,
+ * title, more) drawn over the screen with `headerShown: false`. It moved
+ * into the real header because iOS 26's scroll edge effect — the system
+ * blur where content passes under the status bar — only renders where
+ * scrolling content meets an actual bar, so a real header has to exist, and
+ * a second floating bar above it wasted a bar's worth of space.
  *
- * The center piece isn't wrapped in a `Button` — it's not tappable yet; a
- * future session-details view (context usage, etc.) is the plan, but that's
- * a separate increment. The "more" button is a stub the same way
- * SessionComposer's "+"/Auto buttons are: rendered, not yet wired to
- * anything, because what belongs in that menu isn't decided yet.
+ * Back and "more" are gone from here: back is the system's own back button
+ * (free swipe-back and correct behavior), and "more" is a native header
+ * item declared in RootNavigator. Both of those are bar *button items*,
+ * which an iOS 26 nav bar glasses itself — giving them ours too nested a
+ * second capsule inside the system's.
+ *
+ * The title is not a bar button item and gets no glass from the system, so
+ * it keeps its own `glassEffect` capsule here. That's what the old overlay
+ * had, and losing it when this moved into the header was a regression.
+ *
+ * Width is computed on the RN side rather than left to SwiftUI: `frame({
+ * maxWidth: Infinity })` doesn't survive this bridge's JSON serialization,
+ * and content-sized `Host`s resolve asynchronously via a native round-trip
+ * that this codebase has repeatedly seen race with surrounding layout.
  *
  * `connected` comes from `useSessionStream`'s own `/global/event` reconnect
  * loop — real state, not a synthesized always-on badge.
  *
  * @internal
  */
-import { Button, GlassEffectContainer, HStack, Host, Image, Spacer, Text as UIText } from "@expo/ui/swift-ui";
-import { buttonStyle, font, foregroundStyle, frame, glassEffect, imageScale, labelStyle, lineLimit, padding, tint } from "@expo/ui/swift-ui/modifiers";
+import { HStack, Host, Image, Spacer, Text as UIText } from "@expo/ui/swift-ui";
+import { font, foregroundStyle, frame, glassEffect, lineLimit, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
 
-const BUTTON_SIZE = 44;
-const BAR_CONTENT_HEIGHT = 56;
-const HORIZONTAL_MARGIN = 28;
-const PIECE_SPACING = 8;
+/** Half the screen. The nav bar centers the title slot between its own
+ * items, so the pill only has to be narrow enough never to reach them —
+ * an allowance subtracted from the full width was guesswork and overlapped
+ * the buttons. */
+const PILL_WIDTH_RATIO = 0.5;
+/** Matches the bar's own 44pt item height, so it sits on the same line
+ * rather than reading as a short stub. */
+const PILL_HEIGHT = 44;
 
-const buttonModifiers = () => [
-  buttonStyle("plain"),
-  labelStyle("iconOnly"),
-  imageScale("medium"),
-  tint(colors.label),
-  frame({ width: BUTTON_SIZE, height: BUTTON_SIZE }),
-  glassEffect({ glass: { variant: "regular", interactive: true }, shape: "circle" }),
-];
-
-export const useSessionTopBarHeight = (): number => {
-  const insets = useSafeAreaInsets();
-  return insets.top + BAR_CONTENT_HEIGHT;
-};
-
-export const SessionTopBar = (props: {
+export const SessionHeaderTitle = (props: {
   readonly title: string | undefined;
   readonly connected: boolean;
-  readonly onBack: () => void;
 }): React.ReactElement => {
-  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const centerWidth = screenWidth - HORIZONTAL_MARGIN * 2 - BUTTON_SIZE * 2 - PIECE_SPACING * 2;
+  const pillWidth = Math.round(screenWidth * PILL_WIDTH_RATIO);
 
   return (
-    <View style={[styles.root, { height: insets.top + BAR_CONTENT_HEIGHT }]} pointerEvents="box-none">
-      <Host style={[styles.host, { height: BAR_CONTENT_HEIGHT }]}>
-        <GlassEffectContainer spacing={PIECE_SPACING}>
-          <HStack alignment="center" spacing={PIECE_SPACING} modifiers={[padding({ leading: HORIZONTAL_MARGIN, trailing: HORIZONTAL_MARGIN })]}>
-            <Button label="Back" systemImage="chevron.left" onPress={props.onBack} modifiers={buttonModifiers()} />
-            <HStack
-              alignment="center"
-              modifiers={[
-                frame({ width: centerWidth, height: BUTTON_SIZE }),
-                padding({ horizontal: 16 }),
-                glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
-              ]}
-            >
-              <Spacer />
-              <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title ?? "Session"}</UIText>
-              <Spacer />
-              <Image systemName="circle.fill" size={7} color={props.connected ? colors.brand : colors.secondaryLabel} />
-            </HStack>
-            <Button label="More" systemImage="ellipsis" modifiers={buttonModifiers()} />
-          </HStack>
-        </GlassEffectContainer>
-      </Host>
-    </View>
+    <Host style={{ width: pillWidth, height: PILL_HEIGHT }}>
+      <HStack
+        alignment="center"
+        modifiers={[
+          frame({ width: pillWidth, height: PILL_HEIGHT }),
+          padding({ horizontal: 14 }),
+          glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+        ]}
+      >
+        <Spacer />
+        <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title ?? "Session"}</UIText>
+        <Spacer />
+        <Image systemName="circle.fill" size={7} color={props.connected ? colors.brand : colors.secondaryLabel} />
+      </HStack>
+    </Host>
   );
 };
-
-const styles = StyleSheet.create({
-  root: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  host: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 12,
-  },
-});
