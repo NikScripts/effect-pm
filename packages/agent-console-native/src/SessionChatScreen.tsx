@@ -130,6 +130,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       <FlatList
         ref={listRef}
         inverted
+        // Scroll edge effects need automatic inset adjustment against the
+        // transparent header — without this the soft edge often never renders.
+        contentInsetAdjustmentBehavior="automatic"
         style={styles.flex}
         data={reversedOrder}
         keyExtractor={(id) => id}
@@ -159,7 +162,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         <VariableBlur
           blurRadius={TOP_BLUR_RADIUS}
           direction="up"
-          style={[styles.topBlur, { height: insets.top + TOP_BLUR_FEATHER }]}
+          style={[styles.topBlur, { height: topBarHeight + TOP_BLUR_FEATHER }]}
           pointerEvents="none"
         />
       ) : null}

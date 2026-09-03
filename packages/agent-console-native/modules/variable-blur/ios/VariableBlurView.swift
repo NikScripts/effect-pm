@@ -5,58 +5,105 @@ import QuartzCore
 
 /// Progressive backdrop blur via private `CAFilter.variableBlur`.
 ///
-/// Based on react-native-variable-blur / jtrivedi/VariableBlurView, with two
-/// fixes for our layout:
-/// 1. Never call `super.updateProperties()` — on iOS 26 it reinstalls the stock
-///    gaussian blur and wipes the variable-radius mask (reads as uniform blur).
-/// 2. Size the gradient mask to the view's live bounds, not a fixed 100×100 tile.
+/// Based on nikstar/VariableBlur + jtrivedi/VariableBlurView. The critical
+/// iOS 26 fix is overriding `updateProperties` without calling `super` — UIKit's
+/// default implementation reinstalls a uniform gaussian blur and ignores the
+/// variable-radius mask.
 final class VariableBlurView: ExpoView {
-  enum Direction {
-    case up
-    case down
+  enum Direction: String {
+    case blurredTopClearBottom
+    case blurredBottomClearTop
   }
 
-  private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+  private let effectView = VariableBlurUIView()
 
   var maxBlurRadius: CGFloat = 20 {
-    didSet { applyVariableBlur() }
+    didSet { effectView.maxBlurRadius = maxBlurRadius }
   }
 
-  var direction: Direction = .up {
-    didSet { applyVariableBlur() }
+  var direction: Direction = .blurredTopClearBottom {
+    didSet { effectView.direction = direction }
   }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     clipsToBounds = false
-    addSubview(blurView)
-    blurView.translatesAutoresizingMaskIntoConstraints = false
+    isUserInteractionEnabled = false
+
+    effectView.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(effectView)
     NSLayoutConstraint.activate([
-      blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
-      blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
-      blurView.topAnchor.constraint(equalTo: topAnchor),
-      blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
+      effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      effectView.topAnchor.constraint(equalTo: topAnchor),
+      effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
-    // Drop the tint/dimming subviews so we don't get a hard material edge.
-    for subview in blurView.subviews.dropFirst() {
-      subview.alpha = 0
-    }
+  }
+}
+
+/// The actual `UIVisualEffectView` that owns the backdrop layer and filter.
+private final class VariableBlurUIView: UIVisualEffectView {
+  fileprivate var maxBlurRadius: CGFloat = 20 {
+    didSet { installVariableBlur() }
   }
 
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    applyVariableBlur()
+  fileprivate var direction: VariableBlurView.Direction = .blurredTopClearBottom {
+    didSet { installVariableBlur() }
+  }
+
+  fileprivate init() {
+    super.init(effect: UIBlurEffect(style: .regular))
+    installVariableBlur()
+    hideTintSubviews()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
   }
 
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    guard let window, let backdropLayer = blurView.subviews.first?.layer else { return }
+    guard let window, let backdropLayer = backdropLayer else { return }
     // Avoid pixelization at the unblurred edge (nikstar/VariableBlur#1).
     backdropLayer.setValue(window.traitCollection.displayScale, forKey: "scale")
-    applyVariableBlur()
+    installVariableBlur()
   }
 
-  private func applyVariableBlur() {
+  /// iOS 26 routes effect updates through here; calling `super` reinstalls the
+  /// stock gaussian blur and wipes `variableBlur`.
+  override func updateProperties() {
+    if #available(iOS 26.0, *) {
+      installVariableBlur()
+    } else {
+      super.updateProperties()
+      installVariableBlur()
+    }
+  }
+
+  override func setNeedsUpdateProperties() {
+    if #available(iOS 26.0, *) {
+      installVariableBlur()
+    } else {
+      super.setNeedsUpdateProperties()
+    }
+  }
+
+  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+    // nikstar/VariableBlur: calling super here crashes.
+  }
+
+  private var backdropLayer: CALayer? {
+    subviews.first?.layer
+  }
+
+  private func hideTintSubviews() {
+    for subview in subviews.dropFirst() {
+      subview.alpha = 0
+    }
+  }
+
+  private func installVariableBlur() {
     let clsName = String("retliFAC".reversed())
     guard let filterClass = NSClassFromString(clsName) as? NSObject.Type else {
       NSLog("[VariableBlur] CAFilter class unavailable")
@@ -68,24 +115,26 @@ final class VariableBlurView: ExpoView {
       return
     }
 
-    let width = max(bounds.width, 1)
-    let height = max(bounds.height, 1)
-    let gradientImage = makeGradientImage(width: width, height: height, direction: direction)
+    // nikstar uses a small mask bitmap + inputNormalizeEdges; full-bounds masks
+    // were read as uniform on device during earlier probes.
+    let gradientImage = makeGradientImage(width: 100, height: 100)
 
     variableBlur.setValue(maxBlurRadius, forKey: "inputRadius")
     variableBlur.setValue(gradientImage, forKey: "inputMaskImage")
     variableBlur.setValue(true, forKey: "inputNormalizeEdges")
 
-    blurView.subviews.first?.layer.filters = [variableBlur]
+    guard let backdropLayer else { return }
+    backdropLayer.setValue(false, forKey: "allowsInPlaceFiltering")
+    backdropLayer.filters = [variableBlur]
   }
 
-  private func makeGradientImage(width: CGFloat, height: CGFloat, direction: Direction) -> CGImage {
+  private func makeGradientImage(width: CGFloat, height: CGFloat) -> CGImage {
     let filter = CIFilter.linearGradient()
     filter.color0 = CIColor.black
     filter.color1 = CIColor.clear
     filter.point0 = CGPoint(x: 0, y: height)
     filter.point1 = CGPoint(x: 0, y: 0)
-    if direction == .up {
+    if direction == .blurredBottomClearTop {
       filter.point0 = CGPoint(x: 0, y: 0)
       filter.point1 = CGPoint(x: 0, y: height)
     }

@@ -10,7 +10,13 @@ public class VariableBlurModule: Module {
       }
 
       Prop("direction") { (view: VariableBlurView, direction: String) in
-        view.direction = direction == "up" ? .up : .down
+        switch direction {
+        case "down", "blurredBottomClearTop":
+          view.direction = .blurredBottomClearTop
+        default:
+          // Status-bar feather: strongest blur at the top edge.
+          view.direction = .blurredTopClearBottom
+        }
       }
     }
   }

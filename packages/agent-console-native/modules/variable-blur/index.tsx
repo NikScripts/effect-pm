@@ -10,6 +10,7 @@ import { Platform, type ViewProps } from "react-native";
 
 export type VariableBlurProps = ViewProps & {
   readonly blurRadius?: number;
+  /** `up` (default) = blur strongest at the top edge, fading downward. */
   readonly direction?: "up" | "down";
 };
 
