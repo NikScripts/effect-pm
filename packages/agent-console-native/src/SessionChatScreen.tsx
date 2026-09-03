@@ -34,8 +34,8 @@ type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 const TOP_BLUR_RADIUS = 10;
 const BOTTOM_BLUR_RADIUS = 6;
-const TOP_BLUR_HEIGHT = 112;
-const BOTTOM_BLUR_HEIGHT = 56;
+const TOP_BLUR_HEIGHT = 140;
+const BOTTOM_BLUR_HEIGHT = 80;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
