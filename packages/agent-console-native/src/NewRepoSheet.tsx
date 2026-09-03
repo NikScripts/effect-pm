@@ -35,13 +35,13 @@ import {
 import {
   autocorrectionDisabled,
   background,
-  bold,
   buttonBorderShape,
   buttonStyle,
   controlSize,
   disabled,
   foregroundStyle,
   frame,
+  font,
   imageScale,
   labelStyle,
   listStyle,
@@ -87,8 +87,8 @@ const glassIconButton = [
   buttonStyle("glass"),
   buttonBorderShape("circle"),
   labelStyle("iconOnly"),
-  imageScale("medium"),
-  frame({ width: 36, height: 36 }),
+  imageScale("large"),
+  frame({ width: 44, height: 44 }),
 ] as const;
 
 const isFolderName = (raw: string): boolean =>
@@ -312,7 +312,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                 modifiers={[...glassIconButton]}
               />
               <Spacer />
-              <Text modifiers={[bold()]}>New Repository</Text>
+              <Text modifiers={[font({ size: 22, weight: "semibold" })]}>New Repository</Text>
               <Spacer />
               <Button
                 systemImage="plus"
@@ -476,7 +476,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                 onPress={submit}
                 modifiers={[
                   buttonStyle("borderedProminent"),
-                  controlSize("large"),
+                  controlSize("extraLarge"),
                   disabled(busy || probing),
                   frame({ maxWidth: Infinity }),
                 ]}
