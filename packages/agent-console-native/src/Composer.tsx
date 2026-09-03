@@ -70,7 +70,8 @@
  * bubble reads as one compact pill (`+`, mirrored text, send) without
  * ever being a decoy standing in for the real input the way the old
  * two-tree design was — the `TextInput` itself is what's collapsed, not
- * swapped out.
+ * swapped out. Home's `topSection` (repo/worktree/branch menus) collapses
+ * the same way — only visible while expanded.
  *
  * Model switching and the attachment ("+") button are stubs for now — real
  * `client.provider.list()` wiring is the next increment once this shell's
@@ -343,7 +344,15 @@ export const Composer = (props: {
            * fixed `+` chip, flexible `pickerSlot`, fixed send chip. */}
           <View style={[styles.controlsRow, !expanded && styles.controlsRowCollapsed]}>
             <Host style={styles.chipHost}>
-              <Button label="Attach" systemImage="plus" modifiers={CHIP_BUTTON_MODIFIERS} />
+              <Button
+                label="Attach"
+                systemImage="plus"
+                onPress={() => {
+                  // Collapsed: whole bar expands. Expanded: attach is still a stub.
+                  if (!expanded) inputRef.current?.focus();
+                }}
+                modifiers={CHIP_BUTTON_MODIFIERS}
+              />
             </Host>
             {/* pickerSlot — two always-mounted Pressables stacked on top of
              * each other (`slotContent`'s absolute positioning), cross-
@@ -374,9 +383,31 @@ export const Composer = (props: {
               </Pressable>
             </View>
             <Host style={styles.sendChipHost}>
-              <Button label="Send" systemImage="arrow.up" onPress={() => void send()} modifiers={sendButtonModifiers(hasContent)} />
+              <Button
+                label="Send"
+                systemImage="arrow.up"
+                onPress={() => {
+                  if (!expanded) {
+                    inputRef.current?.focus();
+                    return;
+                  }
+                  void send();
+                }}
+                modifiers={sendButtonModifiers(hasContent)}
+              />
             </Host>
           </View>
+          {/* Collapsed: catch taps on glass padding / anywhere the Host
+           * buttons don't claim, so the whole pill expands — not just the
+           * mirror text. Expanded: gone so + / Auto / send work normally. */}
+          {!expanded ? (
+            <Pressable
+              style={styles.expandHit}
+              onPress={() => inputRef.current?.focus()}
+              accessibilityRole="button"
+              accessibilityLabel={props.placeholder}
+            />
+          ) : null}
         </GlassView>
       </View>
     </View>
@@ -406,6 +437,9 @@ const styles = StyleSheet.create({
   field: {
     padding: 10,
     position: "relative",
+  },
+  expandHit: {
+    ...StyleSheet.absoluteFillObject,
   },
   topSection: {
     overflow: "hidden",
