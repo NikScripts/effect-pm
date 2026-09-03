@@ -225,76 +225,78 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.row}>
-      <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
-        <Menu
-          label={<PillLabel text={repoLabel} dimmed={repoDisabled} />}
-          modifiers={[...MENU_MODIFIERS, ...(repoDisabled ? [disabledModifier(true)] : [])]}
-        >
-          {props.scanned.length > 0 ? (
-            <Section title="Workspaces">
-              {props.scanned.map((repo) => {
-                const active = props.target?.kind === "repo" && props.target.repo === repo.repo;
-                return (
-                  <Toggle
-                    key={repo.repo}
-                    label={repo.repo}
-                    systemImage="folder"
-                    isOn={active}
-                    onIsOnChange={(on) => {
-                      if (on) pickRepo(repo);
-                    }}
-                  />
-                );
-              })}
-            </Section>
-          ) : null}
-          {props.otherFolders.length > 0 ? (
-            <Section title="Other folders">
-              {props.otherFolders.map((folder) => {
-                const active = props.target?.kind === "folder" && props.target.path === folder.path;
-                return (
-                  <Toggle
-                    key={folder.path}
-                    label={folder.name}
-                    systemImage="folder.badge.gearshape"
-                    isOn={active}
-                    onIsOnChange={(on) => {
-                      if (on) pickFolder(folder);
-                    }}
-                  />
-                );
-              })}
-            </Section>
-          ) : null}
-        </Menu>
-      </Host>
+      <View style={styles.leading}>
+        <Host style={styles.pillHost} matchContents ignoreSafeArea="all">
+          <Menu
+            label={<PillLabel text={repoLabel} dimmed={repoDisabled} />}
+            modifiers={[...MENU_MODIFIERS, ...(repoDisabled ? [disabledModifier(true)] : [])]}
+          >
+            {props.scanned.length > 0 ? (
+              <Section title="Workspaces">
+                {props.scanned.map((repo) => {
+                  const active = props.target?.kind === "repo" && props.target.repo === repo.repo;
+                  return (
+                    <Toggle
+                      key={repo.repo}
+                      label={repo.repo}
+                      systemImage="folder"
+                      isOn={active}
+                      onIsOnChange={(on) => {
+                        if (on) pickRepo(repo);
+                      }}
+                    />
+                  );
+                })}
+              </Section>
+            ) : null}
+            {props.otherFolders.length > 0 ? (
+              <Section title="Other folders">
+                {props.otherFolders.map((folder) => {
+                  const active = props.target?.kind === "folder" && props.target.path === folder.path;
+                  return (
+                    <Toggle
+                      key={folder.path}
+                      label={folder.name}
+                      systemImage="folder.badge.gearshape"
+                      isOn={active}
+                      onIsOnChange={(on) => {
+                        if (on) pickFolder(folder);
+                      }}
+                    />
+                  );
+                })}
+              </Section>
+            ) : null}
+          </Menu>
+        </Host>
 
-      <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
-        <Menu
-          label={<PillLabel text={worktreePill} dimmed={repoOnly} />}
-          modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
-        >
-          {worktrees.map((wt) => {
-            const active =
-              props.target?.kind === "repo" && props.target.worktree.path === wt.path;
-            return (
-              <Toggle
-                key={wt.path}
-                label={worktreeLabel(wt)}
-                systemImage={wt.isMain ? "externaldrive" : "square.on.square"}
-                isOn={active}
-                onIsOnChange={(on) => {
-                  if (on) pickWorktree(wt);
-                }}
-              />
-            );
-          })}
-          <Divider />
-          <Button label="Create new…" systemImage="plus" onPress={promptNewWorktree} />
-        </Menu>
-      </Host>
+        <Host style={styles.pillHost} matchContents ignoreSafeArea="all">
+          <Menu
+            label={<PillLabel text={worktreePill} dimmed={repoOnly} />}
+            modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
+          >
+            {worktrees.map((wt) => {
+              const active =
+                props.target?.kind === "repo" && props.target.worktree.path === wt.path;
+              return (
+                <Toggle
+                  key={wt.path}
+                  label={worktreeLabel(wt)}
+                  systemImage={wt.isMain ? "externaldrive" : "square.on.square"}
+                  isOn={active}
+                  onIsOnChange={(on) => {
+                    if (on) pickWorktree(wt);
+                  }}
+                />
+              );
+            })}
+            <Divider />
+            <Button label="Create new…" systemImage="plus" onPress={promptNewWorktree} />
+          </Menu>
+        </Host>
+      </View>
 
-      <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
+      <Host style={styles.pillHost} matchContents ignoreSafeArea="all">
         <Menu
           label={<PillLabel text={branchPill} dimmed={repoOnly} />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
@@ -323,18 +325,25 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 6,
     marginBottom: 6,
   },
+  leading: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    gap: 6,
+  },
   pillHost: {
-    flex: 1,
-    minWidth: 0,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   pill: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
     gap: 4,
-    maxWidth: "100%",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
