@@ -189,3 +189,19 @@ export const registerForPush = async (backendAddress: string): Promise<PushResul
 
   return { ok: true, token, registered: response?.ok === true };
 };
+
+/**
+ * Tells the backend which session is on screen, so it does not notify about
+ * the one you are already watching. Cleared (null) when the chat closes or
+ * the app backgrounds — at that point a notification is useful again.
+ *
+ * Fire and forget: the backend being unreachable only costs a redundant
+ * notification, never a broken screen.
+ */
+export const reportActiveSession = (backendAddress: string, sessionID: string | undefined): void => {
+  void fetch(`${backendAddress}/push/active`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sessionID: sessionID ?? null }),
+  }).catch(() => undefined);
+};

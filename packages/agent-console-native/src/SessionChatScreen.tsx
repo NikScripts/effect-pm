@@ -32,6 +32,8 @@ import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { MessageBubble } from "./MessageBubble";
 import { PermissionPrompt } from "./PermissionPrompt";
+import { reportActiveSession } from "./push";
+import { getBackendAddress } from "./settings";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
@@ -58,6 +60,22 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // `paddingBottom` — see the contentContainerStyle note below.
   const topBarHeight = useHeaderHeight();
   const streamEnabled = useStreamEnabled();
+
+  // The backend suppresses notifications for whatever is on screen. Tied to
+  // `streamEnabled` because it already means exactly "this chat is focused and
+  // the app is foregrounded" — the same condition under which a notification
+  // about this session would be redundant.
+  React.useEffect(() => {
+    let cancelled = false;
+    void getBackendAddress(address).then((backend) => {
+      if (cancelled) return;
+      reportActiveSession(backend, streamEnabled ? sessionID : undefined);
+    });
+    return () => {
+      cancelled = true;
+      void getBackendAddress(address).then((backend) => reportActiveSession(backend, undefined));
+    };
+  }, [streamEnabled, sessionID, address]);
   const { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected } =
     useSessionStream(client, sessionID, address, streamEnabled);
   // Mirrors the module-level store so the menu re-renders with the choice.

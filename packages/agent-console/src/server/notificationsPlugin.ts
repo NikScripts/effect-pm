@@ -35,6 +35,16 @@ const RECEIPT_DELAY_MS = 6000;
 const OPENCODE_URL = process.env.AGENT_CONSOLE_OPENCODE_URL ?? "http://127.0.0.1:4096";
 const TOKENS_FILE = ".agent-console/push-tokens.json";
 
+/** Sessions the app creates for its own `git worktree` plumbing. They run and
+ * go idle like any other session, and notifying about them is pure noise — the
+ * client already hides them from its lists. */
+const HIDDEN_TITLE_PREFIX = "[worktree-setup]";
+
+/** A run shorter than this finished before you could have looked away, so an
+ * alert about it interrupts for nothing. Permission asks ignore this: those
+ * block regardless of how quickly they arrive. */
+const MIN_RUN_MS = 8_000;
+
 /** Reconnect backoff for the event stream, capped. */
 const MAX_RECONNECT_MS = 30_000;
 
@@ -71,10 +81,15 @@ export const notificationsPlugin = (): Plugin => {
   const tokensPath = resolve(root, TOKENS_FILE);
 
   const registrations = new Map<string, Registration>();
-  /** Sessions currently mid-run, so `session.idle` only notifies for a run we
-   * actually saw start. Without this, every idle event on connect would fire
-   * a notification for work that finished hours ago. */
-  const busySessions = new Set<string>();
+  /** Sessions mid-run and when they started, so `session.idle` only notifies
+   * for a run we actually saw start — without this, every idle event on
+   * connect would fire for work that finished hours ago — and so a run's
+   * duration is known when deciding whether it is worth interrupting for. */
+  const busySessions = new Map<string, number>();
+
+  /** The session currently on screen in a foregrounded app. Notifying about
+   * the thing you are already watching is the most annoying case of all. */
+  let activeSessionID: string | undefined;
   /** Suppresses a duplicate push when the same session is answered and
    * re-blocks quickly. */
   const lastNotifiedAt = new Map<string, number>();
@@ -196,6 +211,19 @@ export const notificationsPlugin = (): Plugin => {
     return true;
   };
 
+  /** Titles change rarely and this runs per notification, so results are kept
+   * rather than re-fetched on every event. */
+  const hiddenCache = new Map<string, boolean>();
+
+  const isHidden = async (sessionID: string): Promise<boolean> => {
+    const cached = hiddenCache.get(sessionID);
+    if (cached !== undefined) return cached;
+    const title = await titleOf(sessionID);
+    const hidden = title.startsWith(HIDDEN_TITLE_PREFIX);
+    hiddenCache.set(sessionID, hidden);
+    return hidden;
+  };
+
   const titleOf = async (sessionID: string): Promise<string> => {
     const response = await fetch(`${OPENCODE_URL}/session/${sessionID}`).catch(() => undefined);
     if (response === undefined || !response.ok) return "Session";
@@ -238,12 +266,16 @@ export const notificationsPlugin = (): Plugin => {
             const sessionID = typeof properties.sessionID === "string" ? properties.sessionID : undefined;
 
             if (event.type === "message.updated" || event.type === "message.part.delta") {
-              if (sessionID !== undefined) busySessions.add(sessionID);
+              if (sessionID !== undefined && !busySessions.has(sessionID)) {
+                busySessions.set(sessionID, Date.now());
+              }
               continue;
             }
 
             if (event.type === "permission.asked" || event.type === "permission.v2.asked") {
               if (sessionID === undefined || !shouldNotify(`ask:${sessionID}`)) continue;
+              if (sessionID === activeSessionID) continue;
+              if (await isHidden(sessionID)) continue;
               const action =
                 typeof properties.permission === "string"
                   ? properties.permission
@@ -260,8 +292,13 @@ export const notificationsPlugin = (): Plugin => {
             }
 
             if (event.type === "session.idle" && sessionID !== undefined) {
-              if (!busySessions.delete(sessionID)) continue;
+              const startedAt = busySessions.get(sessionID);
+              busySessions.delete(sessionID);
+              if (startedAt === undefined) continue;
+              if (Date.now() - startedAt < MIN_RUN_MS) continue;
+              if (sessionID === activeSessionID) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
+              if (await isHidden(sessionID)) continue;
               await send({
                 title: await titleOf(sessionID),
                 body: "Finished.",
@@ -322,6 +359,16 @@ export const notificationsPlugin = (): Plugin => {
           data: { kind: "test" },
         });
         json(200, { attempted, remaining: registrations.size });
+        return;
+      }
+
+      if (path === "/push/active" && req.method === "POST") {
+        const body = await readJson(req);
+        activeSessionID =
+          isRecord(body) && typeof body.sessionID === "string" && body.sessionID !== ""
+            ? body.sessionID
+            : undefined;
+        json(200, { activeSessionID: activeSessionID ?? null });
         return;
       }
 
