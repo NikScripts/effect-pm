@@ -1,9 +1,12 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { filesPlugin } from "./src/server/filesPlugin";
+import { notificationsPlugin } from "./src/server/notificationsPlugin";
+import { processesPlugin } from "./src/server/processesPlugin";
 
 // Port kept off docs Waku (:5190) and the other example apps (:5177, :5189).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), filesPlugin(), processesPlugin(), notificationsPlugin()],
   server: {
     host: true,
     port: 5195,
