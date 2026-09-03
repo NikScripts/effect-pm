@@ -5,9 +5,9 @@
  * One field accepts GitHub search text or a pasteable remote URL. Typing
  * searches; a parseable remote auto-probes. Selecting a hit or resolving a
  * URL shows preview + collapsed preferences (folder name defaults to the
- * remote repo name). Header glass `xmark` / `plus` and the bottom Create /
- * Clone CTA sit outside the `Form` (no Section wells); the sheet itself is
- * painted with `systemGroupedBackground` so they share the Form's backdrop.
+ * remote repo name). Header glass `xmark` / `plus` sit outside the `Form`; the Create / Clone
+ * CTA is the last Form section so it scrolls with content (same action as `plus`).
+ * The sheet is painted with `systemGroupedBackground` for a shared backdrop.
  *
  * @internal
  */
@@ -43,6 +43,7 @@ import {
   glassEffect,
   imageScale,
   labelStyle,
+  multilineTextAlignment,
   onSubmit,
   padding,
   pickerStyle,
@@ -78,6 +79,7 @@ const SHEET_BACKGROUND = {
   dark: "#000000",
 } as const;
 
+const primaryText = foregroundStyle({ type: "hierarchical", style: "primary" });
 const secondaryText = foregroundStyle({ type: "hierarchical", style: "secondary" });
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -350,11 +352,26 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
               {!hasSelection && hits.length > 0 ? (
                 <Section title="Suggestions">
                   {hits.map((hit) => (
-                    <Button key={hit.fullName} onPress={() => selectHit(hit)}>
-                      <VStack spacing={2}>
-                        <Text>{hit.fullName}</Text>
+                    <Button
+                      key={hit.fullName}
+                      onPress={() => selectHit(hit)}
+                      modifiers={[buttonStyle("plain")]}
+                    >
+                      <VStack
+                        spacing={2}
+                        alignment="leading"
+                        modifiers={[
+                          frame({ maxWidth: Infinity, alignment: "leading" }),
+                          multilineTextAlignment("leading"),
+                        ]}
+                      >
+                        <Text modifiers={[primaryText, multilineTextAlignment("leading")]}>
+                          {hit.fullName}
+                        </Text>
                         {hit.description !== undefined && hit.description.length > 0 ? (
-                          <Text modifiers={[secondaryText]}>{hit.description}</Text>
+                          <Text modifiers={[secondaryText, multilineTextAlignment("leading")]}>
+                            {hit.description}
+                          </Text>
                         ) : null}
                       </VStack>
                     </Button>
@@ -413,6 +430,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                           modifiers={[
                             autocorrectionDisabled(),
                             textInputAutocapitalization("never"),
+                            secondaryText,
                           ]}
                         />
                       </LabeledContent>
@@ -445,22 +463,20 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                   <Text modifiers={[foregroundStyle("#FF3B30")]}>{error}</Text>
                 </Section>
               ) : null}
+              <Section>
+                <Button
+                  label={primaryLabel}
+                  onPress={submit}
+                  modifiers={[
+                    buttonStyle("borderedProminent"),
+                    controlSize("large"),
+                    disabled(busy || probing),
+                    frame({ maxWidth: Infinity, minHeight: 56 }),
+                  ]}
+                />
+                {busy ? <ProgressView /> : null}
+              </Section>
             </Form>
-
-            {/* Outside Form — no Section well; sheet background still shows through. */}
-            <VStack spacing={8} modifiers={[padding({ horizontal: 20 })]}>
-              <Button
-                label={primaryLabel}
-                onPress={submit}
-                modifiers={[
-                  buttonStyle("borderedProminent"),
-                  controlSize("large"),
-                  disabled(busy || probing),
-                  frame({ maxWidth: Infinity, minHeight: 56 }),
-                ]}
-              />
-              {busy ? <ProgressView /> : null}
-            </VStack>
           </VStack>
         </Group>
       </BottomSheet>
