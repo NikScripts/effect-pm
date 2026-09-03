@@ -17,10 +17,13 @@
       // comment — not this setting. `steps` stays as a ceiling regardless.)
       "steps": 8,
       "permission": {
-        // Explicit "deny" (not the default "ask") — this client has no permission-response
-        // UI yet, and "ask" with no answerer is untested territory. `doom_loop` is opencode's
-        // own protection against exactly the kind of runaway loop found and root-caused while
-        // building this client (see the `steps` comment above) — keep it active, not disabled.
+        // The native client now answers permission requests (see
+        // agent-console-native/src/sessionPermissions.ts), so the risky tools below are "ask"
+        // rather than "deny": the session's own toggle decides whether an ask is
+        // auto-approved ("Allow all") or surfaced as an in-chat prompt. `doom_loop` stays
+        // denied — it is opencode's protection against exactly the runaway loop found and
+        // root-caused while building this client (see the `steps` comment above), and it is
+        // not something a per-session toggle should be able to switch off.
         "doom_loop": "deny",
         "edit": "allow",
         // "write" (new-file creation) isn't in opencode's documented/schema-named permission
@@ -29,12 +32,12 @@
         // in README.md — that spike is *why* both are listed explicitly here, not just "edit").
         "write": "allow",
         "patch": "allow",
-        "bash": "deny",
-        // Confirmed hands-on: without this, the console agent could invoke the `task` tool
-        // to delegate to a general-purpose subagent — which has its OWN, unrestricted
-        // permissions — and that subagent created a file `console`'s own edit/write/bash
-        // denial never touched. Denying `task` closes that delegation path entirely.
-        "task": "deny",
+        "bash": "ask",
+        // Worth knowing before approving one: a `task` delegates to a general-purpose
+        // subagent with its OWN, unrestricted permissions. Confirmed hands-on — such a
+        // subagent created a file that `console`'s own edit/write/bash rules never touched.
+        // Approving a task therefore grants more than the single action it names.
+        "task": "ask",
         "read": "allow",
         "glob": "allow",
         "grep": "allow",
@@ -42,12 +45,14 @@
         "lsp": "allow",
         "webfetch": "allow"
       },
-      // Belt-and-suspenders for the tools still denied above (deprecated field, but it gates
-      // tool *registration*, not just the permission check — a second layer in case a future
-      // tool ever bypasses the permission list the way "write" did in phase 1).
+      // Registration, not permission — this gates whether the tool exists at all, so it has
+      // to allow `bash`/`task` for the "ask" rules above to ever fire. Left explicit rather
+      // than deleted: it is the layer that caught "write" bypassing the permission list in
+      // phase 1, and flipping either of these back to false disables the tool outright,
+      // regardless of what any session toggle says.
       "tools": {
-        "bash": false,
-        "task": false
+        "bash": true,
+        "task": true
       }
     }
     // "repo-admin" (worktree creation/scanning, see src/opencode/worktree.ts
