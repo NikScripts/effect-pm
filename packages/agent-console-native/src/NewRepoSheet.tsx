@@ -180,6 +180,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
       setPreview(undefined);
       setMeta(undefined);
       setBranch(undefined);
+      nameState.set("");
     }
   };
 
@@ -241,11 +242,10 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
           return;
         }
 
-        const fromField = nameState.get().trim();
-        const fromQuery = query.trim();
-        const repoName = fromField.length > 0 ? fromField : isFolderName(fromQuery) ? fromQuery : "";
-        if (repoName.length === 0) {
-          setError("Pick a repository to clone, or type a name to create one.");
+        // Create Repository — name is whatever was typed in the single search field.
+        const repoName = query.trim();
+        if (!isFolderName(repoName)) {
+          setError("Type a repository name to create, or pick a search result to clone.");
           return;
         }
         applyFolderName(repoName);
@@ -410,14 +410,16 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                       isExpanded={prefsOpen}
                       onIsExpandedChange={setPrefsOpen}
                     >
-                      <TextField
-                        text={nameState}
-                        placeholder="Folder name"
-                        modifiers={[
-                          autocorrectionDisabled(),
-                          textInputAutocapitalization("never"),
-                        ]}
-                      />
+                      <LabeledContent label="Folder name">
+                        <TextField
+                          text={nameState}
+                          placeholder="Folder name"
+                          modifiers={[
+                            autocorrectionDisabled(),
+                            textInputAutocapitalization("never"),
+                          ]}
+                        />
+                      </LabeledContent>
                       <Picker
                         label="Branch"
                         selection={branch ?? preview.defaultBranch}
