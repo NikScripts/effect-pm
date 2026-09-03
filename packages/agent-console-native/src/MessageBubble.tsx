@@ -2,8 +2,7 @@
  * User = right-aligned tinted bubble; assistant = plain left-aligned text,
  * no bubble — the pattern ChatGPT/Claude's own clients use, not a dev-tool
  * log. Ported from packages/agent-console/src/components/MessageBubble.tsx,
- * minus Markdown rendering — plain text (with real newlines) for v1, the
- * same scoped cut as ToolCallBubble's dropped syntax highlighting.
+ * with markdown via `Markdown.tsx` (no Shiki — monospaced fences only).
  *
  * Memoized for the same reason as the web version: `useSessionStream`'s
  * updater only creates a new `TranscriptMessage` object for the message an
@@ -13,8 +12,9 @@
  * @internal
  */
 import * as React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { colors } from "./colors";
+import { Markdown } from "./Markdown";
 import { ToolCallBubble } from "./ToolCallBubble";
 import type { TranscriptMessage } from "./useSessionStream";
 
@@ -25,9 +25,7 @@ const MessageBubbleImpl = (props: { readonly message: TranscriptMessage }): Reac
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
         {Array.from(props.message.parts.values()).map((part) =>
           part.type === "text" ? (
-            <Text key={part.id} style={styles.text} selectable>
-              {part.text}
-            </Text>
+            <Markdown key={part.id} text={part.text} />
           ) : (
             <ToolCallBubble key={part.id} part={part} />
           ),
@@ -59,10 +57,5 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
-  },
-  text: {
-    color: colors.label,
-    fontSize: 16,
-    lineHeight: 22,
   },
 });
