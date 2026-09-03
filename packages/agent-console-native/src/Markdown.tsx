@@ -83,12 +83,6 @@ const MARKDOWN_STYLES: MarkedStyles = {
     padding: 10,
     marginBottom: 8,
   },
-  codeText: {
-    color: colors.label,
-    fontFamily: "Menlo",
-    fontSize: 13,
-    lineHeight: 18,
-  },
   blockquote: {
     borderLeftWidth: 3,
     borderLeftColor: colors.separator,
