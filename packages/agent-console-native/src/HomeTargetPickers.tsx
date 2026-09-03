@@ -1,30 +1,29 @@
 /**
  * Home composer top section — native SwiftUI `Menu` selectors for repo,
- * worktree, and branch (not a hand-rolled RN Modal). Repo menu keeps
- * workspaces and "Other folders" as separate sections. Worktree offers
- * create-new via `Alert.prompt`. Branch lists local refs with the
- * worktree's current HEAD pre-selected.
+ * worktree, and branch. Trigger chrome is an RN pill (`RNHostView` label)
+ * so fill + label color are under our control; SwiftUI `tint` on
+ * `bordered` kept resolving to the same light system gray.
  *
  * @internal
  */
+import { Feather } from "@expo/vector-icons";
 import {
   Button,
   Divider,
   Host,
   Menu,
+  RNHostView,
   Section,
   Toggle,
 } from "@expo/ui/swift-ui";
 import {
   buttonStyle,
-  controlSize,
   disabled as disabledModifier,
-  foregroundStyle,
   menuIndicator,
-  tint,
+  menuStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { Alert, DynamicColorIOS, StyleSheet, View } from "react-native";
+import { Alert, DynamicColorIOS, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { useAppContext } from "./AppContext";
 import { listLocalBranches, readCurrentBranch } from "./branchScan";
 import type { ScannedRepo, ScannedWorktree } from "./repoScan";
@@ -59,25 +58,31 @@ type Props = {
   readonly onWorktreesChanged: () => Promise<void>;
 };
 
-/** Trigger chrome inside the glass composer. `bordered` + explicit tint/
- * foreground so we don't inherit the accent-blue default — fill tracks
- * tertiarySystemFill-ish gray, label tracks secondaryLabel. */
-const PILL_FILL = DynamicColorIOS({
-  light: "rgba(120, 120, 128, 0.16)",
-  dark: "rgba(120, 120, 128, 0.28)",
-});
-const PILL_LABEL = DynamicColorIOS({
-  light: "rgba(60, 60, 67, 0.85)",
-  dark: "rgba(235, 235, 245, 0.7)",
-});
+/** Filled chip — systemGray5 / gray4, not the translucent bordered default. */
+const PILL_BG = DynamicColorIOS({ light: "#E5E5EA", dark: "#3A3A3C" });
+const PILL_FG = DynamicColorIOS({ light: "#3C3C43", dark: "#EBEBF5" });
+const PILL_CHEVRON = { light: "#8E8E93", dark: "#8E8E93" } as const;
+
+/** Custom label as the whole trigger — no SwiftUI button chrome. */
 const MENU_MODIFIERS = [
-  buttonStyle("bordered"),
-  controlSize("small"),
-  menuIndicator("visible"),
-  tint(PILL_FILL),
-  // After tint — same ordering lesson as Composer's chip glyphs.
-  foregroundStyle(PILL_LABEL),
+  menuStyle("button"),
+  buttonStyle("plain"),
+  menuIndicator("hidden"),
 ] as const;
+
+const PillLabel = (props: { readonly text: string; readonly dimmed?: boolean }): React.ReactElement => {
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  return (
+    <RNHostView matchContents>
+      <View style={[styles.pill, props.dimmed === true && styles.pillDimmed]}>
+        <Text style={styles.pillText} numberOfLines={1}>
+          {props.text}
+        </Text>
+        <Feather name="chevron-down" size={12} color={PILL_CHEVRON[scheme]} />
+      </View>
+    </RNHostView>
+  );
+};
 
 export const HomeTargetPickers = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
@@ -222,7 +227,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     <View style={styles.row}>
       <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
         <Menu
-          label={repoLabel}
+          label={<PillLabel text={repoLabel} dimmed={repoDisabled} />}
           modifiers={[...MENU_MODIFIERS, ...(repoDisabled ? [disabledModifier(true)] : [])]}
         >
           {props.scanned.length > 0 ? (
@@ -266,7 +271,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
 
       <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
         <Menu
-          label={worktreePill}
+          label={<PillLabel text={worktreePill} dimmed={repoOnly} />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
           {worktrees.map((wt) => {
@@ -291,7 +296,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
 
       <Host style={styles.pillHost} matchContents={{ vertical: true }} ignoreSafeArea="all">
         <Menu
-          label={branchPill}
+          label={<PillLabel text={branchPill} dimmed={repoOnly} />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
           {branches.map((branch) => {
@@ -324,5 +329,25 @@ const styles = StyleSheet.create({
   pillHost: {
     flex: 1,
     minWidth: 0,
+  },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    maxWidth: "100%",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderCurve: "continuous",
+    backgroundColor: PILL_BG,
+  },
+  pillDimmed: {
+    opacity: 0.4,
+  },
+  pillText: {
+    flexShrink: 1,
+    color: PILL_FG,
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
