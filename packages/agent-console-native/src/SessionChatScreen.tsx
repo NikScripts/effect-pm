@@ -18,7 +18,7 @@ import { FlatList, Platform, StyleSheet, Text, Vibration, View } from "react-nat
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
-import { VariableBlur } from "react-native-variable-blur";
+import { VariableBlur } from "../modules/variable-blur";
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { colors } from "./colors";
@@ -32,15 +32,11 @@ import { useSessionStream } from "./useSessionStream";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-/** How far past the status bar the ramp keeps dissolving. Measured from the
- * safe-area inset rather than the full header height: header height includes
- * the whole nav bar, which made the blurred band roughly twice as tall as the
- * region it needs to cover. */
-const TOP_BLUR_FEATHER = 44;
-
-/** Peak blur radius at the status bar. `react-native-variable-blur` uses the
- * same private `variableBlur` CAFilter path the custom module was probing. */
+/** Peak blur radius at the status bar. */
 const TOP_BLUR_RADIUS = 36;
+/** Taller band gives the ramp room to dissolve — a short view makes a uniform
+ * blur easy to mistake for a failed mask. */
+const TOP_BLUR_FEATHER = 72;
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
