@@ -218,3 +218,103 @@ export const searchGitHubRepos = async (
     return [];
   }
 };
+
+/** Useful remote metadata shown before clone (description, rules files, etc.). */
+export type RepoMeta = {
+  readonly description: string | undefined;
+  readonly language: string | undefined;
+  readonly stars: number | undefined;
+  readonly topics: ReadonlyArray<string>;
+  /** Root-ish paths that look like agent/docs/policy files. */
+  readonly ruleFiles: ReadonlyArray<string>;
+};
+
+const INTERESTING_ROOT = new Set([
+  "agents.md",
+  "claude.md",
+  "readme.md",
+  "readme",
+  "license",
+  "license.md",
+  "contributing.md",
+  "codeowners",
+  ".cursorrules",
+  ".editorconfig",
+  "package.json",
+  "opencode.json",
+  "opencode.jsonc",
+]);
+
+const isInterestingPath = (name: string): boolean => {
+  const lower = name.toLowerCase();
+  if (INTERESTING_ROOT.has(lower)) return true;
+  if (lower.startsWith("readme")) return true;
+  if (lower === ".cursor" || lower.startsWith(".cursor/")) return true;
+  if (lower === "docs" || lower.startsWith("docs/")) return true;
+  return false;
+};
+
+/**
+ * Best-effort GitHub metadata (description, language, root rule/docs files).
+ * Returns undefined when `gh` can't resolve the repo.
+ */
+export const fetchRepoMeta = async (
+  client: OpencodeClient,
+  rootDir: string,
+  owner: string | undefined,
+  name: string,
+): Promise<RepoMeta | undefined> => {
+  if (owner === undefined || owner.length === 0 || name.length === 0) return undefined;
+  const expanded = await expandHome(client, rootDir);
+  const repo = `${owner}/${name}`;
+  try {
+    const infoOut = await runRepoAdmin(
+      client,
+      expanded,
+      `gh api ${JSON.stringify(`repos/${owner}/${name}`)} --jq '{description,language,stargazers_count,topics}' 2>/dev/null || true`,
+      `meta ${repo}`,
+    );
+    let description: string | undefined;
+    let language: string | undefined;
+    let stars: number | undefined;
+    let topics: ReadonlyArray<string> = [];
+    if (infoOut.length > 0 && infoOut.startsWith("{")) {
+      const info: unknown = JSON.parse(infoOut);
+      if (typeof info === "object" && info !== null) {
+        const row = info as {
+          description?: unknown;
+          language?: unknown;
+          stargazers_count?: unknown;
+          topics?: unknown;
+        };
+        description = typeof row.description === "string" ? row.description : undefined;
+        language = typeof row.language === "string" ? row.language : undefined;
+        stars = typeof row.stargazers_count === "number" ? row.stargazers_count : undefined;
+        topics = Array.isArray(row.topics)
+          ? row.topics.filter((t): t is string => typeof t === "string")
+          : [];
+      }
+    }
+
+    const contentsOut = await runRepoAdmin(
+      client,
+      expanded,
+      `gh api ${JSON.stringify(`repos/${owner}/${name}/contents`)} --jq '[.[].name]' 2>/dev/null || true`,
+      `contents ${repo}`,
+    );
+    let ruleFiles: ReadonlyArray<string> = [];
+    if (contentsOut.length > 0 && contentsOut.startsWith("[")) {
+      const names: unknown = JSON.parse(contentsOut);
+      if (Array.isArray(names)) {
+        ruleFiles = names
+          .filter((n): n is string => typeof n === "string")
+          .filter(isInterestingPath)
+          .slice(0, 12);
+      }
+    }
+
+    return { description, language, stars, topics, ruleFiles };
+  } catch {
+    return undefined;
+  }
+};
