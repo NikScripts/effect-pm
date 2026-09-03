@@ -458,6 +458,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                             autocorrectionDisabled(),
                             textInputAutocapitalization("never"),
                             secondaryText,
+                            multilineTextAlignment("trailing"),
+                            frame({ maxWidth: Infinity, alignment: "trailing" }),
                           ]}
                         />
                       </LabeledContent>
@@ -477,7 +479,15 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                       </Picker>
                       {destinationPreview !== undefined ? (
                         <LabeledContent label="Destination">
-                          <Text modifiers={[secondaryText]}>{destinationPreview}</Text>
+                          <Text
+                            modifiers={[
+                              secondaryText,
+                              multilineTextAlignment("trailing"),
+                              frame({ maxWidth: Infinity, alignment: "trailing" }),
+                            ]}
+                          >
+                            {destinationPreview}
+                          </Text>
                         </LabeledContent>
                       ) : null}
                     </DisclosureGroup>
