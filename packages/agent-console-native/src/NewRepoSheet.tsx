@@ -84,7 +84,7 @@ const secondaryText = foregroundStyle({ type: "hierarchical", style: "secondary"
 const SEARCH_DEBOUNCE_MS = 350;
 
 /** Circular glass chrome — Composer chip recipe so `frame` actually sizes the disc. */
-const HEADER_BUTTON_SIZE = 52;
+const HEADER_BUTTON_SIZE = 44;
 const glassIconButton = [
   buttonStyle("plain"),
   labelStyle("iconOnly"),
