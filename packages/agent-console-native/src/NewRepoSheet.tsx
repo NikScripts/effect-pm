@@ -35,13 +35,13 @@ import {
 import {
   autocorrectionDisabled,
   background,
-  buttonBorderShape,
+  bold,
   buttonStyle,
   controlSize,
   disabled,
   foregroundStyle,
   frame,
-  font,
+  glassEffect,
   imageScale,
   labelStyle,
   listStyle,
@@ -83,12 +83,14 @@ const SHEET_BACKGROUND = {
 const secondaryText = foregroundStyle({ type: "hierarchical", style: "secondary" });
 const SEARCH_DEBOUNCE_MS = 350;
 
+/** Circular glass chrome — Composer chip recipe so `frame` actually sizes the disc. */
+const HEADER_BUTTON_SIZE = 52;
 const glassIconButton = [
-  buttonStyle("glass"),
-  buttonBorderShape("circle"),
+  buttonStyle("plain"),
   labelStyle("iconOnly"),
   imageScale("large"),
-  frame({ width: 44, height: 44 }),
+  frame({ width: HEADER_BUTTON_SIZE, height: HEADER_BUTTON_SIZE }),
+  glassEffect({ glass: { variant: "regular", interactive: true }, shape: "circle" }),
 ] as const;
 
 const isFolderName = (raw: string): boolean =>
@@ -296,14 +298,14 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
           ]}
         >
           <VStack
-            spacing={12}
+            spacing={16}
             modifiers={[
               background(colors.background),
-              padding({ top: 8, bottom: 16 }),
+              padding({ top: 20, bottom: 20 }),
             ]}
           >
-            {/* Outside Form — avoids Section wells; sheet background fills the gap. */}
-            <HStack modifiers={[padding({ horizontal: 16 })]}>
+            {/* Outside Form — more header margin; bigger circular chrome. */}
+            <HStack modifiers={[padding({ horizontal: 20, vertical: 10 })]}>
               <Button
                 systemImage="xmark"
                 label="Close"
@@ -312,7 +314,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                 modifiers={[...glassIconButton]}
               />
               <Spacer />
-              <Text modifiers={[font({ size: 22, weight: "semibold" })]}>New Repository</Text>
+              <Text modifiers={[bold()]}>New Repository</Text>
               <Spacer />
               <Button
                 systemImage="plus"
@@ -470,15 +472,15 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
             </Form>
 
             {/* Outside Form — no Section well; sheet background still shows through. */}
-            <VStack spacing={8} modifiers={[padding({ horizontal: 16 })]}>
+            <VStack spacing={8} modifiers={[padding({ horizontal: 20 })]}>
               <Button
                 label={primaryLabel}
                 onPress={submit}
                 modifiers={[
                   buttonStyle("borderedProminent"),
-                  controlSize("extraLarge"),
+                  controlSize("large"),
                   disabled(busy || probing),
-                  frame({ maxWidth: Infinity }),
+                  frame({ maxWidth: Infinity, minHeight: 56 }),
                 ]}
               />
               {busy ? <ProgressView /> : null}
