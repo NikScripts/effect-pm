@@ -57,10 +57,12 @@ type Props = {
   readonly onWorktreesChanged: () => Promise<void>;
 };
 
-/** Trigger chrome inside the glass composer — `glass` matches the field;
- * swap to `bordered` / `plain` / `glassProminent` if the look fights the bubble. */
+/** Trigger chrome inside the glass composer. Tried `bordered` then `glass`;
+ * `plain` keeps the system chevron without a second glass capsule fighting
+ * the field. Other options: `automatic` / `bordered` / `borderedProminent` /
+ * `glass` / `glassProminent`. */
 const MENU_MODIFIERS = [
-  buttonStyle("glass"),
+  buttonStyle("plain"),
   controlSize("small"),
   menuIndicator("visible"),
 ] as const;
