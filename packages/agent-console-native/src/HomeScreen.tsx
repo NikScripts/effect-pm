@@ -16,9 +16,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { AGENT } from "./client";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import {
+  HomeTargetPickers,
+  sessionDirectory,
+  type FolderTarget,
+  type SessionTarget,
+} from "./HomeTargetPickers";
+import { listOtherFolders } from "./otherFolders";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
 import type { ScannedRepo } from "./repoScan";
@@ -51,9 +59,12 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
+  const [otherFolders, setOtherFolders] = React.useState<ReadonlyArray<FolderTarget>>([]);
+  const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>(undefined);
+  const [sending, setSending] = React.useState(false);
 
   const loadSessions = React.useCallback(async (): Promise<void> => {
     const { data, error: fetchError } = await client.session.list();
@@ -69,10 +80,17 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const loadScan = React.useCallback(
     async (force: boolean): Promise<void> => {
       const stale = force || (await isStale());
-      if (!stale) return;
+      if (!stale) {
+        const cached = await getCachedRepos();
+        if (cached !== undefined) {
+          setOtherFolders(await listOtherFolders(client, rootDir, cached));
+        }
+        return;
+      }
       try {
         const repos = await rescan(client, rootDir);
         setScanned(repos);
+        setOtherFolders(await listOtherFolders(client, rootDir, repos));
         setError(undefined);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
@@ -81,15 +99,46 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     [client, rootDir],
   );
 
+  const refreshWorktrees = React.useCallback(async (): Promise<void> => {
+    try {
+      const repos = await rescan(client, rootDir);
+      setScanned(repos);
+      setOtherFolders(await listOtherFolders(client, rootDir, repos));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
+    }
+  }, [client, rootDir]);
+
   React.useEffect(() => {
     (async () => {
       const [cachedSessions, cachedScan] = await Promise.all([getCachedSessions(), getCachedRepos()]);
       if (cachedSessions !== undefined) setSessions(cachedSessions);
-      if (cachedScan !== undefined) setScanned(cachedScan);
+      if (cachedScan !== undefined) {
+        setScanned(cachedScan);
+        setOtherFolders(await listOtherFolders(client, rootDir, cachedScan));
+      }
       setLoading(false);
       await Promise.all([loadSessions(), loadScan(cachedScan === undefined)]);
     })();
-  }, [loadSessions, loadScan]);
+  }, [loadSessions, loadScan, client, rootDir]);
+
+  const onSend = async (text: string): Promise<void> => {
+    if (target === undefined || sending) return;
+    setSending(true);
+    try {
+      const directory = sessionDirectory(target);
+      const { data } = await client.session.create({ query: { directory } });
+      if (data === undefined) throw new Error("no session");
+      await client.session.promptAsync({
+        path: { id: data.id },
+        body: { agent: AGENT, parts: [{ type: "text", text }] },
+      });
+      props.navigation.navigate("Chat", { sessionID: data.id });
+      void loadSessions();
+    } finally {
+      setSending(false);
+    }
+  };
 
   const onRefresh = (): void => {
     setRefreshing(true);
@@ -196,19 +245,21 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       />
       </ScrollViewMarker>
       <EdgeBlurBars bottomInset={keyboardHeight} />
-      {/* Same shared Composer as the chat screen, floated the same way —
-       * Home differs only by placeholder for now. `topSection` (the
-       * repo/worktree/branch pickers) is the next increment; `onSend` is
-       * still a stub, as HomeComposerBar's own `onPress` was, since
-       * creating a session needs those pickers' values first. */}
       <View style={[styles.composerFloat, { bottom: keyboardHeight }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
-          onSend={async () => {
-            // Stub — see comment above.
-          }}
-          disabled={false}
+          onSend={onSend}
+          disabled={sending || target === undefined}
           bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
           placeholder="Plan, ask, build…"
+          topSection={
+            <HomeTargetPickers
+              scanned={scanned}
+              otherFolders={otherFolders}
+              target={target}
+              onChange={setTarget}
+              onWorktreesChanged={refreshWorktrees}
+            />
+          }
         />
       </View>
     </View>
