@@ -22,7 +22,6 @@ import {
   Host,
   HStack,
   LabeledContent,
-  List,
   Picker,
   ProgressView,
   Section,
@@ -44,7 +43,6 @@ import {
   glassEffect,
   imageScale,
   labelStyle,
-  listStyle,
   onSubmit,
   padding,
   pickerStyle,
@@ -351,18 +349,16 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
 
               {!hasSelection && hits.length > 0 ? (
                 <Section title="Suggestions">
-                  <List modifiers={[listStyle("plain")]}>
-                    {hits.map((hit) => (
-                      <Button key={hit.fullName} onPress={() => selectHit(hit)}>
-                        <VStack>
-                          <Text>{hit.fullName}</Text>
-                          {hit.description !== undefined && hit.description.length > 0 ? (
-                            <Text modifiers={[secondaryText]}>{hit.description}</Text>
-                          ) : null}
-                        </VStack>
-                      </Button>
-                    ))}
-                  </List>
+                  {hits.map((hit) => (
+                    <Button key={hit.fullName} onPress={() => selectHit(hit)}>
+                      <VStack spacing={2}>
+                        <Text>{hit.fullName}</Text>
+                        {hit.description !== undefined && hit.description.length > 0 ? (
+                          <Text modifiers={[secondaryText]}>{hit.description}</Text>
+                        ) : null}
+                      </VStack>
+                    </Button>
+                  ))}
                 </Section>
               ) : null}
 
