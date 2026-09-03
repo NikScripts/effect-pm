@@ -1,8 +1,9 @@
 /**
  * Home composer top section — native SwiftUI `Menu` selectors for repo,
- * worktree, and branch. Trigger chrome is an RN pill (`RNHostView` label)
- * so fill + label color are under our control; SwiftUI `tint` on
- * `bordered` kept resolving to the same light system gray.
+ * branch, and worktree. Repo + branch hug on the leading edge; worktree
+ * sits alone on the trailing edge. Trigger chrome is an RN pill
+ * (`RNHostView` label) so fill + label color are under our control;
+ * SwiftUI `tint` on `bordered` kept resolving to the same light system gray.
  *
  * @internal
  */
@@ -87,7 +88,7 @@ const PillLabel = (props: { readonly text: string; readonly dimmed?: boolean }):
   return (
     <RNHostView matchContents>
       <View style={[styles.pill, props.dimmed === true && styles.pillDimmed]}>
-        <Text style={styles.pillText} numberOfLines={1}>
+        <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
           {props.text}
         </Text>
         <Feather name="chevron-down" size={12} color={PILL_CHEVRON[scheme]} />
