@@ -57,12 +57,12 @@ type Props = {
   readonly onWorktreesChanged: () => Promise<void>;
 };
 
-/** Trigger chrome inside the glass composer. Tried `bordered` then `glass`;
- * `plain` keeps the system chevron without a second glass capsule fighting
- * the field. Other options: `automatic` / `bordered` / `borderedProminent` /
- * `glass` / `glassProminent`. */
+/** Trigger chrome inside the glass composer. Tried `glass` then `plain`;
+ * `bordered` is the middle weight — outlined control without a second glass
+ * capsule. Other options: `automatic` / `plain` / `borderedProminent` /
+ * `glass` / `glassProminent` / `borderless`. */
 const MENU_MODIFIERS = [
-  buttonStyle("plain"),
+  buttonStyle("bordered"),
   controlSize("small"),
   menuIndicator("visible"),
 ] as const;
