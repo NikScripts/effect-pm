@@ -25,6 +25,7 @@ const SERVER_ADDRESS_KEY = "agent-console-native:serverAddress";
 const ROOT_DIR_KEY = "agent-console-native:rootDir";
 const REPO_TEMPLATE_KEY = "agent-console-native:repoTemplate";
 const WORKTREE_TEMPLATE_KEY = "agent-console-native:worktreeTemplate";
+const LAST_MODEL_KEY = "agent-console-native:lastModel";
 const DEFAULT_WORKTREE_PREF_KEY = "agent-console-native:defaultWorktreePreference";
 const LAST_WORKTREE_BY_REPO_KEY = "agent-console-native:lastWorktreeByRepo";
 const DEFAULT_PERMISSION_MODE_KEY = "agent-console-native:defaultPermissionMode";
@@ -93,6 +94,25 @@ export const setWorktreeTemplate = (value: string): Promise<void> =>
     WORKTREE_TEMPLATE_KEY,
     value.trim().length === 0 ? DEFAULT_WORKTREE_TEMPLATE : value.trim(),
   );
+
+/** Last model the user picked in a composer — restored on next open. */
+export const getLastModel = async (): Promise<{ providerID: string; modelID: string } | undefined> => {
+  const raw = await AsyncStorage.getItem(LAST_MODEL_KEY);
+  if (raw === null) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    const providerID = (parsed as { providerID?: unknown }).providerID;
+    const modelID = (parsed as { modelID?: unknown }).modelID;
+    if (typeof providerID !== "string" || typeof modelID !== "string") return undefined;
+    return { providerID, modelID };
+  } catch {
+    return undefined;
+  }
+};
+
+export const setLastModel = (value: { readonly providerID: string; readonly modelID: string }): Promise<void> =>
+  AsyncStorage.setItem(LAST_MODEL_KEY, JSON.stringify(value));
 
 export const getDefaultWorktreePreference = async (): Promise<DefaultWorktreePreference> => {
   const value = await AsyncStorage.getItem(DEFAULT_WORKTREE_PREF_KEY);

@@ -62,8 +62,8 @@
  * (`@expo/vector-icons`) — it's not wired to a real dropdown yet, and was
  * never part of this native-button work.
  *
- * `pickerSlot` holds two always-mounted, absolutely-stacked Pressables —
- * the Auto model-picker and a single-line mirror of the `TextInput`'s own
+ * `pickerSlot` holds two always-mounted, absolutely-stacked children —
+ * the model picker and a single-line mirror of the `TextInput`'s own
  * value/placeholder — cross-faded by opacity/`pointerEvents` on
  * `expanded`, never conditionally rendered. Tapping the mirror focuses
  * the real (currently 0-height) `TextInput` via a ref; the collapsed
@@ -73,20 +73,24 @@
  * swapped out. Home's `topSection` (repo/worktree/branch menus) collapses
  * the same way — only visible while expanded.
  *
- * Model switching and the attachment ("+") button are stubs for now — real
- * `client.provider.list()` wiring is the next increment once this shell's
- * confirmed good, matching web's NewSessionPicker pattern.
+ * Attachment ("+") is still a stub. Model selection is real —
+ * `client.provider.list()`, passed through on every send (new session and
+ * mid-chat). The label is the model name, not “Auto” (Cursor’s routing
+ * feature; we pick an explicit connected model).
  *
  * @internal
  */
-import { Feather } from "@expo/vector-icons";
 import { Button, Host } from "@expo/ui/swift-ui";
 import { buttonStyle, foregroundStyle, frame, glassEffect, imageScale, labelStyle } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { DynamicColorIOS, LayoutAnimation, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { findModel, getDefaultModel, listModels, type ModelOption } from "./models";
+import { ModelPicker } from "./ModelPicker";
+import { getLastModel, setLastModel } from "./settings";
 
 // Comfortably under half the field's smallest (idle) rendered height, so
 // the rounded corners never overlap/distort ("weird clipping") no matter
@@ -225,13 +229,15 @@ const sendButtonModifiers = (active: boolean) => [
 ];
 
 export const Composer = (props: {
-  readonly onSend: (text: string) => Promise<void>;
+  readonly onSend: (text: string, model: ModelOption | undefined) => Promise<void>;
   readonly disabled: boolean;
   /** Home-indicator safe-area inset — the caller knows whether the keyboard
    * is covering it (0) or not (the real inset), so this doesn't read insets
    * itself and risk double-counting against the keyboard height. */
   readonly bottomInset: number;
   readonly placeholder: string;
+  /** Prefer this model when set (e.g. last assistant turn in a session). */
+  readonly seedModel?: ModelOption;
   /** Rendered inside the glass bubble, above the input — Home's
    * repo/worktree/branch pickers. Only shown while expanded (focused or
    * typing); collapsed Home stays the compact `+` / mirror / send pill.
@@ -239,11 +245,14 @@ export const Composer = (props: {
    * everything else in this tree. */
   readonly topSection?: React.ReactNode;
 }): React.ReactElement => {
+  const { client } = useAppContext();
   const scheme = useColorScheme();
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [focused, setFocused] = React.useState(false);
+  const [models, setModels] = React.useState<ReadonlyArray<ModelOption>>([]);
+  const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
   const expanded = focused || text.length > 0;
   const hasContent = text.trim().length > 0 && !props.disabled;
   // iOS multiline TextInput's own intrinsic-size reporting to Yoga doesn't
@@ -251,6 +260,37 @@ export const Composer = (props: {
   // height directly (the standard RN pattern for auto-growing text inputs)
   // sidesteps that measurement gap entirely instead of guessing at it.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [options, last] = await Promise.all([listModels(client), getLastModel()]);
+      if (cancelled) return;
+      setModels(options);
+      const fromSeed =
+        props.seedModel !== undefined
+          ? findModel(options, props.seedModel.providerID, props.seedModel.modelID) ?? props.seedModel
+          : undefined;
+      const fromLast =
+        last !== undefined ? findModel(options, last.providerID, last.modelID) : undefined;
+      setSelectedModel(fromSeed ?? fromLast ?? getDefaultModel(client) ?? options[0]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client]); // eslint-disable-line react-hooks/exhaustive-deps -- seed applied in the effect below
+
+  React.useEffect(() => {
+    if (props.seedModel === undefined || models.length === 0) return;
+    const match = findModel(models, props.seedModel.providerID, props.seedModel.modelID);
+    setSelectedModel(match ?? props.seedModel);
+  }, [props.seedModel?.providerID, props.seedModel?.modelID, models]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickModel = (model: ModelOption): void => {
+    setSelectedModel(model);
+    void setLastModel({ providerID: model.providerID, modelID: model.modelID });
+  };
+
   // onContentSizeChange fires once on mount, before any typing, with an
   // unreliable measurement — storing that made the field latch onto an
   // inflated height with no real content to justify it. Ignoring it
@@ -284,7 +324,7 @@ export const Composer = (props: {
     setContentHeight(MIN_INPUT_HEIGHT);
     setError(undefined);
     try {
-      await props.onSend(value);
+      await props.onSend(value, selectedModel);
     } catch {
       setError("Message failed to send — is the OpenCode server running?");
     }
@@ -361,13 +401,12 @@ export const Composer = (props: {
              * icon-settles-late race entirely instead of timing around
              * it. */}
             <View style={styles.pickerSlot}>
-              <Pressable
+              <View
                 style={[styles.slotContent, styles.autoContent, { opacity: expanded ? 1 : 0 }]}
                 pointerEvents={expanded ? "auto" : "none"}
               >
-                <Text style={styles.autoText}>Auto</Text>
-                <Feather name="chevron-down" size={13} color={colors.secondaryLabel} />
-              </Pressable>
+                <ModelPicker models={models} selected={selectedModel} onChange={pickModel} />
+              </View>
               {/* Mirrors the TextInput's own value/placeholder — tapping
                * it focuses the real (currently collapsed) TextInput
                * above via ref, since that TextInput has no touchable
@@ -439,7 +478,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   expandHit: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   topSection: {
     overflow: "hidden",
@@ -516,11 +555,6 @@ const styles = StyleSheet.create({
   },
   autoContent: {
     gap: 4,
-  },
-  autoText: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-    fontWeight: "500",
   },
   mirrorText: {
     color: colors.label,

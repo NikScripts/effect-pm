@@ -35,16 +35,27 @@
  * @internal
  */
 import * as React from "react";
-import type { Part, TextPart, ToolPart } from "@opencode-ai/sdk";
+import type { Part, ReasoningPart, TextPart, ToolPart } from "@opencode-ai/sdk";
 import type { OpencodeClient } from "./client";
+import { isPartDeltaEvent, withPartDelta } from "./partDelta";
+import {
+  asPendingPermission,
+  getPermissionMode,
+  replyToPermission,
+  type PendingPermission,
+  type PermissionReply,
+} from "./sessionPermissions";
 import { transcriptCache } from "./transcriptCache";
 
-export type RenderablePart = TextPart | ToolPart;
+export type RenderablePart = TextPart | ToolPart | ReasoningPart;
 
 export type TranscriptMessage = {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly parts: ReadonlyMap<string, RenderablePart>;
+  /** Present on assistant messages once the server reports them. */
+  readonly providerID?: string;
+  readonly modelID?: string;
 };
 
 export type Transcript = {
@@ -57,15 +68,23 @@ export const EMPTY: Transcript = { messages: new Map(), order: [], busy: false }
 const MAX_RECONNECT_DELAY_MS = 10_000;
 const LOCAL_ID_PREFIX = "local-";
 
-export const isRenderablePart = (part: Part): part is RenderablePart => part.type === "text" || part.type === "tool";
+export const isRenderablePart = (part: Part): part is RenderablePart =>
+  part.type === "text" || part.type === "tool" || part.type === "reasoning";
 
-export const withRole = (transcript: Transcript, messageID: string, role: "user" | "assistant"): Transcript => {
+export const withRole = (
+  transcript: Transcript,
+  messageID: string,
+  role: "user" | "assistant",
+  model?: { readonly providerID: string; readonly modelID: string },
+): Transcript => {
   const existing = transcript.messages.get(messageID);
   const messages = new Map(transcript.messages);
   messages.set(messageID, {
     id: messageID,
     role,
     parts: existing?.parts ?? new Map(),
+    providerID: model?.providerID ?? existing?.providerID,
+    modelID: model?.modelID ?? existing?.modelID,
   });
   const order = existing === undefined ? [...transcript.order, messageID] : transcript.order;
   return { ...transcript, messages, order };
@@ -77,7 +96,13 @@ export const withPart = (transcript: Transcript, part: RenderablePart): Transcri
   const parts = new Map(existing?.parts ?? []);
   parts.set(part.id, part);
   const messages = new Map(transcript.messages);
-  messages.set(part.messageID, { id: part.messageID, role, parts });
+  messages.set(part.messageID, {
+    id: part.messageID,
+    role,
+    parts,
+    providerID: existing?.providerID,
+    modelID: existing?.modelID,
+  });
   const order = existing === undefined ? [...transcript.order, part.messageID] : transcript.order;
   return { ...transcript, messages, order };
 };
@@ -87,8 +112,17 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 export const useSessionStream = (
   client: OpencodeClient,
   sessionID: string | undefined,
+  /** Base URL for the permission endpoints the pinned SDK does not expose. */
+  address: string,
+  /** Whether to hold a live connection. False tears the stream down — see
+   * useStreamEnabled for why a backgrounded socket is worse than none. */
+  enabled: boolean,
 ): {
   readonly transcript: Transcript;
+  /** A permission the server is waiting on, when this session asks rather
+   * than auto-approving. Null while nothing is pending. */
+  readonly pendingPermission: PendingPermission | undefined;
+  readonly replyPermission: (reply: PermissionReply) => Promise<void>;
   readonly markBusy: () => void;
   readonly clearBusy: () => void;
   /** Adds the just-sent text to the transcript immediately, under a local
@@ -107,6 +141,16 @@ export const useSessionStream = (
 } => {
   const [transcript, setTranscript] = React.useState<Transcript>(() => (sessionID !== undefined ? (transcriptCache.get(sessionID) ?? EMPTY) : EMPTY));
   const [connected, setConnected] = React.useState(false);
+  const [pendingPermission, setPendingPermission] = React.useState<PendingPermission | undefined>(undefined);
+
+  const replyPermission = React.useCallback(
+    async (reply: PermissionReply): Promise<void> => {
+      if (pendingPermission === undefined) return;
+      await replyToPermission(address, pendingPermission, reply);
+      setPendingPermission(undefined);
+    },
+    [address, pendingPermission],
+  );
   const currentRef = React.useRef<Transcript>(transcript);
   const sessionIdRef = React.useRef(sessionID);
   sessionIdRef.current = sessionID;
@@ -149,7 +193,7 @@ export const useSessionStream = (
 
   React.useEffect(() => {
     setConnected(false);
-    if (sessionID === undefined) {
+    if (sessionID === undefined || !enabled) {
       currentRef.current = EMPTY;
       setTranscript(EMPTY);
       return;
@@ -167,7 +211,14 @@ export const useSessionStream = (
       apply((t) => {
         let next = t;
         for (const { info, parts } of history ?? []) {
-          next = withRole(next, info.id, info.role);
+          next = withRole(
+            next,
+            info.id,
+            info.role,
+            info.role === "assistant"
+              ? { providerID: info.providerID, modelID: info.modelID }
+              : undefined,
+          );
           for (const part of parts) {
             if (isRenderablePart(part)) next = withPart(next, part);
           }
@@ -186,9 +237,36 @@ export const useSessionStream = (
           setConnected(true);
           for await (const { payload: event } of stream) {
             if (cancelled) return;
-            if (event.type === "message.updated" && event.properties.info.sessionID === sessionID) {
+            // Widened deliberately: `message.part.delta` is not in the pinned
+            // v1 SDK's Event union, so it cannot be narrowed off `event.type`.
+            // See partDelta.ts.
+            const raw: unknown = event;
+            // Permission asks pause the run until answered. In `full` mode
+            // that reply is automatic, so an agent never stalls waiting on a
+            // UI this app did not used to have. A failed auto-reply falls
+            // through to the prompt rather than leaving the run wedged.
+            const asked = asPendingPermission(raw);
+            if (asked !== undefined && asked.sessionID === sessionID) {
+              if (getPermissionMode(sessionID) === "full") {
+                void replyToPermission(address, asked, "once").catch(() => setPendingPermission(asked));
+              } else {
+                setPendingPermission(asked);
+              }
+            } else if (isPartDeltaEvent(raw) && raw.properties.sessionID === sessionID) {
+              const deltaEvent = raw;
+              apply((t) => withPartDelta(t, deltaEvent));
+            } else if (event.type === "message.updated" && event.properties.info.sessionID === sessionID) {
               const info = event.properties.info;
-              apply((t) => withRole(t, info.id, info.role));
+              apply((t) =>
+                withRole(
+                  t,
+                  info.id,
+                  info.role,
+                  info.role === "assistant"
+                    ? { providerID: info.providerID, modelID: info.modelID }
+                    : undefined,
+                ),
+              );
             } else if (event.type === "message.part.updated" && isRenderablePart(event.properties.part) && event.properties.part.sessionID === sessionID) {
               const part = event.properties.part;
               apply((t) => withPart(t, part));
@@ -213,7 +291,7 @@ export const useSessionStream = (
       cancelled = true;
       controller.abort();
     };
-  }, [sessionID, apply, client]);
+  }, [sessionID, apply, client, enabled, address]);
 
   const markBusy = React.useCallback(() => {
     apply((t) => ({ ...t, busy: true }));
@@ -223,5 +301,5 @@ export const useSessionStream = (
     apply((t) => ({ ...t, busy: false }));
   }, [apply]);
 
-  return { transcript, markBusy, clearBusy, sendOptimistic, connected };
+  return { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected };
 };

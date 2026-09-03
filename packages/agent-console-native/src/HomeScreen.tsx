@@ -26,6 +26,7 @@ import {
   type FolderTarget,
   type SessionTarget,
 } from "./HomeTargetPickers";
+import type { ModelOption } from "./models";
 import { listOtherFolders } from "./otherFolders";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
@@ -122,7 +123,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     })();
   }, [loadSessions, loadScan, client, rootDir]);
 
-  const onSend = async (text: string): Promise<void> => {
+  const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     if (target === undefined || sending) return;
     setSending(true);
     try {
@@ -131,7 +132,14 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       if (data === undefined) throw new Error("no session");
       await client.session.promptAsync({
         path: { id: data.id },
-        body: { agent: AGENT, parts: [{ type: "text", text }] },
+        body: {
+          agent: AGENT,
+          parts: [{ type: "text", text }],
+          model:
+            model === undefined
+              ? undefined
+              : { providerID: model.providerID, modelID: model.modelID },
+        },
       });
       props.navigation.navigate("Chat", { sessionID: data.id });
       void loadSessions();
