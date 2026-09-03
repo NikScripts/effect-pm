@@ -6,12 +6,13 @@
  * searches; a parseable remote auto-probes. Selecting a hit or resolving a
  * URL shows preview + collapsed preferences (folder name defaults to the
  * remote repo name). Header glass `xmark` / `plus` and the bottom Create /
- * Clone CTA live in the `Form` but not inside a `Section`.
+ * Clone CTA sit outside the `Form` (no Section wells); the sheet itself is
+ * painted with `systemGroupedBackground` so they share the Form's backdrop.
  *
  * @internal
  */
 import * as React from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, useColorScheme } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -33,6 +34,7 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   autocorrectionDisabled,
+  background,
   bold,
   buttonStyle,
   controlSize,
@@ -43,13 +45,16 @@ import {
   labelStyle,
   listStyle,
   onSubmit,
+  padding,
   pickerStyle,
+  presentationBackground,
   presentationDetents,
   presentationDragIndicator,
   tag,
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAppContext } from "./AppContext";
+import { colors } from "./colors";
 import {
   cloneRepo,
   fetchRepoMeta,
@@ -68,6 +73,12 @@ type Props = {
   readonly onCreated: (repoName: string, mainPath: string) => void;
 };
 
+/** Matches Form / systemGroupedBackground (see RootNavigator theme notes). */
+const SHEET_BACKGROUND = {
+  light: "#F2F2F7",
+  dark: "#000000",
+} as const;
+
 const secondaryText = foregroundStyle({ type: "hierarchical", style: "secondary" });
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -83,6 +94,7 @@ const isFolderName = (raw: string): boolean =>
 
 export const NewRepoSheet = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
+  const colorScheme = useColorScheme();
   const queryState = useNativeState("");
   const nameState = useNativeState("");
   const [query, setQuery] = React.useState("");
@@ -276,10 +288,20 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
           modifiers={[
             presentationDetents(["large", "medium"]),
             presentationDragIndicator("visible"),
+            presentationBackground(
+              colorScheme === "dark" ? SHEET_BACKGROUND.dark : SHEET_BACKGROUND.light,
+            ),
           ]}
         >
-          <Form>
-            <HStack>
+          <VStack
+            spacing={12}
+            modifiers={[
+              background(colors.background),
+              padding({ top: 8, bottom: 16 }),
+            ]}
+          >
+            {/* Outside Form — avoids Section wells; sheet background fills the gap. */}
+            <HStack modifiers={[padding({ horizontal: 16 })]}>
               <Button
                 systemImage="xmark"
                 label="Close"
@@ -298,162 +320,168 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
               />
             </HStack>
 
-            <Section
-              title="Repository"
-              footer={
-                <Text modifiers={[secondaryText]}>
-                  Search GitHub, or paste a URL / owner/repo — preview appears automatically.
-                </Text>
-              }
-            >
-              <TextField
-                text={queryState}
-                placeholder="Search or paste clone URL"
-                onTextChange={onQueryChange}
-                modifiers={[
-                  autocorrectionDisabled(),
-                  textInputAutocapitalization("never"),
-                  onSubmit(() => {
-                    const trimmed = queryState.get().trim();
-                    if (parseRemoteInput(trimmed) !== undefined) void runProbe(trimmed);
-                  }),
-                ]}
-              />
-              {searching || probing ? <ProgressView /> : null}
-            </Section>
-
-            {!hasSelection && hits.length > 0 ? (
-              <Section title="Suggestions">
-                <List modifiers={[listStyle("plain")]}>
-                  {hits.map((hit) => (
-                    <Button key={hit.fullName} onPress={() => selectHit(hit)}>
-                      <VStack>
-                        <Text>{hit.fullName}</Text>
-                        {hit.description !== undefined && hit.description.length > 0 ? (
-                          <Text modifiers={[secondaryText]}>{hit.description}</Text>
-                        ) : null}
-                      </VStack>
-                    </Button>
-                  ))}
-                </List>
-              </Section>
-            ) : null}
-
-            {hasSelection && preview !== undefined ? (
-              <>
-                <Section title="Preview">
-                  {repoTitle !== undefined ? (
-                    <LabeledContent label="Repo">
-                      <Text>{repoTitle}</Text>
-                    </LabeledContent>
-                  ) : null}
-                  {meta?.description !== undefined && meta.description.length > 0 ? (
-                    <LabeledContent label="About">
-                      <Text modifiers={[secondaryText]}>{meta.description}</Text>
-                    </LabeledContent>
-                  ) : null}
-                  {meta?.language !== undefined ? (
-                    <LabeledContent label="Language">
-                      <Text>{meta.language}</Text>
-                    </LabeledContent>
-                  ) : null}
-                  {meta?.stars !== undefined ? (
-                    <LabeledContent label="Stars">
-                      <Text>{String(meta.stars)}</Text>
-                    </LabeledContent>
-                  ) : null}
-                  <LabeledContent label="URL">
-                    <Text modifiers={[secondaryText]}>{preview.remote.url}</Text>
-                  </LabeledContent>
-                  {meta !== undefined && meta.topics.length > 0 ? (
-                    <LabeledContent label="Topics">
-                      <Text modifiers={[secondaryText]}>{meta.topics.join(", ")}</Text>
-                    </LabeledContent>
-                  ) : null}
-                  {meta !== undefined && meta.ruleFiles.length > 0 ? (
-                    <LabeledContent label="In repo">
-                      <Text modifiers={[secondaryText]}>{meta.ruleFiles.join(", ")}</Text>
-                    </LabeledContent>
-                  ) : null}
-                </Section>
-
-                <Section>
-                  <DisclosureGroup
-                    label="Repository preferences"
-                    isExpanded={prefsOpen}
-                    onIsExpandedChange={setPrefsOpen}
-                  >
-                    <TextField
-                      text={nameState}
-                      placeholder="Folder name"
-                      modifiers={[
-                        autocorrectionDisabled(),
-                        textInputAutocapitalization("never"),
-                      ]}
-                    />
-                    <Picker
-                      label="Branch"
-                      selection={branch ?? preview.defaultBranch}
-                      onSelectionChange={(value) => {
-                        if (typeof value === "string") setBranch(value);
-                      }}
-                      modifiers={[pickerStyle("menu")]}
-                    >
-                      {preview.branches.map((b) => (
-                        <Text key={b} modifiers={[tag(b)]}>
-                          {b}
-                        </Text>
-                      ))}
-                    </Picker>
-                    {destinationPreview !== undefined ? (
-                      <LabeledContent label="Destination">
-                        <Text modifiers={[secondaryText]}>{destinationPreview}</Text>
-                      </LabeledContent>
-                    ) : null}
-                  </DisclosureGroup>
-                </Section>
-              </>
-            ) : null}
-
-            {!hasSelection ? (
+            <Form>
               <Section
-                title="Or create empty"
+                title="Repository"
                 footer={
                   <Text modifiers={[secondaryText]}>
-                    Without a selection, Create Repository inits a new git repo. Folder name
-                    defaults to what you typed when it looks like a simple name.
+                    Search GitHub, or paste a URL / owner/repo — preview appears automatically.
                   </Text>
                 }
               >
                 <TextField
-                  text={nameState}
-                  placeholder="Folder name (optional)"
+                  text={queryState}
+                  placeholder="Search or paste clone URL"
+                  onTextChange={onQueryChange}
                   modifiers={[
                     autocorrectionDisabled(),
                     textInputAutocapitalization("never"),
-                    onSubmit(submit),
+                    onSubmit(() => {
+                      const trimmed = queryState.get().trim();
+                      if (parseRemoteInput(trimmed) !== undefined) void runProbe(trimmed);
+                    }),
                   ]}
                 />
+                {searching || probing ? <ProgressView /> : null}
               </Section>
-            ) : null}
 
-            {error !== undefined ? (
-              <Section>
-                <Text modifiers={[foregroundStyle("#FF3B30")]}>{error}</Text>
-              </Section>
-            ) : null}
+              {!hasSelection && hits.length > 0 ? (
+                <Section title="Suggestions">
+                  <List modifiers={[listStyle("plain")]}>
+                    {hits.map((hit) => (
+                      <Button key={hit.fullName} onPress={() => selectHit(hit)}>
+                        <VStack>
+                          <Text>{hit.fullName}</Text>
+                          {hit.description !== undefined && hit.description.length > 0 ? (
+                            <Text modifiers={[secondaryText]}>{hit.description}</Text>
+                          ) : null}
+                        </VStack>
+                      </Button>
+                    ))}
+                  </List>
+                </Section>
+              ) : null}
 
-            <Button
-              label={primaryLabel}
-              onPress={submit}
-              modifiers={[
-                buttonStyle("borderedProminent"),
-                controlSize("large"),
-                disabled(busy || probing),
-              ]}
-            />
-            {busy ? <ProgressView /> : null}
-          </Form>
+              {hasSelection && preview !== undefined ? (
+                <>
+                  <Section title="Preview">
+                    {repoTitle !== undefined ? (
+                      <LabeledContent label="Repo">
+                        <Text>{repoTitle}</Text>
+                      </LabeledContent>
+                    ) : null}
+                    {meta?.description !== undefined && meta.description.length > 0 ? (
+                      <LabeledContent label="About">
+                        <Text modifiers={[secondaryText]}>{meta.description}</Text>
+                      </LabeledContent>
+                    ) : null}
+                    {meta?.language !== undefined ? (
+                      <LabeledContent label="Language">
+                        <Text>{meta.language}</Text>
+                      </LabeledContent>
+                    ) : null}
+                    {meta?.stars !== undefined ? (
+                      <LabeledContent label="Stars">
+                        <Text>{String(meta.stars)}</Text>
+                      </LabeledContent>
+                    ) : null}
+                    <LabeledContent label="URL">
+                      <Text modifiers={[secondaryText]}>{preview.remote.url}</Text>
+                    </LabeledContent>
+                    {meta !== undefined && meta.topics.length > 0 ? (
+                      <LabeledContent label="Topics">
+                        <Text modifiers={[secondaryText]}>{meta.topics.join(", ")}</Text>
+                      </LabeledContent>
+                    ) : null}
+                    {meta !== undefined && meta.ruleFiles.length > 0 ? (
+                      <LabeledContent label="In repo">
+                        <Text modifiers={[secondaryText]}>{meta.ruleFiles.join(", ")}</Text>
+                      </LabeledContent>
+                    ) : null}
+                  </Section>
+
+                  <Section>
+                    <DisclosureGroup
+                      label="Repository preferences"
+                      isExpanded={prefsOpen}
+                      onIsExpandedChange={setPrefsOpen}
+                    >
+                      <TextField
+                        text={nameState}
+                        placeholder="Folder name"
+                        modifiers={[
+                          autocorrectionDisabled(),
+                          textInputAutocapitalization("never"),
+                        ]}
+                      />
+                      <Picker
+                        label="Branch"
+                        selection={branch ?? preview.defaultBranch}
+                        onSelectionChange={(value) => {
+                          if (typeof value === "string") setBranch(value);
+                        }}
+                        modifiers={[pickerStyle("menu")]}
+                      >
+                        {preview.branches.map((b) => (
+                          <Text key={b} modifiers={[tag(b)]}>
+                            {b}
+                          </Text>
+                        ))}
+                      </Picker>
+                      {destinationPreview !== undefined ? (
+                        <LabeledContent label="Destination">
+                          <Text modifiers={[secondaryText]}>{destinationPreview}</Text>
+                        </LabeledContent>
+                      ) : null}
+                    </DisclosureGroup>
+                  </Section>
+                </>
+              ) : null}
+
+              {!hasSelection ? (
+                <Section
+                  title="Or create empty"
+                  footer={
+                    <Text modifiers={[secondaryText]}>
+                      Without a selection, Create Repository inits a new git repo. Folder name
+                      defaults to what you typed when it looks like a simple name.
+                    </Text>
+                  }
+                >
+                  <TextField
+                    text={nameState}
+                    placeholder="Folder name (optional)"
+                    modifiers={[
+                      autocorrectionDisabled(),
+                      textInputAutocapitalization("never"),
+                      onSubmit(submit),
+                    ]}
+                  />
+                </Section>
+              ) : null}
+
+              {error !== undefined ? (
+                <Section>
+                  <Text modifiers={[foregroundStyle("#FF3B30")]}>{error}</Text>
+                </Section>
+              ) : null}
+            </Form>
+
+            {/* Outside Form — no Section well; sheet background still shows through. */}
+            <VStack spacing={8} modifiers={[padding({ horizontal: 16 })]}>
+              <Button
+                label={primaryLabel}
+                onPress={submit}
+                modifiers={[
+                  buttonStyle("borderedProminent"),
+                  controlSize("large"),
+                  disabled(busy || probing),
+                  frame({ maxWidth: Infinity }),
+                ]}
+              />
+              {busy ? <ProgressView /> : null}
+            </VStack>
+          </VStack>
         </Group>
       </BottomSheet>
     </Host>
