@@ -1,8 +1,8 @@
 /**
- * Paints the current wallpaper behind the whole app and tracks which scope is
- * in view. Screens call `setScope` on focus (Home → app, a repo screen → that
- * repo/worktree); the background re-resolves and updates. When no wallpaper is
- * set the ground is just the default `colors.background`, so the app looks
+ * Paints the current wallpaper behind the whole app and tracks the current
+ * context — the scope (app / repo / worktree) and the surface (home / a page /
+ * chat). Screens call `setContext` on focus; the background re-resolves. When
+ * nothing resolves, the ground is just `colors.background`, so the app looks
  * exactly as before.
  *
  * @internal
@@ -11,15 +11,15 @@ import * as ImagePicker from "expo-image-picker";
 import * as React from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { colors } from "./colors";
-import { clearWallpaper, loadWallpapers, resolveWallpaper, scopeKey, setWallpaper, type WallpaperScope } from "./wallpapers";
+import { clearWallpaper, loadWallpapers, resolveWallpaper, scopeKey, setWallpaperImage, type WallpaperEntry, type WallpaperScope, type WallpaperSurface } from "./wallpapers";
 
 type WallpaperContextValue = {
-  readonly setScope: (scope: WallpaperScope) => void;
+  readonly setContext: (scope: WallpaperScope, surface: WallpaperSurface) => void;
   readonly refresh: () => Promise<void>;
 };
 
 const WallpaperContext = React.createContext<WallpaperContextValue>({
-  setScope: () => {},
+  setContext: () => {},
   refresh: async () => {},
 });
 
@@ -32,15 +32,15 @@ export const pickWallpaper = async (scope: WallpaperScope): Promise<boolean> => 
   const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
   const asset = result.canceled ? undefined : result.assets?.[0];
   if (asset === undefined) return false;
-  await setWallpaper(scopeKey(scope), asset.uri);
+  await setWallpaperImage(scopeKey(scope), asset.uri);
   return true;
 };
 
 export const removeWallpaper = (scope: WallpaperScope): Promise<void> => clearWallpaper(scopeKey(scope));
 
 export const WallpaperProvider = (props: { readonly children: React.ReactNode }): React.ReactElement => {
-  const [scope, setScope] = React.useState<WallpaperScope>({});
-  const [map, setMap] = React.useState<ReadonlyMap<string, string>>(new Map());
+  const [context, setContextState] = React.useState<{ scope: WallpaperScope; surface: WallpaperSurface }>({ scope: {}, surface: "home" });
+  const [map, setMap] = React.useState<ReadonlyMap<string, WallpaperEntry>>(new Map());
 
   const refresh = React.useCallback(async (): Promise<void> => {
     setMap(new Map(await loadWallpapers()));
@@ -50,8 +50,12 @@ export const WallpaperProvider = (props: { readonly children: React.ReactNode })
     void refresh();
   }, [refresh]);
 
-  const value = React.useMemo<WallpaperContextValue>(() => ({ setScope, refresh }), [refresh]);
-  const uri = resolveWallpaper(map, scope);
+  const setContext = React.useCallback((scope: WallpaperScope, surface: WallpaperSurface): void => {
+    setContextState({ scope, surface });
+  }, []);
+
+  const value = React.useMemo<WallpaperContextValue>(() => ({ setContext, refresh }), [setContext, refresh]);
+  const uri = resolveWallpaper(map, context.scope, context.surface);
 
   return (
     <WallpaperContext.Provider value={value}>

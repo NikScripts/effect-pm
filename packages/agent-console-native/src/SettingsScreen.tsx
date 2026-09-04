@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -45,7 +46,13 @@ import {
 } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { pickWallpaper, removeWallpaper, useWallpaper } from "./WallpaperProvider";
-import { loadWallpapers } from "./wallpapers";
+import { DEFAULT_SURFACES, loadWallpapers, setWallpaperSurface, type WallpaperSurface } from "./wallpapers";
+
+const WALLPAPER_SURFACES: ReadonlyArray<{ readonly key: WallpaperSurface; readonly label: string; readonly hint: string }> = [
+  { key: "home", label: "Home background", hint: "Behind the home screen." },
+  { key: "pages", label: "All pages", hint: "Behind every page (files, docs, lists…)." },
+  { key: "chat", label: "Chat sessions", hint: "Behind the chat transcript." },
+];
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
@@ -75,19 +82,31 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
   const { refresh: refreshWallpaper } = useWallpaper();
   const [hasWallpaper, setHasWallpaper] = React.useState(false);
-  React.useEffect(() => {
-    void loadWallpapers().then((m) => setHasWallpaper(m.get("app") !== undefined));
+  const [wallpaperSurfaces, setWallpaperSurfaces] = React.useState<Readonly<Record<WallpaperSurface, boolean>>>(DEFAULT_SURFACES);
+  const loadWallpaperState = React.useCallback(async (): Promise<void> => {
+    const entry = (await loadWallpapers()).get("app");
+    setHasWallpaper(entry !== undefined);
+    if (entry !== undefined) setWallpaperSurfaces(entry.surfaces);
   }, []);
+  React.useEffect(() => {
+    void loadWallpaperState();
+  }, [loadWallpaperState]);
   const onPickWallpaper = React.useCallback(async (): Promise<void> => {
     if (await pickWallpaper({})) {
       await refreshWallpaper();
-      setHasWallpaper(true);
+      await loadWallpaperState();
     }
-  }, [refreshWallpaper]);
+  }, [refreshWallpaper, loadWallpaperState]);
   const onRemoveWallpaper = React.useCallback(async (): Promise<void> => {
     await removeWallpaper({});
     await refreshWallpaper();
     setHasWallpaper(false);
+    setWallpaperSurfaces(DEFAULT_SURFACES);
+  }, [refreshWallpaper]);
+  const onToggleSurface = React.useCallback(async (surface: WallpaperSurface, on: boolean): Promise<void> => {
+    setWallpaperSurfaces((current) => ({ ...current, [surface]: on }));
+    await setWallpaperSurface("app", surface, on);
+    await refreshWallpaper();
   }, [refreshWallpaper]);
 
   React.useEffect(() => {
@@ -267,9 +286,26 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             </TouchableOpacity>
           </View>
           {hasWallpaper ? (
-            <TouchableOpacity onPress={() => void onRemoveWallpaper()}>
-              <Text style={styles.removeText}>Remove wallpaper</Text>
-            </TouchableOpacity>
+            <>
+              {WALLPAPER_SURFACES.map((surface) => (
+                <View
+                  key={surface.key}
+                  style={styles.toggleRow}
+                >
+                  <View style={styles.rowText}>
+                    <Text style={styles.rowTitle}>{surface.label}</Text>
+                    <Text style={styles.hint}>{surface.hint}</Text>
+                  </View>
+                  <Switch
+                    value={wallpaperSurfaces[surface.key]}
+                    onValueChange={(on) => void onToggleSurface(surface.key, on)}
+                  />
+                </View>
+              ))}
+              <TouchableOpacity onPress={() => void onRemoveWallpaper()}>
+                <Text style={styles.removeText}>Remove wallpaper</Text>
+              </TouchableOpacity>
+            </>
           ) : null}
         </View>
 
@@ -559,5 +595,15 @@ const styles = StyleSheet.create({
     color: colors.destructive,
     fontSize: 15,
     marginTop: 12,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingTop: 12,
+    marginTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
   },
 });

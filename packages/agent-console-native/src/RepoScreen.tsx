@@ -37,6 +37,7 @@ import { getSetupDate, loadReads } from "./sessionReads";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
+import { useWallpaper } from "./WallpaperProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Repo">;
 
@@ -101,6 +102,11 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   // Sessions older than the app's setup date count as already-read. Default to
   // now so nothing flashes as unread before the real (earlier) date loads.
   const [setupDate, setSetupDate] = React.useState<number>(() => Date.now());
+
+  // This screen is the repo/workspace "home". Worktree scope is left off — the
+  // repo screen spans all worktrees.
+  const { setContext } = useWallpaper();
+  useFocusEffect(React.useCallback(() => setContext({ repo: name }, "home"), [setContext, name]));
 
   // Reload read state whenever the screen refocuses (e.g. back from a chat that
   // just marked itself read), so Unread updates.

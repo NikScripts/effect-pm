@@ -32,10 +32,12 @@ import type { RootStackParamList } from "./RootNavigator";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
+import { useFocusEffect } from "@react-navigation/native";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
+import { useWallpaper } from "./WallpaperProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -47,6 +49,8 @@ type Row =
 export const HomeScreen = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
   const groupSize = useGroupSize();
+  const { setContext } = useWallpaper();
+  useFocusEffect(React.useCallback(() => setContext({}, "home"), [setContext]));
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);

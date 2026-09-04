@@ -16,6 +16,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ActionSheetIOS, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
@@ -41,6 +42,7 @@ import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { useKeyboardHeight } from "./useKeyboardHeight";
+import { useWallpaper } from "./WallpaperProvider";
 import { runStartedAt, useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 
@@ -60,6 +62,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // `paddingBottom` — see the contentContainerStyle note below.
   const topBarHeight = useHeaderHeight();
   const streamEnabled = useStreamEnabled();
+  // Chat surface (app-scope for now; per-repo/session chat wallpaper is a
+  // later tier that needs the session's repo/worktree).
+  const { setContext } = useWallpaper();
+  useFocusEffect(React.useCallback(() => setContext({}, "chat"), [setContext]));
 
   // A banner for the session you are looking at is noise. Synchronous module
   // state, so it cannot race the way a reported-to-the-server flag did.

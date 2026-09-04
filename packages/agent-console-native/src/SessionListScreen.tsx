@@ -9,6 +9,7 @@ import type { Session } from "@opencode-ai/sdk";
 import * as React from "react";
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useFocusEffect } from "@react-navigation/native";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
@@ -21,6 +22,7 @@ import { readWorkspace } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
+import { useWallpaper } from "./WallpaperProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SessionList">;
 
@@ -28,6 +30,8 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   const { repo, worktree } = props.route.params;
   const { client } = useAppContext();
   const headerHeight = useHeaderHeight();
+  const { setContext } = useWallpaper();
+  useFocusEffect(React.useCallback(() => setContext({ repo }, "pages"), [setContext, repo]));
 
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
