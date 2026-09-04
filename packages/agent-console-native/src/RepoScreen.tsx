@@ -17,7 +17,8 @@
 import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import type { ColorValue } from "react-native";
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -70,15 +71,35 @@ const WORKSPACE_MENU: ReadonlyArray<MenuItem> = [
   { label: "Docs", icon: "book" },
 ];
 
+/**
+ * Per-session indicator dot. `unread` is the plain secondary-colored dot; the
+ * rest light up once a status source is wired (push notification `kind`:
+ * idle → response, permission → question; `failure` has no source yet). Colors
+ * kept in one place so the whole set stays coherent.
+ */
+export type SessionIndicatorKind = "unread" | "response" | "question" | "failure";
+const INDICATOR_COLORS: Record<SessionIndicatorKind, ColorValue> = {
+  unread: colors.secondaryLabel,
+  response: colors.brand,
+  question: colors.warning,
+  failure: colors.destructive,
+};
+
 /** A few most-recent sessions across all worktrees, up top for quick access. */
 const RECENT_COUNT = 3;
-/** Max sessions shown per worktree group before a "See all" row. */
-const PER_GROUP = 5;
+/** Sessions shown per group before "See all" — scaled to screen height so a
+ * phone shows ~3 and a tablet more. `height / DIVISOR`, clamped. */
+const PER_GROUP_DIVISOR = 230;
+const PER_GROUP_MIN = 3;
+const PER_GROUP_MAX = 7;
 
 export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
   const { client } = useAppContext();
   const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
+  // Taller screen → more sessions per group.
+  const perGroup = Math.max(PER_GROUP_MIN, Math.min(PER_GROUP_MAX, Math.floor(screenHeight / PER_GROUP_DIVISOR)));
 
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
@@ -133,7 +154,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   // install doesn't treat every pre-existing session as unread).
   const isUnread = (session: Session): boolean => session.time.updated > Math.max(reads.get(session.id) ?? 0, setupDate);
   const recent = repoSessions.slice(0, RECENT_COUNT);
-  const unread = repoSessions.filter(isUnread).slice(0, PER_GROUP);
+  const unread = repoSessions.filter(isUnread).slice(0, perGroup);
   const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<Session>]> = group ? [...group.worktrees.entries()] : [];
   // Group by worktree only when there's more than one; otherwise a flat list.
   const grouped = worktreeGroups.length > 1;
@@ -161,7 +182,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         activeOpacity={0.7}
         onPress={() => props.navigation.navigate("Chat", { sessionID: session.id })}
       >
-        {isUnread(session) ? <View style={styles.cardUnreadDot} /> : null}
+        {isUnread(session) ? <View style={[styles.cardIndicator, { backgroundColor: INDICATOR_COLORS.unread }]} /> : null}
         <Text
           style={[styles.cardTitle, isUnread(session) && styles.cardTitleUnread]}
           numberOfLines={2}
@@ -219,7 +240,11 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     return { opacity: interpolate(scrollY.value, glassFadeInPx, GLASS_FADE_OUT, Extrapolation.CLAMP) };
   });
 
+  // Clip the body to a shrinking height (overflow:hidden) so its content is cut
+  // off at the glass edge as it collapses instead of spilling out. This is a
+  // no-shadow layer, so clipping it doesn't touch the squircle's drop shadow.
   const bodyStyle = useAnimatedStyle(() => ({
+    height: interpolate(scrollY.value, [0, collapseDistance], [bodyHeight, 0], Extrapolation.CLAMP),
     opacity: interpolate(scrollY.value, [0, collapseDistance * 0.3], [1, 0], Extrapolation.CLAMP),
   }));
 
@@ -274,8 +299,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
                   return (
                     <React.Fragment key={worktree}>
                       {sectionHeader(heading, worktreeSessions.filter(isUnread).length)}
-                      {worktreeSessions.slice(0, PER_GROUP).map((session) => sessionCard(session, false, worktree))}
-                      {worktreeSessions.length > PER_GROUP ? seeAllRow(worktree, worktreeSessions.length, heading) : null}
+                      {worktreeSessions.slice(0, perGroup).map((session) => sessionCard(session, false, worktree))}
+                      {worktreeSessions.length > perGroup ? seeAllRow(worktree, worktreeSessions.length, heading) : null}
                     </React.Fragment>
                   );
                 })}
@@ -283,8 +308,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
             ) : (
               <>
                 {sectionHeader("Sessions", repoSessions.filter(isUnread).length)}
-                {repoSessions.slice(0, PER_GROUP).map((session) => sessionCard(session, false, "flat"))}
-                {repoSessions.length > PER_GROUP ? seeAllRow(null, repoSessions.length, "Sessions") : null}
+                {repoSessions.slice(0, perGroup).map((session) => sessionCard(session, false, "flat"))}
+                {repoSessions.length > perGroup ? seeAllRow(null, repoSessions.length, "Sessions") : null}
               </>
             )}
           </>
@@ -310,13 +335,15 @@ export const RepoScreen = (props: Props): React.ReactElement => {
          * hugs its contents. */}
         <Animated.View
           pointerEvents="box-none"
-          onLayout={(event) => setBodyHeight(event.nativeEvent.layout.height)}
           style={[
             styles.body,
             { top: insets.top + BAR_CONTENT_HEIGHT + TOP_MARGIN + BODY_TOP_GAP, left: SQUIRCLE_INSET + 6, right: SQUIRCLE_INSET + 6 },
             bodyStyle,
           ]}
         >
+          {/* Inner wrapper is measured (natural height) so the outer clip's
+           * animated height doesn't feed back into the measurement. */}
+          <View onLayout={(event) => setBodyHeight(event.nativeEvent.layout.height)}>
           <View style={styles.info}>
             <Text style={styles.infoMeta}>{metaParts.join(" · ")}</Text>
           </View>
@@ -343,6 +370,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               />
             </Pressable>
           ))}
+          </View>
         </Animated.View>
 
         {/* Inner-header: back · name · 3-dot. Margins present when expanded,
@@ -427,6 +455,7 @@ const styles = StyleSheet.create({
   body: {
     position: "absolute",
     paddingHorizontal: 6,
+    overflow: "hidden",
   },
   info: {
     paddingHorizontal: 14,
@@ -562,14 +591,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 6,
   },
-  cardUnreadDot: {
+  cardIndicator: {
     position: "absolute",
     top: 16,
     right: 14,
     width: 9,
     height: 9,
     borderRadius: 4.5,
-    backgroundColor: colors.tint,
+    // color set inline from INDICATOR_COLORS by kind
   },
   cardTitle: {
     color: colors.label,
