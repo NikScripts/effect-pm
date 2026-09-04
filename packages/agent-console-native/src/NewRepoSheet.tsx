@@ -267,12 +267,18 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
           return;
         }
 
-        // Create Repository — name is whatever was typed in the single search field.
-        const repoName = query.trim();
-        if (!isFolderName(repoName)) {
-          setError("Type a repository name to create, or pick a search result to clone.");
+        // Create Repository — empty init from the name in the search field.
+        // Read the native field directly; React `query` can lag behind typing.
+        const repoName = queryState.get().trim();
+        if (repoName.length === 0) {
+          setError("Type a name for the new repository.");
           return;
         }
+        if (!isFolderName(repoName)) {
+          setError("Use a simple folder name (no spaces or slashes).");
+          return;
+        }
+        setQuery(repoName);
         applyFolderName(repoName);
         const path = await initRepo(client, rootDir, repoName);
         props.onCreated(repoName, path);
