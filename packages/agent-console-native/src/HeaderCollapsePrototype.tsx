@@ -25,7 +25,7 @@
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { SFSymbol } from "sf-symbols-typescript";
@@ -119,6 +119,17 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
   const bodyStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, collapseDistance * 0.3], [1, 0], Extrapolation.CLAMP),
   }));
+
+  // The name's glass pill exists ONLY when collapsed. It's mounted/unmounted
+  // (not opacity-animated) because animating a GlassView's opacity stops it
+  // rendering glass. Threshold near the end so it appears as the bar tightens.
+  const [collapsed, setCollapsed] = React.useState(false);
+  useAnimatedReaction(
+    () => scrollY.value > collapseDistance * 0.7,
+    (isCollapsed, previous) => {
+      if (isCollapsed !== previous) runOnJS(setCollapsed)(isCollapsed);
+    },
+  );
 
   return (
     <View style={styles.root}>
@@ -215,14 +226,16 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
             </GlassView>
           </Pressable>
 
-          {/* Center: the name in a glass pill, sized to its own content — the
-           * chat header's title pill. Always glass (animating a GlassView's
-           * opacity stops it rendering glass, per expo-glass-effect). */}
+          {/* Center: the name. Its glass pill is mounted only when collapsed
+           * (the chat header's title pill); expanded, the name sits bare on the
+           * squircle. Mounted, not opacity-faded, so the glass actually renders. */}
           <View style={styles.namePillWrap}>
-            <GlassView
-              style={styles.namePillGlass}
-              glassEffectStyle="regular"
-            />
+            {collapsed ? (
+              <GlassView
+                style={styles.namePillGlass}
+                glassEffectStyle="regular"
+              />
+            ) : null}
             <Text
               numberOfLines={1}
               style={styles.nameText}
@@ -309,9 +322,13 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   innerHeader: {
+    // Aligned to the glass box edges, with padding INSIDE so the buttons keep
+    // a clear margin from the glass — space-between pins them to the padded
+    // bounds, which a margin on the button itself can't do.
     position: "absolute",
-    left: BAR_EDGE_INSET,
-    right: BAR_EDGE_INSET,
+    left: SQUIRCLE_INSET,
+    right: SQUIRCLE_INSET,
+    paddingHorizontal: BAR_EDGE_INSET,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -320,7 +337,6 @@ const styles = StyleSheet.create({
     width: GLASS_BUTTON,
     height: GLASS_BUTTON,
     borderRadius: GLASS_BUTTON / 2,
-    marginHorizontal: 6,
     alignItems: "center",
     justifyContent: "center",
   },
