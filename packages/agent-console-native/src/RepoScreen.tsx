@@ -176,7 +176,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
         contentContainerStyle={{
-          paddingTop: expandedH + 8,
+          paddingTop: expandedH + 24,
           paddingBottom: insets.bottom + 40,
         }}
       >
