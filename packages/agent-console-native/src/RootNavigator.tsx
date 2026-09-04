@@ -16,11 +16,16 @@ import { loadNotifications, payloadOfResponse } from "./push";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
+import { HeaderCollapsePrototype } from "./HeaderCollapsePrototype";
 
 export type RootStackParamList = {
   Home: undefined;
   Chat: { sessionID: string };
   Settings: undefined;
+  // TEMP: throwaway collapsing-glass-header prototype (see that screen's header
+  // comment). Remove this route and its Home entry button once the real repo
+  // screen lands.
+  HeaderPrototype: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -120,6 +125,15 @@ export const RootNavigator = (): React.ReactElement => {
               },
             ],
             unstable_headerRightItems: () => [
+              // TEMP: opens the collapsing-header prototype. Remove with the
+              // HeaderPrototype route.
+              {
+                type: "button",
+                label: "Header prototype (dev)",
+                icon: { type: "sfSymbol", name: "hammer" },
+                onPress: () => navigation.navigate("HeaderPrototype"),
+              },
+              { type: "spacing", spacing: 24 },
               {
                 type: "button",
                 label: "Search",
@@ -162,6 +176,13 @@ export const RootNavigator = (): React.ReactElement => {
           }}
         />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+        {/* TEMP: prototype route. Its own screen draws a fully custom header,
+         * so the native bar is hidden here. */}
+        <Stack.Screen
+          name="HeaderPrototype"
+          component={HeaderCollapsePrototype}
+          options={{ headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
