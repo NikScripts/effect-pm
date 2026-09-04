@@ -446,8 +446,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                       >
                         <Image
                           systemName="plus"
-                          size={AVATAR_SIZE}
-                          modifiers={[...squircleClip, primaryText]}
+                          size={16}
+                          modifiers={[...squircleClip, secondaryText]}
                         />
                         <Text modifiers={[primaryText, multilineTextAlignment("leading")]}>
                           {`Create “${typedName}”`}
