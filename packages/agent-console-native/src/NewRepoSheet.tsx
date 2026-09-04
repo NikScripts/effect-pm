@@ -22,6 +22,7 @@ import {
   Group,
   Host,
   HStack,
+  Image,
   LabeledContent,
   Picker,
   ProgressView,
@@ -37,6 +38,7 @@ import {
   background,
   bold,
   buttonStyle,
+  clipShape,
   controlSize,
   disabled,
   foregroundStyle,
@@ -100,6 +102,22 @@ const glassIconButton = [
 
 const isFolderName = (raw: string): boolean =>
   raw.length > 0 && !raw.includes("/") && !raw.includes(":") && !/\s/.test(raw);
+
+const AVATAR_SIZE = 28;
+const avatarFrame = [
+  frame({ width: AVATAR_SIZE, height: AVATAR_SIZE }),
+  clipShape("circle"),
+] as const;
+
+/** Owner avatar when present; SF Symbol placeholder otherwise. */
+const SuggestionAvatar = (props: {
+  readonly avatarUrl: string | undefined;
+}): React.ReactElement =>
+  props.avatarUrl !== undefined ? (
+    <Image uiImage={props.avatarUrl} modifiers={[...avatarFrame]} />
+  ) : (
+    <Image systemName="shippingbox" size={AVATAR_SIZE} modifiers={[...avatarFrame, secondaryText]} />
+  );
 
 export const NewRepoSheet = (props: Props): React.ReactElement => {
   const { client, address, rootDir } = useAppContext();
@@ -303,6 +321,33 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
       ? "Clone Repository"
       : "Create Repository";
 
+  const typedName = query.trim();
+  const showCreateSuggestion =
+    !hasSelection &&
+    typedName.length > 0 &&
+    parseRemoteInput(typedName) === undefined &&
+    isFolderName(typedName);
+  const showSuggestions = showCreateSuggestion || (!hasSelection && hits.length > 0);
+
+  const createFromTypedName = (): void => {
+    if (!showCreateSuggestion || busy || probing) return;
+    setBusy(true);
+    setError(undefined);
+    void (async () => {
+      try {
+        const repoName = queryState.get().trim() || typedName;
+        applyFolderName(repoName);
+        const path = await initRepo(client, rootDir, repoName);
+        props.onCreated(repoName, path);
+        props.onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't create the repo.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
   const repoTitle =
     preview !== undefined
       ? [
@@ -360,13 +405,14 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                 title="Repository"
                 footer={
                   <Text modifiers={[secondaryText]}>
-                    Search GitHub, or paste a URL / owner/repo — preview appears automatically.
+                    Type a name to create a new repo, search GitHub, or paste a URL / owner/repo —
+                    preview appears automatically.
                   </Text>
                 }
               >
                 <TextField
                   text={queryState}
-                  placeholder="Search or paste clone URL"
+                  placeholder="Name, search, or clone URL"
                   onTextChange={onQueryChange}
                   modifiers={[
                     autocorrectionDisabled(),
@@ -380,31 +426,59 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                 {searching || probing ? <ProgressView /> : null}
               </Section>
 
-              {!hasSelection && hits.length > 0 ? (
+              {showSuggestions ? (
                 <Section title="Suggestions">
+                  {showCreateSuggestion ? (
+                    <Button
+                      onPress={createFromTypedName}
+                      modifiers={[buttonStyle("plain")]}
+                    >
+                      <HStack
+                        spacing={12}
+                        alignment="center"
+                        modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
+                      >
+                        <Image
+                          systemName="plus"
+                          size={AVATAR_SIZE}
+                          modifiers={[...avatarFrame, primaryText]}
+                        />
+                        <Text modifiers={[primaryText, multilineTextAlignment("leading")]}>
+                          {`Create “${typedName}”`}
+                        </Text>
+                      </HStack>
+                    </Button>
+                  ) : null}
                   {hits.map((hit) => (
                     <Button
                       key={hit.fullName}
                       onPress={() => selectHit(hit)}
                       modifiers={[buttonStyle("plain")]}
                     >
-                      <VStack
-                        spacing={2}
-                        alignment="leading"
-                        modifiers={[
-                          frame({ maxWidth: Infinity, alignment: "leading" }),
-                          multilineTextAlignment("leading"),
-                        ]}
+                      <HStack
+                        spacing={12}
+                        alignment="center"
+                        modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
                       >
-                        <Text modifiers={[primaryText, multilineTextAlignment("leading")]}>
-                          {hit.fullName}
-                        </Text>
-                        {hit.description !== undefined && hit.description.length > 0 ? (
-                          <Text modifiers={[secondaryText, multilineTextAlignment("leading")]}>
-                            {hit.description}
+                        <SuggestionAvatar avatarUrl={hit.avatarUrl} />
+                        <VStack
+                          spacing={2}
+                          alignment="leading"
+                          modifiers={[
+                            frame({ maxWidth: Infinity, alignment: "leading" }),
+                            multilineTextAlignment("leading"),
+                          ]}
+                        >
+                          <Text modifiers={[primaryText, multilineTextAlignment("leading")]}>
+                            {hit.fullName}
                           </Text>
-                        ) : null}
-                      </VStack>
+                          {hit.description !== undefined && hit.description.length > 0 ? (
+                            <Text modifiers={[secondaryText, multilineTextAlignment("leading")]}>
+                              {hit.description}
+                            </Text>
+                          ) : null}
+                        </VStack>
+                      </HStack>
                     </Button>
                   ))}
                 </Section>
