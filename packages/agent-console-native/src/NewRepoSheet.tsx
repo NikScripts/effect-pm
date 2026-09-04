@@ -5,10 +5,10 @@
  * One field accepts GitHub search text or a pasteable remote URL. Typing
  * searches; a parseable remote auto-probes. Selecting a hit or resolving a
  * URL shows preview + collapsed preferences (folder name defaults to the
- * remote repo name). Header glass `xmark` / `plus` stay outside the scroll.
- * Form fields and the Create / Clone CTA share one `ScrollView` (Form's own
- * scroll disabled) so the CTA scrolls with content without a Section well —
- * same action as `plus`. Sheet backdrop is `systemGroupedBackground`.
+ * remote repo name). Header glass `xmark` / `plus` stay outside the Form.
+ * The Create / Clone CTA is the last Form child (not a Section) so it scrolls
+ * with content without a grouped well — same action as `plus`. Sheet backdrop
+ * is `systemGroupedBackground`.
  *
  * @internal
  */
@@ -25,7 +25,6 @@ import {
   LabeledContent,
   Picker,
   ProgressView,
-  ScrollView,
   Section,
   Spacer,
   Text,
@@ -48,8 +47,10 @@ import {
   multilineTextAlignment,
   onSubmit,
   padding,
+  listRowSeparator,
+  listRowInsets,
+  listRowBackground,
   pickerStyle,
-  scrollDisabled,
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
@@ -348,10 +349,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
               />
             </HStack>
 
-            <ScrollView>
-              <Form
-                modifiers={[scrollDisabled(true)]}
-              >
+            <Form>
               <Section
                 title="Repository"
                 footer={
@@ -500,21 +498,29 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                   <Text modifiers={[foregroundStyle("#FF3B30")]}>{error}</Text>
                 </Section>
               ) : null}
-            </Form>
-              <VStack spacing={8} modifiers={[padding({ horizontal: 20 })]}>
-                <Button
-                  label={primaryLabel}
-                  onPress={submit}
+              {/* Not a Section — scrolls with Form, no grouped well. */}
+              <Button
+                label={primaryLabel}
+                onPress={submit}
+                modifiers={[
+                  buttonStyle("borderedProminent"),
+                  controlSize("large"),
+                  disabled(busy || probing),
+                  frame({ maxWidth: Infinity, minHeight: 56 }),
+                  listRowBackground("clear"),
+                  listRowSeparator("hidden"),
+                  listRowInsets({ top: 12, leading: 20, bottom: 12, trailing: 20 }),
+                ]}
+              />
+              {busy ? (
+                <ProgressView
                   modifiers={[
-                    buttonStyle("borderedProminent"),
-                    controlSize("large"),
-                    disabled(busy || probing),
-                    frame({ maxWidth: Infinity, minHeight: 56 }),
+                    listRowBackground("clear"),
+                    listRowSeparator("hidden"),
                   ]}
                 />
-                {busy ? <ProgressView /> : null}
-              </VStack>
-            </ScrollView>
+              ) : null}
+            </Form>
           </VStack>
         </Group>
       </BottomSheet>
