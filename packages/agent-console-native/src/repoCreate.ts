@@ -174,6 +174,18 @@ export const initRepo = async (
   return destination;
 };
 
+/** Resolve where an empty init would land (create-flow folder prefs). */
+export const previewInitDestination = async (
+  client: OpencodeClient,
+  rootDir: string,
+  repoName: string,
+): Promise<string> => {
+  const expanded = await expandHome(client, rootDir);
+  const template = await getRepoTemplate();
+  return resolveRepoPath(expanded, repoName.trim(), template);
+};
+
+
 export const createWorkspaceFolder = async (
   client: OpencodeClient,
   rootDir: string,

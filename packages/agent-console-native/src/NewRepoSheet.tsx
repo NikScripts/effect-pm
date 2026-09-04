@@ -9,8 +9,11 @@
  * preview + collapsed preferences (folder name defaults to the remote
  * repo name). Header glass `xmark` / `plus` stay outside the Form. The
  * Create / Clone CTA is the last Form child (not a Section) so it scrolls
- * with content without a grouped well — same action as `plus`. Sheet
- * backdrop is `systemGroupedBackground`.
+ * with content without a grouped well — same action as `plus`. Search and
+ * probe loading use `redacted` skeleton rows (suggestions / preview), not a
+ * spinner in the search field. Create “name” selects a draft and opens
+ * preferences; Create / plus commits only when a draft or clone is selected
+ * (buttons stay disabled otherwise). Sheet backdrop is `systemGroupedBackground`.
  *
  * @internal
  */
@@ -27,7 +30,6 @@ import {
   Image,
   LabeledContent,
   Picker,
-  ProgressView,
   Section,
   Spacer,
   Text,
@@ -59,6 +61,7 @@ import {
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
+  redacted,
   resizable,
   tag,
   textInputAutocapitalization,
@@ -71,6 +74,7 @@ import {
   fetchRepoMeta,
   initRepo,
   parseRemoteInput,
+  previewInitDestination,
   previewRemote,
   searchGitHubRepos,
   type GitHubSearchHit,
@@ -130,6 +134,45 @@ const SuggestionAvatar = (props: {
   );
 };
 
+/** Fake suggestion row — `redacted` turns the text/icon into a native skeleton. */
+const SuggestionSkeleton = (): React.ReactElement => (
+  <HStack
+    spacing={12}
+    alignment="center"
+    modifiers={[
+      frame({ maxWidth: Infinity, alignment: "leading" }),
+      redacted("placeholder"),
+    ]}
+  >
+    <Image systemName="shippingbox" size={AVATAR_SIZE} modifiers={[...squircleClip]} />
+    <VStack
+      spacing={2}
+      alignment="leading"
+      modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
+    >
+      <Text modifiers={[primaryText]}>owner/repository-name</Text>
+      <Text modifiers={[secondaryText]}>Repository description goes here</Text>
+    </VStack>
+  </HStack>
+);
+
+/** Preview meta placeholders while GitHub details load. */
+const PreviewMetaSkeleton = (): React.ReactElement => (
+  <>
+    <LabeledContent label="About">
+      <Text modifiers={[secondaryText, redacted("placeholder")]}>
+        Loading description placeholder text
+      </Text>
+    </LabeledContent>
+    <LabeledContent label="Language">
+      <Text modifiers={[redacted("placeholder")]}>TypeScript</Text>
+    </LabeledContent>
+    <LabeledContent label="Stars">
+      <Text modifiers={[redacted("placeholder")]}>1234</Text>
+    </LabeledContent>
+  </>
+);
+
 export const NewRepoSheet = (props: Props): React.ReactElement => {
   const { client, address, rootDir } = useAppContext();
   const colorScheme = useColorScheme();
@@ -140,6 +183,10 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
   const [searching, setSearching] = React.useState(false);
   const [preview, setPreview] = React.useState<RemotePreview | undefined>(undefined);
   const [meta, setMeta] = React.useState<RepoMeta | undefined>(undefined);
+  const [metaLoading, setMetaLoading] = React.useState(false);
+  const [createDraft, setCreateDraft] = React.useState<string | undefined>(undefined);
+  const [createDestination, setCreateDestination] = React.useState<string | undefined>(undefined);
+  const [folderEpoch, setFolderEpoch] = React.useState(0);
   const [branch, setBranch] = React.useState<string | undefined>(undefined);
   const [probing, setProbing] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -157,6 +204,9 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     setHits([]);
     setPreview(undefined);
     setMeta(undefined);
+    setMetaLoading(false);
+    setCreateDraft(undefined);
+    setCreateDestination(undefined);
     setBranch(undefined);
     setError(undefined);
     setBusy(false);
@@ -189,6 +239,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     setProbing(true);
     setError(undefined);
     setHits([]);
+    setCreateDraft(undefined);
+    setCreateDestination(undefined);
     try {
       const next = await previewRemote(client, rootDir, raw);
       if (seq !== probeSeq.current) return undefined;
@@ -198,15 +250,23 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
       queryState.set(next.remote.url);
       setQuery(next.remote.url);
       if (backendAddress !== undefined) {
-        void fetchRepoMeta(backendAddress, next.remote.owner, next.remote.name).then((m) => {
-          if (seq === probeSeq.current) setMeta(m);
-        });
+        setMetaLoading(true);
+        void fetchRepoMeta(backendAddress, next.remote.owner, next.remote.name)
+          .then((m) => {
+            if (seq === probeSeq.current) setMeta(m);
+          })
+          .finally(() => {
+            if (seq === probeSeq.current) setMetaLoading(false);
+          });
+      } else {
+        setMetaLoading(false);
       }
       return next;
     } catch (err) {
       if (seq !== probeSeq.current) return undefined;
       setPreview(undefined);
       setMeta(undefined);
+      setMetaLoading(false);
       setError(err instanceof Error ? err.message : "Couldn't reach that remote.");
       return undefined;
     } finally {
@@ -224,9 +284,12 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
   const onQueryChange = (text: string): void => {
     setQuery(text);
     setError(undefined);
-    if (preview !== undefined) {
+    if (preview !== undefined || createDraft !== undefined) {
       setPreview(undefined);
       setMeta(undefined);
+      setMetaLoading(false);
+      setCreateDraft(undefined);
+      setCreateDestination(undefined);
       setBranch(undefined);
       nameState.set("");
     }
@@ -279,36 +342,44 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, props.visible, backendAddress]);
 
+  // Keep create-destination preview in sync with the folder-name field.
+  React.useEffect(() => {
+    if (createDraft === undefined) {
+      setCreateDestination(undefined);
+      return;
+    }
+    let cancelled = false;
+    const folder = nameState.get().trim() || createDraft;
+    void previewInitDestination(client, rootDir, folder).then((dest) => {
+      if (!cancelled) setCreateDestination(dest);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // nameState is a stable native ref; re-run when draft changes or prefs open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createDraft, client, rootDir, prefsOpen, folderEpoch]);
+
   const submit = (): void => {
-    setBusy(true);
-    setError(undefined);
+    if (busy || probing) return;
     void (async () => {
       try {
         if (preview !== undefined) {
           const repoName = nameState.get().trim() || preview.remote.name;
-          if (repoName.length === 0) {
-            setError("Give the repo a folder name.");
-            return;
-          }
+          if (!isFolderName(repoName)) return;
+          setBusy(true);
+          setError(undefined);
           const path = await cloneRepo(client, rootDir, preview.remote.url, repoName, branch);
           props.onCreated(repoName, path);
           props.onClose();
           return;
         }
 
-        // Create Repository — empty init from the name in the search field.
-        // Read the native field directly; React `query` can lag behind typing.
-        const repoName = queryState.get().trim();
-        if (repoName.length === 0) {
-          setError("Type a name for the new repository.");
-          return;
-        }
-        if (!isFolderName(repoName)) {
-          setError("Use a simple folder name (no spaces or slashes).");
-          return;
-        }
-        setQuery(repoName);
-        applyFolderName(repoName);
+        if (createDraft === undefined) return;
+        const repoName = nameState.get().trim() || createDraft;
+        if (!isFolderName(repoName)) return;
+        setBusy(true);
+        setError(undefined);
         const path = await initRepo(client, rootDir, repoName);
         props.onCreated(repoName, path);
         props.onClose();
@@ -323,12 +394,29 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
   const destinationPreview =
     preview !== undefined
       ? preview.destination.replace(/\/[^/]+$/, `/${nameState.get().trim() || preview.remote.name}`)
-      : undefined;
+      : createDraft !== undefined
+        ? (createDestination !== undefined
+            ? createDestination.replace(/\/[^/]+$/, `/${nameState.get().trim() || createDraft}`)
+            : createDestination)
+        : undefined;
 
-  const hasSelection = preview !== undefined;
+  const hasCloneSelection = preview !== undefined;
+  const hasCreateSelection = createDraft !== undefined;
+  const hasSelection = hasCloneSelection || hasCreateSelection;
+  const folderForAction =
+    hasCloneSelection
+      ? nameState.get().trim() || preview!.remote.name
+      : hasCreateSelection
+        ? nameState.get().trim() || createDraft!
+        : "";
+  const canSubmit =
+    !busy &&
+    !probing &&
+    hasSelection &&
+    isFolderName(folderForAction);
   const primaryLabel = busy
     ? "Working…"
-    : hasSelection
+    : hasCloneSelection
       ? "Clone Repository"
       : "Create Repository";
 
@@ -338,25 +426,22 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     typedName.length > 0 &&
     parseRemoteInput(typedName) === undefined &&
     isFolderName(typedName);
-  const showSuggestions = showCreateSuggestion || (!hasSelection && hits.length > 0);
+  const showSuggestions =
+    showCreateSuggestion || (!hasSelection && (hits.length > 0 || searching));
 
-  const createFromTypedName = (): void => {
+  /** Select create — show prefs; do not init until Create Repository / plus. */
+  const selectCreateDraft = (): void => {
     if (!showCreateSuggestion || busy || probing) return;
-    setBusy(true);
+    const repoName = queryState.get().trim() || typedName;
+    if (!isFolderName(repoName)) return;
     setError(undefined);
-    void (async () => {
-      try {
-        const repoName = queryState.get().trim() || typedName;
-        applyFolderName(repoName);
-        const path = await initRepo(client, rootDir, repoName);
-        props.onCreated(repoName, path);
-        props.onClose();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't create the repo.");
-      } finally {
-        setBusy(false);
-      }
-    })();
+    setHits([]);
+    setPreview(undefined);
+    setMeta(undefined);
+    setMetaLoading(false);
+    applyFolderName(repoName);
+    setCreateDraft(repoName);
+    setPrefsOpen(true);
   };
 
   const repoTitle =
@@ -407,7 +492,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                 systemImage="plus"
                 label={primaryLabel}
                 onPress={submit}
-                modifiers={[...glassIconButton, disabled(busy || probing)]}
+                modifiers={[...glassIconButton, disabled(!canSubmit)]}
               />
             </HStack>
 
@@ -434,14 +519,13 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                     }),
                   ]}
                 />
-                {searching || probing ? <ProgressView /> : null}
               </Section>
 
               {showSuggestions ? (
                 <Section title="Suggestions">
                   {showCreateSuggestion ? (
                     <Button
-                      onPress={createFromTypedName}
+                      onPress={selectCreateDraft}
                       modifiers={[buttonStyle("plain")]}
                     >
                       <HStack
@@ -492,10 +576,81 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                       </HStack>
                     </Button>
                   ))}
+                  {searching
+                    ? [0, 1, 2].map((i) => <SuggestionSkeleton key={`skel-${i}`} />)
+                    : null}
                 </Section>
               ) : null}
 
-              {hasSelection && preview !== undefined ? (
+              {probing && !hasSelection ? (
+                <Section title="Preview">
+                  <LabeledContent label="Repo">
+                    <Text modifiers={[redacted("placeholder")]}>owner/repository</Text>
+                  </LabeledContent>
+                  <PreviewMetaSkeleton />
+                  <LabeledContent label="URL">
+                    <Text modifiers={[secondaryText, redacted("placeholder")]}>
+                      https://github.com/owner/repository.git
+                    </Text>
+                  </LabeledContent>
+                </Section>
+              ) : null}
+
+              {hasCreateSelection && createDraft !== undefined ? (
+                <>
+                  <Section title="Preview">
+                    <LabeledContent label="Repo">
+                      <Text>{createDraft}</Text>
+                    </LabeledContent>
+                    <LabeledContent label="Kind">
+                      <Text modifiers={[secondaryText]}>New empty repository</Text>
+                    </LabeledContent>
+                  </Section>
+                  <Section>
+                    <DisclosureGroup
+                      label="Repository preferences"
+                      isExpanded={prefsOpen}
+                      onIsExpandedChange={setPrefsOpen}
+                    >
+                      <LabeledContent label="Folder name">
+                        <TextField
+                          text={nameState}
+                          placeholder="Folder name"
+                          onTextChange={() => setFolderEpoch((n) => n + 1)}
+                          modifiers={[
+                            autocorrectionDisabled(),
+                            textInputAutocapitalization("never"),
+                            secondaryText,
+                            multilineTextAlignment("trailing"),
+                            frame({ maxWidth: Infinity, alignment: "trailing" }),
+                          ]}
+                        />
+                      </LabeledContent>
+                      {destinationPreview !== undefined ? (
+                        <LabeledContent label="Destination">
+                          <Text
+                            modifiers={[
+                              secondaryText,
+                              multilineTextAlignment("trailing"),
+                              frame({ maxWidth: Infinity, alignment: "trailing" }),
+                            ]}
+                          >
+                            {destinationPreview}
+                          </Text>
+                        </LabeledContent>
+                      ) : (
+                        <LabeledContent label="Destination">
+                          <Text modifiers={[secondaryText, redacted("placeholder")]}>
+                            /path/to/repo/main
+                          </Text>
+                        </LabeledContent>
+                      )}
+                    </DisclosureGroup>
+                  </Section>
+                </>
+              ) : null}
+
+              {hasCloneSelection && preview !== undefined ? (
                 <>
                   <Section title="Preview">
                     {repoTitle !== undefined ? (
@@ -518,6 +673,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                         <Text>{String(meta.stars)}</Text>
                       </LabeledContent>
                     ) : null}
+                    {metaLoading && meta === undefined ? <PreviewMetaSkeleton /> : null}
                     <LabeledContent label="URL">
                       <Text modifiers={[secondaryText]}>{preview.remote.url}</Text>
                     </LabeledContent>
@@ -543,6 +699,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                         <TextField
                           text={nameState}
                           placeholder="Folder name"
+                          onTextChange={() => setFolderEpoch((n) => n + 1)}
                           modifiers={[
                             autocorrectionDisabled(),
                             textInputAutocapitalization("never"),
@@ -596,21 +753,13 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                 modifiers={[
                   buttonStyle("borderedProminent"),
                   controlSize("large"),
-                  disabled(busy || probing),
+                  disabled(!canSubmit),
                   frame({ maxWidth: Infinity, minHeight: 56 }),
                   listRowBackground("clear"),
                   listRowSeparator("hidden"),
                   listRowInsets({ top: 12, leading: 20, bottom: 12, trailing: 20 }),
                 ]}
               />
-              {busy ? (
-                <ProgressView
-                  modifiers={[
-                    listRowBackground("clear"),
-                    listRowSeparator("hidden"),
-                  ]}
-                />
-              ) : null}
             </Form>
           </VStack>
         </Group>
