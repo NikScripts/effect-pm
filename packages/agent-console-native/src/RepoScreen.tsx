@@ -27,6 +27,7 @@ import type { SFSymbol } from "sf-symbols-typescript";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
+import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
 import { readWorkspace } from "./repoScanCache";
@@ -312,6 +313,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           </>
         )}
       </Animated.ScrollView>
+
+      {/* Top blur feather over the scrolling content, behind the glass header. */}
+      <EdgeBlurBars variant="top" />
 
       {/* Collapsing glass header. */}
       <Animated.View

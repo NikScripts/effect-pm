@@ -7,13 +7,14 @@
  */
 import type { Session } from "@opencode-ai/sdk";
 import * as React from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
+import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
 import { readWorkspace } from "./repoScanCache";
@@ -61,8 +62,9 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   const listed = worktree === null ? (group?.sessions ?? []) : (group?.worktrees.get(worktree) ?? []);
 
   return (
+    <View style={styles.root}>
     <ScrollViewMarker
-      style={styles.root}
+      style={styles.fill}
       scrollEdgeEffects={{ top: "soft", bottom: "soft" }}
     >
       <FlatList
@@ -92,6 +94,8 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
         }}
       />
     </ScrollViewMarker>
+      <EdgeBlurBars variant="top" />
+    </View>
   );
 };
 
@@ -99,6 +103,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  fill: {
+    flex: 1,
   },
   empty: {
     color: colors.secondaryLabel,

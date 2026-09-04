@@ -17,6 +17,7 @@ import { getSetupDate } from "./sessionReads";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
+import { HeaderTitlePill } from "./HeaderTitlePill";
 import { RepoScreen } from "./RepoScreen";
 import { SessionListScreen } from "./SessionListScreen";
 
@@ -194,7 +195,7 @@ export const RootNavigator = (): React.ReactElement => {
             headerStyle: { backgroundColor: "transparent" },
             headerShadowVisible: false,
             headerBackButtonDisplayMode: "minimal",
-            headerTitle: route.params.title,
+            headerTitle: () => <HeaderTitlePill title={route.params.title} />,
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           })}
         />
