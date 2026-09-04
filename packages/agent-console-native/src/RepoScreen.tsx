@@ -234,13 +234,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           ]}
         >
           <View style={styles.info}>
-            <Text
-              style={styles.infoPath}
-              numberOfLines={1}
-              ellipsizeMode="middle"
-            >
-              {dir}
-            </Text>
             <Text style={styles.infoMeta}>{metaParts.join(" · ")}</Text>
           </View>
 
@@ -298,6 +291,13 @@ export const RepoScreen = (props: Props): React.ReactElement => {
             >
               {name}
             </Text>
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="middle"
+              style={styles.namePath}
+            >
+              {dir}
+            </Text>
           </View>
 
           <Pressable
@@ -350,10 +350,6 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     gap: 5,
   },
-  infoPath: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-  },
   infoMeta: {
     color: colors.secondaryLabel,
     fontSize: 13,
@@ -399,11 +395,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   namePillWrap: {
-    height: BAR_CONTENT_HEIGHT,
+    flexShrink: 1,
     borderRadius: BAR_CONTENT_HEIGHT / 2,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 5,
     alignItems: "center",
     justifyContent: "center",
+    gap: 1,
   },
   namePillGlass: {
     position: "absolute",
@@ -417,6 +415,11 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "600",
+  },
+  namePath: {
+    maxWidth: "100%",
+    color: colors.secondaryLabel,
+    fontSize: 11,
   },
   sectionHeading: {
     color: colors.secondaryLabel,
