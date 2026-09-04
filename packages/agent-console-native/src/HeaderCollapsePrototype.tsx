@@ -232,11 +232,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
+    // No overflow:hidden — it would clip the squircle's drop shadow at the
+    // bottom edge (an ancestor clip masks a descendant's shadow on iOS). The
+    // squircle shrinks via its own animated height and the body fades on
+    // opacity, so nothing here needs clipping.
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    overflow: "hidden",
   },
   squircleWrap: {
     position: "absolute",
