@@ -34,11 +34,10 @@ import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
+import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
-
-const RECENT_COUNT = 4;
 
 type Row =
   | { readonly kind: "heading"; readonly title: string }
@@ -47,6 +46,7 @@ type Row =
 
 export const HomeScreen = (props: Props): React.ReactElement => {
   const { client, rootDir } = useAppContext();
+  const groupSize = useGroupSize();
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
@@ -133,7 +133,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   };
 
   const sortedByRecent = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
-  const recent = sortedByRecent.slice(0, RECENT_COUNT);
+  const recent = sortedByRecent.slice(0, groupSize);
   const groups = groupByRepo(sessions, scanned);
   const knownGroups = groups.filter((g) => g.isKnownRepo);
   const otherGroups = groups.filter((g) => !g.isKnownRepo);

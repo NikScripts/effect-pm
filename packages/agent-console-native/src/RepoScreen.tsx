@@ -17,7 +17,7 @@
 import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { ColorValue } from "react-native";
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,6 +35,7 @@ import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
+import { useGroupSize } from "./useGroupSize";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Repo">;
 
@@ -85,21 +86,12 @@ const INDICATOR_COLORS: Record<SessionIndicatorKind, ColorValue> = {
   failure: colors.destructive,
 };
 
-/** A few most-recent sessions across all worktrees, up top for quick access. */
-const RECENT_COUNT = 3;
-/** Sessions shown per group before "See all" — scaled to screen height so a
- * phone shows ~3 and a tablet more. `height / DIVISOR`, clamped. */
-const PER_GROUP_DIVISOR = 230;
-const PER_GROUP_MIN = 3;
-const PER_GROUP_MAX = 7;
 
 export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
   const { client } = useAppContext();
   const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
-  // Taller screen → more sessions per group.
-  const perGroup = Math.max(PER_GROUP_MIN, Math.min(PER_GROUP_MAX, Math.floor(screenHeight / PER_GROUP_DIVISOR)));
+  const perGroup = useGroupSize();
 
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
@@ -153,7 +145,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   // Unread = updated since you last opened it AND since app setup (so a fresh
   // install doesn't treat every pre-existing session as unread).
   const isUnread = (session: Session): boolean => session.time.updated > Math.max(reads.get(session.id) ?? 0, setupDate);
-  const recent = repoSessions.slice(0, RECENT_COUNT);
+  const recent = repoSessions.slice(0, perGroup);
   const unread = repoSessions.filter(isUnread).slice(0, perGroup);
   const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<Session>]> = group ? [...group.worktrees.entries()] : [];
   // Group by worktree only when there's more than one; otherwise a flat list.
