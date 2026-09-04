@@ -13,9 +13,9 @@
  * probe loading use `redacted` skeleton rows (suggestions / preview), not a
  * spinner in the search field. Create “name” selects a draft and opens
  * preferences. Plus / Create with a typed name selects that draft first; a
- * second press (or Create after select) commits. Buttons stay disabled when
- * there is nothing valid to select or create. Sheet backdrop is
- * `systemGroupedBackground`.
+ * second press (or Create after select) commits. Invalid / incomplete input
+ * disables Create and plus — no validation error banners. Probe misses stay
+ * silent the same way. Sheet backdrop is `systemGroupedBackground`.
  *
  * @internal
  */
@@ -264,12 +264,12 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
         setMetaLoading(false);
       }
       return next;
-    } catch (err) {
+    } catch {
       if (seq !== probeSeq.current) return undefined;
       setPreview(undefined);
       setMeta(undefined);
       setMetaLoading(false);
-      setError(err instanceof Error ? err.message : "Couldn't reach that remote.");
+      // No error banner — Create/Clone stay disabled until a valid selection exists.
       return undefined;
     } finally {
       if (seq === probeSeq.current) setProbing(false);
@@ -364,6 +364,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
 
   const submit = (): void => {
     if (busy || probing) return;
+    // Validation = disabled controls, not alerts. Only commit when canSubmit.
+    if (preview === undefined && createDraft === undefined) return;
     void (async () => {
       try {
         if (preview !== undefined) {
@@ -386,6 +388,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
         props.onCreated(repoName, path);
         props.onClose();
       } catch (err) {
+        // Real I/O failure after an enabled press — keep this; validation never lands here.
         setError(err instanceof Error ? err.message : "Couldn't create the repo.");
       } finally {
         setBusy(false);
@@ -449,6 +452,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
       ? "Clone Repository"
       : "Create Repository";
   const onPrimaryPress = (): void => {
+    if (!canPrimary) return;
     if (hasSelection) {
       submit();
       return;
@@ -538,7 +542,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                   {showCreateSuggestion ? (
                     <Button
                       onPress={selectCreateDraft}
-                      modifiers={[buttonStyle("plain")]}
+                      modifiers={[buttonStyle("plain"), disabled(busy || probing)]}
                     >
                       <HStack
                         spacing={12}
