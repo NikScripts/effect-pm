@@ -12,8 +12,10 @@
  * with content without a grouped well — same action as `plus`. Search and
  * probe loading use `redacted` skeleton rows (suggestions / preview), not a
  * spinner in the search field. Create “name” selects a draft and opens
- * preferences; Create / plus commits only when a draft or clone is selected
- * (buttons stay disabled otherwise). Sheet backdrop is `systemGroupedBackground`.
+ * preferences. Plus / Create with a typed name selects that draft first; a
+ * second press (or Create after select) commits. Buttons stay disabled when
+ * there is nothing valid to select or create. Sheet backdrop is
+ * `systemGroupedBackground`.
  *
  * @internal
  */
@@ -409,17 +411,6 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
       : hasCreateSelection
         ? nameState.get().trim() || createDraft!
         : "";
-  const canSubmit =
-    !busy &&
-    !probing &&
-    hasSelection &&
-    isFolderName(folderForAction);
-  const primaryLabel = busy
-    ? "Working…"
-    : hasCloneSelection
-      ? "Clone Repository"
-      : "Create Repository";
-
   const typedName = query.trim();
   const showCreateSuggestion =
     !hasSelection &&
@@ -431,8 +422,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
 
   /** Select create — show prefs; do not init until Create Repository / plus. */
   const selectCreateDraft = (): void => {
-    if (!showCreateSuggestion || busy || probing) return;
-    const repoName = queryState.get().trim() || typedName;
+    if (busy || probing) return;
+    const repoName = (queryState.get().trim() || typedName).trim();
     if (!isFolderName(repoName)) return;
     setError(undefined);
     setHits([]);
@@ -442,6 +433,27 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     applyFolderName(repoName);
     setCreateDraft(repoName);
     setPrefsOpen(true);
+  };
+
+  const canSubmit =
+    !busy &&
+    !probing &&
+    hasSelection &&
+    isFolderName(folderForAction);
+  /** Plus / CTA: with a typed name and no selection, select the create draft
+   * (show form). With a draft or clone selected, commit. Otherwise disabled. */
+  const canPrimary = canSubmit || (!busy && !probing && showCreateSuggestion);
+  const primaryLabel = busy
+    ? "Working…"
+    : hasCloneSelection
+      ? "Clone Repository"
+      : "Create Repository";
+  const onPrimaryPress = (): void => {
+    if (hasSelection) {
+      submit();
+      return;
+    }
+    if (showCreateSuggestion) selectCreateDraft();
   };
 
   const repoTitle =
@@ -491,8 +503,8 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
               <Button
                 systemImage="plus"
                 label={primaryLabel}
-                onPress={submit}
-                modifiers={[...glassIconButton, disabled(!canSubmit)]}
+                onPress={onPrimaryPress}
+                modifiers={[...glassIconButton, disabled(!canPrimary)]}
               />
             </HStack>
 
@@ -606,46 +618,40 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                       <Text modifiers={[secondaryText]}>New empty repository</Text>
                     </LabeledContent>
                   </Section>
-                  <Section>
-                    <DisclosureGroup
-                      label="Repository preferences"
-                      isExpanded={prefsOpen}
-                      onIsExpandedChange={setPrefsOpen}
-                    >
-                      <LabeledContent label="Folder name">
-                        <TextField
-                          text={nameState}
-                          placeholder="Folder name"
-                          onTextChange={() => setFolderEpoch((n) => n + 1)}
+                  <Section title="Repository preferences">
+                    <LabeledContent label="Folder name">
+                      <TextField
+                        text={nameState}
+                        placeholder="Folder name"
+                        onTextChange={() => setFolderEpoch((n) => n + 1)}
+                        modifiers={[
+                          autocorrectionDisabled(),
+                          textInputAutocapitalization("never"),
+                          secondaryText,
+                          multilineTextAlignment("trailing"),
+                          frame({ maxWidth: Infinity, alignment: "trailing" }),
+                        ]}
+                      />
+                    </LabeledContent>
+                    {destinationPreview !== undefined ? (
+                      <LabeledContent label="Destination">
+                        <Text
                           modifiers={[
-                            autocorrectionDisabled(),
-                            textInputAutocapitalization("never"),
                             secondaryText,
                             multilineTextAlignment("trailing"),
                             frame({ maxWidth: Infinity, alignment: "trailing" }),
                           ]}
-                        />
+                        >
+                          {destinationPreview}
+                        </Text>
                       </LabeledContent>
-                      {destinationPreview !== undefined ? (
-                        <LabeledContent label="Destination">
-                          <Text
-                            modifiers={[
-                              secondaryText,
-                              multilineTextAlignment("trailing"),
-                              frame({ maxWidth: Infinity, alignment: "trailing" }),
-                            ]}
-                          >
-                            {destinationPreview}
-                          </Text>
-                        </LabeledContent>
-                      ) : (
-                        <LabeledContent label="Destination">
-                          <Text modifiers={[secondaryText, redacted("placeholder")]}>
-                            /path/to/repo/main
-                          </Text>
-                        </LabeledContent>
-                      )}
-                    </DisclosureGroup>
+                    ) : (
+                      <LabeledContent label="Destination">
+                        <Text modifiers={[secondaryText, redacted("placeholder")]}>
+                          /path/to/repo/main
+                        </Text>
+                      </LabeledContent>
+                    )}
                   </Section>
                 </>
               ) : null}
@@ -749,11 +755,11 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
               {/* Not a Section — scrolls with Form, no grouped well. */}
               <Button
                 label={primaryLabel}
-                onPress={submit}
+                onPress={onPrimaryPress}
                 modifiers={[
                   buttonStyle("borderedProminent"),
                   controlSize("large"),
-                  disabled(!canSubmit),
+                  disabled(!canPrimary),
                   frame({ maxWidth: Infinity, minHeight: 56 }),
                   listRowBackground("clear"),
                   listRowSeparator("hidden"),
