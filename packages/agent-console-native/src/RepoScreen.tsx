@@ -129,13 +129,26 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const worktreeCount = group?.worktrees.size ?? 0;
   const menu = isRepo ? REPO_MENU : WORKSPACE_MENU;
 
-  const recent = repoSessions.slice(0, RECENT_COUNT);
   // Unread = updated since you last opened it AND since app setup (so a fresh
-  // install doesn't treat every pre-existing session as unread). Newest first.
-  const unread = repoSessions.filter((s) => s.time.updated > Math.max(reads.get(s.id) ?? 0, setupDate)).slice(0, PER_GROUP);
+  // install doesn't treat every pre-existing session as unread).
+  const isUnread = (session: Session): boolean => session.time.updated > Math.max(reads.get(session.id) ?? 0, setupDate);
+  const recent = repoSessions.slice(0, RECENT_COUNT);
+  const unread = repoSessions.filter(isUnread).slice(0, PER_GROUP);
   const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<Session>]> = group ? [...group.worktrees.entries()] : [];
   // Group by worktree only when there's more than one; otherwise a flat list.
   const grouped = worktreeGroups.length > 1;
+
+  // A section heading; `unreadCount` right-aligns an accent pill when > 0.
+  const sectionHeader = (title: string, unreadCount = 0): React.ReactElement => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeading}>{title}</Text>
+      {unreadCount > 0 ? (
+        <View style={styles.unreadPill}>
+          <Text style={styles.unreadPillText}>{unreadCount}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
 
   // `keyPrefix` keeps keys unique when a session shows in more than one section
   // (Unread + Recent + its worktree group).
@@ -148,8 +161,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         activeOpacity={0.7}
         onPress={() => props.navigation.navigate("Chat", { sessionID: session.id })}
       >
+        {isUnread(session) ? <View style={styles.cardUnreadDot} /> : null}
         <Text
-          style={styles.cardTitle}
+          style={[styles.cardTitle, isUnread(session) && styles.cardTitleUnread]}
           numberOfLines={2}
         >
           {session.title}
@@ -246,20 +260,20 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           <>
             {unread.length > 0 ? (
               <>
-                <Text style={styles.sectionHeading}>Unread</Text>
+                {sectionHeader("Unread")}
                 {unread.map((session) => sessionCard(session, true, "unread"))}
               </>
             ) : null}
 
             {grouped ? (
               <>
-                <Text style={styles.sectionHeading}>Recent</Text>
+                {sectionHeader("Recent")}
                 {recent.map((session) => sessionCard(session, true, "recent"))}
                 {worktreeGroups.map(([worktree, worktreeSessions]) => {
                   const heading = displayWorktree(worktree) ?? (worktree === MAIN_WORKTREE ? "Main" : "Sessions");
                   return (
                     <React.Fragment key={worktree}>
-                      <Text style={styles.sectionHeading}>{heading}</Text>
+                      {sectionHeader(heading, worktreeSessions.filter(isUnread).length)}
                       {worktreeSessions.slice(0, PER_GROUP).map((session) => sessionCard(session, false, worktree))}
                       {worktreeSessions.length > PER_GROUP ? seeAllRow(worktree, worktreeSessions.length, heading) : null}
                     </React.Fragment>
@@ -268,7 +282,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               </>
             ) : (
               <>
-                <Text style={styles.sectionHeading}>Sessions</Text>
+                {sectionHeader("Sessions", repoSessions.filter(isUnread).length)}
                 {repoSessions.slice(0, PER_GROUP).map((session) => sessionCard(session, false, "flat"))}
                 {repoSessions.length > PER_GROUP ? seeAllRow(null, repoSessions.length, "Sessions") : null}
               </>
@@ -419,10 +433,12 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 14,
     gap: 5,
+    alignItems: "center",
   },
   infoMeta: {
     color: colors.secondaryLabel,
     fontSize: 13,
+    textAlign: "center",
   },
   menuRow: {
     flexDirection: "row",
@@ -491,25 +507,48 @@ const styles = StyleSheet.create({
     color: colors.secondaryLabel,
     fontSize: 11,
   },
-  sectionHeading: {
-    color: colors.secondaryLabel,
-    fontSize: 15,
-    marginTop: 18,
-    marginBottom: 10,
-    marginHorizontal: 16,
-  },
-  seeAll: {
+  sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginHorizontal: 16,
-    marginTop: -2,
-    marginBottom: 4,
-    paddingVertical: 6,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  sectionHeading: {
+    color: colors.label,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  unreadPill: {
+    minWidth: 22,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 11,
+    backgroundColor: colors.tint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadPillText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  seeAll: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 6,
+    paddingVertical: 9,
   },
   seeAllText: {
     color: colors.tint,
     fontSize: 15,
+    fontWeight: "600",
   },
   empty: {
     color: colors.secondaryLabel,
@@ -523,10 +562,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 6,
   },
+  cardUnreadDot: {
+    position: "absolute",
+    top: 16,
+    right: 14,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: colors.tint,
+  },
   cardTitle: {
     color: colors.label,
     fontSize: 16,
     fontWeight: "500",
+    paddingRight: 16,
+  },
+  cardTitleUnread: {
+    fontWeight: "700",
   },
   badge: {
     alignSelf: "flex-start",
