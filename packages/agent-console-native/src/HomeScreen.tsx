@@ -238,8 +238,14 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             ...(worktreeCount > 1 ? [`${worktreeCount} worktrees`] : []),
             relativeTime(item.group.mostRecentUpdate),
           ];
+          const mainPath = scanned.find((r) => r.repo === item.group.repo)?.worktrees.find((w) => w.isMain)?.path;
+          const repoDir = mainPath ?? item.group.sessions[0]?.directory ?? "";
           return (
-            <TouchableOpacity style={styles.card} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.card}
+              activeOpacity={0.7}
+              onPress={() => props.navigation.navigate("Repo", { name: item.group.repo, dir: repoDir, isRepo: item.group.isKnownRepo })}
+            >
               <View style={styles.repoCardHeader}>
                 <SystemIcon
                   name={item.group.isKnownRepo ? "shippingbox" : "folder"}

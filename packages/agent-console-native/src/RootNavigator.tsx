@@ -16,16 +16,16 @@ import { loadNotifications, payloadOfResponse } from "./push";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
-import { HeaderCollapsePrototype } from "./HeaderCollapsePrototype";
+import { RepoScreen } from "./RepoScreen";
 
 export type RootStackParamList = {
   Home: undefined;
   Chat: { sessionID: string };
   Settings: undefined;
-  // TEMP: throwaway collapsing-glass-header prototype (see that screen's header
-  // comment). Remove this route and its Home entry button once the real repo
-  // screen lands.
-  HeaderPrototype: undefined;
+  // A repo (git checkout) or workspace (non-git session folder). `isRepo`
+  // selects the menu variant; `dir` is the primary directory shown in the
+  // header info.
+  Repo: { name: string; dir: string; isRepo: boolean };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -125,15 +125,6 @@ export const RootNavigator = (): React.ReactElement => {
               },
             ],
             unstable_headerRightItems: () => [
-              // TEMP: opens the collapsing-header prototype. Remove with the
-              // HeaderPrototype route.
-              {
-                type: "button",
-                label: "Header prototype (dev)",
-                icon: { type: "sfSymbol", name: "hammer" },
-                onPress: () => navigation.navigate("HeaderPrototype"),
-              },
-              { type: "spacing", spacing: 24 },
               {
                 type: "button",
                 label: "Search",
@@ -176,11 +167,11 @@ export const RootNavigator = (): React.ReactElement => {
           }}
         />
         <Stack.Screen name="Settings" component={SettingsScreen} />
-        {/* TEMP: prototype route. Its own screen draws a fully custom header,
-         * so the native bar is hidden here. */}
+        {/* Repo/workspace screen draws its own fully custom collapsing glass
+         * header, so the native bar is hidden. */}
         <Stack.Screen
-          name="HeaderPrototype"
-          component={HeaderCollapsePrototype}
+          name="Repo"
+          component={RepoScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>
