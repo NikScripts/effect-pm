@@ -52,6 +52,11 @@ const BUTTON_ICON = 20;
 /** Inset of the inner-header row from the screen edges — where the chat bar's
  * own items sit, so the collapsed state lines up with it. */
 const BAR_EDGE_INSET = 16;
+/** Extra margins that exist ONLY when expanded — the inner-header sits down and
+ * in from the glass edges, then animates these to 0 as it collapses so the bar
+ * lands exactly on the chat top bar. */
+const TOP_MARGIN = 10;
+const SIDE_MARGIN = 10;
 
 /**
  * Glass-opacity easing for the squircle fading out — solid for the first
@@ -84,7 +89,7 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
   const [bodyHeight, setBodyHeight] = React.useState(DEFAULT_BODY_HEIGHT);
 
   const collapsedH = insets.top + BAR_CONTENT_HEIGHT;
-  const expandedH = collapsedH + BODY_TOP_GAP + bodyHeight + BODY_BOTTOM_PAD;
+  const expandedH = collapsedH + TOP_MARGIN + BODY_TOP_GAP + bodyHeight + BODY_BOTTOM_PAD;
   // The scroll span that takes the header from expanded to collapsed.
   const collapseDistance = expandedH - collapsedH;
   // The glass ease-in breakpoints, scaled to px against the measured distance.
@@ -119,6 +124,16 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
   const bodyStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, collapseDistance * 0.3], [1, 0], Extrapolation.CLAMP),
   }));
+
+  // The inner-header's margins — present when expanded, animating to 0 as it
+  // collapses so it ends flush on the chat bar (top:insets.top, 16pt edges).
+  const innerHeaderStyle = useAnimatedStyle(() => {
+    const expand = interpolate(scrollY.value, [0, collapseDistance], [1, 0], Extrapolation.CLAMP);
+    return {
+      transform: [{ translateY: TOP_MARGIN * expand }],
+      paddingHorizontal: BAR_EDGE_INSET + SIDE_MARGIN * expand,
+    };
+  });
 
   // The name's glass pill exists ONLY when collapsed. It's mounted/unmounted
   // (not opacity-animated) because animating a GlassView's opacity stops it
@@ -178,7 +193,7 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
           onLayout={(event) => setBodyHeight(event.nativeEvent.layout.height)}
           style={[
             styles.body,
-            { top: insets.top + BAR_CONTENT_HEIGHT + BODY_TOP_GAP, left: SQUIRCLE_INSET + 6, right: SQUIRCLE_INSET + 6 },
+            { top: insets.top + BAR_CONTENT_HEIGHT + TOP_MARGIN + BODY_TOP_GAP, left: SQUIRCLE_INSET + 6, right: SQUIRCLE_INSET + 6 },
             bodyStyle,
           ]}
         >
@@ -204,11 +219,11 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
           ))}
         </Animated.View>
 
-        {/* Inner-header row: back · name · 3-dot. Pinned at top:insets.top, so
-         * it does not move through the collapse. This is the row that must end
-         * up matching the chat top bar. */}
-        <View
-          style={[styles.innerHeader, { top: insets.top, height: BAR_CONTENT_HEIGHT }]}
+        {/* Inner-header row: back · name · 3-dot. Sits down + in from the glass
+         * edges when expanded (animated margins), and lands flush on the chat
+         * bar (top:insets.top, 16pt edges) when collapsed. */}
+        <Animated.View
+          style={[styles.innerHeader, { top: insets.top, height: BAR_CONTENT_HEIGHT }, innerHeaderStyle]}
         >
           <Pressable
             onPress={() => props.navigation.goBack()}
@@ -259,7 +274,7 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
               />
             </GlassView>
           </Pressable>
-        </View>
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -322,13 +337,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   innerHeader: {
-    // Aligned to the glass box edges, with padding INSIDE so the buttons keep
-    // a clear margin from the glass — space-between pins them to the padded
-    // bounds, which a margin on the button itself can't do.
+    // Full width; the horizontal inset and top offset are animated inline
+    // (innerHeaderStyle) so the margins exist only when expanded.
     position: "absolute",
-    left: SQUIRCLE_INSET,
-    right: SQUIRCLE_INSET,
-    paddingHorizontal: BAR_EDGE_INSET,
+    left: 0,
+    right: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
