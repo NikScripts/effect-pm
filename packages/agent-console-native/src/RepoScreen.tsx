@@ -234,20 +234,13 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           ]}
         >
           <View style={styles.info}>
-            <View style={styles.infoRow}>
-              <SystemIcon
-                name={isRepo ? "shippingbox" : "folder"}
-                size={15}
-                color={colors.secondaryLabel}
-              />
-              <Text
-                style={styles.infoPath}
-                numberOfLines={1}
-                ellipsizeMode="middle"
-              >
-                {dir}
-              </Text>
-            </View>
+            <Text
+              style={styles.infoPath}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {dir}
+            </Text>
             <Text style={styles.infoMeta}>{metaParts.join(" · ")}</Text>
           </View>
 
@@ -352,17 +345,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   info: {
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-    gap: 4,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 14,
+    gap: 5,
   },
   infoPath: {
-    flex: 1,
     color: colors.secondaryLabel,
     fontSize: 13,
   },
