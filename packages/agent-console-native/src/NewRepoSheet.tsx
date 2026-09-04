@@ -2,13 +2,15 @@
  * Native sheet for adding a repo — empty `git init` or clone under the
  * configured main-checkout template.
  *
- * One field accepts GitHub search text or a pasteable remote URL. Typing
- * searches; a parseable remote auto-probes. Selecting a hit or resolving a
- * URL shows preview + collapsed preferences (folder name defaults to the
- * remote repo name). Header glass `xmark` / `plus` stay outside the Form.
- * The Create / Clone CTA is the last Form child (not a Section) so it scrolls
- * with content without a grouped well — same action as `plus`. Sheet backdrop
- * is `systemGroupedBackground`.
+ * One field accepts a create name, GitHub search text, or a pasteable remote
+ * URL. Typing searches and offers a first-row Create “name” suggestion;
+ * a parseable remote auto-probes. Clone hits show the owner/org avatar
+ * when GitHub provides one. Selecting a hit or resolving a URL shows
+ * preview + collapsed preferences (folder name defaults to the remote
+ * repo name). Header glass `xmark` / `plus` stay outside the Form. The
+ * Create / Clone CTA is the last Form child (not a Section) so it scrolls
+ * with content without a grouped well — same action as `plus`. Sheet
+ * backdrop is `systemGroupedBackground`.
  *
  * @internal
  */
