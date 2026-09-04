@@ -37,6 +37,7 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   autocorrectionDisabled,
+  aspectRatio,
   background,
   bold,
   buttonStyle,
@@ -58,6 +59,7 @@ import {
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
+  resizable,
   tag,
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
@@ -119,7 +121,10 @@ const SuggestionAvatar = (props: {
 }): React.ReactElement => {
   const clip = props.ownerKind === "user" ? circleClip : squircleClip;
   return props.avatarUrl !== undefined ? (
-    <Image uiImage={props.avatarUrl} modifiers={[...clip]} />
+    <Image
+      uiImage={props.avatarUrl}
+      modifiers={[resizable(), aspectRatio({ contentMode: "fill" }), ...clip]}
+    />
   ) : (
     <Image systemName="shippingbox" size={AVATAR_SIZE} modifiers={[...clip, secondaryText]} />
   );
