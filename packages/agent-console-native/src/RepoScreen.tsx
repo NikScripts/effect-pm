@@ -31,7 +31,7 @@ import type { ScannedRepo } from "./repoScan";
 import { readWorkspace } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
-import { loadReads } from "./sessionReads";
+import { getSetupDate, loadReads } from "./sessionReads";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
 
@@ -84,12 +84,18 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [refreshing, setRefreshing] = React.useState(false);
   const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
+  // Sessions older than the app's setup date count as already-read. Default to
+  // now so nothing flashes as unread before the real (earlier) date loads.
+  const [setupDate, setSetupDate] = React.useState<number>(() => Date.now());
 
   // Reload read state whenever the screen refocuses (e.g. back from a chat that
   // just marked itself read), so Unread updates.
   useFocusEffect(
     React.useCallback(() => {
-      void loadReads().then(setReads);
+      void Promise.all([loadReads(), getSetupDate()]).then(([nextReads, date]) => {
+        setReads(nextReads);
+        setSetupDate(date);
+      });
     }, []),
   );
 
@@ -124,8 +130,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const menu = isRepo ? REPO_MENU : WORKSPACE_MENU;
 
   const recent = repoSessions.slice(0, RECENT_COUNT);
-  // Updated since last opened → unread. Newest first (repoSessions already is).
-  const unread = repoSessions.filter((s) => s.time.updated > (reads.get(s.id) ?? 0)).slice(0, PER_GROUP);
+  // Unread = updated since you last opened it AND since app setup (so a fresh
+  // install doesn't treat every pre-existing session as unread). Newest first.
+  const unread = repoSessions.filter((s) => s.time.updated > Math.max(reads.get(s.id) ?? 0, setupDate)).slice(0, PER_GROUP);
   const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<Session>]> = group ? [...group.worktrees.entries()] : [];
   // Group by worktree only when there's more than one; otherwise a flat list.
   const grouped = worktreeGroups.length > 1;

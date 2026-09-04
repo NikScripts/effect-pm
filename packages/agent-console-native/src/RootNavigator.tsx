@@ -13,6 +13,7 @@ import * as React from "react";
 import { useColorScheme } from "react-native";
 import { colors } from "./colors";
 import { loadNotifications, payloadOfResponse } from "./push";
+import { getSetupDate } from "./sessionReads";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
@@ -47,6 +48,12 @@ const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "#
 export const RootNavigator = (): React.ReactElement => {
   const scheme = useColorScheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
+  // Establish the unread "setup date" on first launch, so pre-existing sessions
+  // are treated as already-read rather than flooding Unread.
+  React.useEffect(() => {
+    void getSetupDate();
+  }, []);
 
   // Tapping a notification opens the session it is about. Handled here rather
   // than in a screen because the tap usually arrives with no screen mounted —

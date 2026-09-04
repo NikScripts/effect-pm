@@ -10,8 +10,39 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "agent-console-native:sessionReads";
+const SETUP_KEY = "agent-console-native:setupDate";
 
 let inMemory: ReadonlyMap<string, number> | undefined;
+let setupInMemory: number | undefined;
+
+/**
+ * The timestamp read-tracking was first established (first launch). Sessions
+ * last updated before this are treated as already-read, so a fresh install
+ * doesn't surface every pre-existing session as unread. Set once, lazily.
+ */
+export const getSetupDate = async (): Promise<number> => {
+  if (setupInMemory !== undefined) return setupInMemory;
+  try {
+    const raw = await AsyncStorage.getItem(SETUP_KEY);
+    if (raw !== null) {
+      const stored = Number(raw);
+      if (Number.isFinite(stored)) {
+        setupInMemory = stored;
+        return stored;
+      }
+    }
+  } catch {
+    // fall through and establish a fresh date
+  }
+  const now = Date.now();
+  setupInMemory = now;
+  try {
+    await AsyncStorage.setItem(SETUP_KEY, String(now));
+  } catch {
+    // non-fatal — re-established next launch
+  }
+  return now;
+};
 
 export const loadReads = async (): Promise<ReadonlyMap<string, number>> => {
   if (inMemory !== undefined) return inMemory;
