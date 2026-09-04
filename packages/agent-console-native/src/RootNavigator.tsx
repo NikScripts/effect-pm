@@ -17,6 +17,7 @@ import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { RepoScreen } from "./RepoScreen";
+import { SessionListScreen } from "./SessionListScreen";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -26,6 +27,9 @@ export type RootStackParamList = {
   // selects the menu variant; `dir` is the primary directory shown in the
   // header info.
   Repo: { name: string; dir: string; isRepo: boolean };
+  // The full session list for a repo's worktree (`worktree` = null → the whole
+  // repo). `title` is the nav-bar title.
+  SessionList: { repo: string; worktree: string | null; title: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -173,6 +177,19 @@ export const RootNavigator = (): React.ReactElement => {
           name="Repo"
           component={RepoScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="SessionList"
+          component={SessionListScreen}
+          options={({ route }) => ({
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            headerTitle: route.params.title,
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          })}
         />
       </Stack.Navigator>
     </NavigationContainer>

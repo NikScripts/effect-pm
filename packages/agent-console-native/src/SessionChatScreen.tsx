@@ -33,6 +33,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { MessageBubble } from "./MessageBubble";
 import { PermissionPrompt } from "./PermissionPrompt";
 import { setViewedSession } from "./push";
+import { markSessionRead } from "./sessionReads";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
@@ -66,7 +67,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // foregrounded", which is exactly when the banner is redundant.
   React.useEffect(() => {
     setViewedSession(streamEnabled ? sessionID : undefined);
-    return () => setViewedSession(undefined);
+    // Mark read on open and again on leave (catching any activity while open),
+    // so it drops out of the Unread section on the repo/home screens.
+    void markSessionRead(sessionID, Date.now());
+    return () => {
+      setViewedSession(undefined);
+      void markSessionRead(sessionID, Date.now());
+    };
   }, [streamEnabled, sessionID]);
   const { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected } =
     useSessionStream(client, sessionID, address, streamEnabled);

@@ -20,17 +20,20 @@ import * as React from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
-import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
+import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
 import { readWorkspace } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
+import { loadReads } from "./sessionReads";
 import { SystemIcon } from "./SystemIcon";
+import { relativeTime } from "./time";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Repo">;
 
@@ -67,15 +70,10 @@ const WORKSPACE_MENU: ReadonlyArray<MenuItem> = [
   { label: "Docs", icon: "book" },
 ];
 
-const relativeTime = (ms: number): string => {
-  const diff = Date.now() - ms;
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-};
+/** A few most-recent sessions across all worktrees, up top for quick access. */
+const RECENT_COUNT = 3;
+/** Max sessions shown per worktree group before a "See all" row. */
+const PER_GROUP = 5;
 
 export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
@@ -85,6 +83,15 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
+
+  // Reload read state whenever the screen refocuses (e.g. back from a chat that
+  // just marked itself read), so Unread updates.
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadReads().then(setReads);
+    }, []),
+  );
 
   const load = React.useCallback(async (): Promise<void> => {
     const [list, scan] = await Promise.all([client.session.list(), readWorkspace()]);
@@ -115,6 +122,52 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const repoSessions = group?.sessions ?? [];
   const worktreeCount = group?.worktrees.size ?? 0;
   const menu = isRepo ? REPO_MENU : WORKSPACE_MENU;
+
+  const recent = repoSessions.slice(0, RECENT_COUNT);
+  // Updated since last opened → unread. Newest first (repoSessions already is).
+  const unread = repoSessions.filter((s) => s.time.updated > (reads.get(s.id) ?? 0)).slice(0, PER_GROUP);
+  const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<Session>]> = group ? [...group.worktrees.entries()] : [];
+  // Group by worktree only when there's more than one; otherwise a flat list.
+  const grouped = worktreeGroups.length > 1;
+
+  // `keyPrefix` keeps keys unique when a session shows in more than one section
+  // (Unread + Recent + its worktree group).
+  const sessionCard = (session: Session, showWorktree: boolean, keyPrefix: string): React.ReactElement => {
+    const wt = showWorktree ? displayWorktree(matchSession(session.directory, scanned).worktree) : undefined;
+    return (
+      <TouchableOpacity
+        key={`${keyPrefix}-${session.id}`}
+        style={styles.card}
+        activeOpacity={0.7}
+        onPress={() => props.navigation.navigate("Chat", { sessionID: session.id })}
+      >
+        <Text
+          style={styles.cardTitle}
+          numberOfLines={2}
+        >
+          {session.title}
+        </Text>
+        {wt !== undefined ? <Text style={styles.badge}>{wt}</Text> : null}
+        <Text style={styles.cardMeta}>{relativeTime(session.time.updated)}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const seeAllRow = (worktree: string | null, count: number, title: string): React.ReactElement => (
+    <TouchableOpacity
+      key={`all-${worktree ?? "repo"}`}
+      style={styles.seeAll}
+      activeOpacity={0.6}
+      onPress={() => props.navigation.navigate("SessionList", { repo: name, worktree, title })}
+    >
+      <Text style={styles.seeAllText}>See all {count} sessions</Text>
+      <SystemIcon
+        name="chevron.forward"
+        size={13}
+        color={colors.tint}
+      />
+    </TouchableOpacity>
+  );
 
   const metaParts = [
     `${repoSessions.length} session${repoSessions.length === 1 ? "" : "s"}`,
@@ -176,34 +229,44 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
         contentContainerStyle={{
-          paddingTop: expandedH + 24,
+          paddingTop: expandedH + 12,
           paddingBottom: insets.bottom + 40,
         }}
       >
-        <Text style={styles.sectionHeading}>Sessions</Text>
         {repoSessions.length === 0 ? (
           <Text style={styles.empty}>No sessions in this {isRepo ? "repo" : "workspace"} yet.</Text>
         ) : (
-          repoSessions.map((session) => {
-            const worktree = displayWorktree(matchSession(session.directory, scanned).worktree);
-            return (
-              <TouchableOpacity
-                key={session.id}
-                style={styles.card}
-                activeOpacity={0.7}
-                onPress={() => props.navigation.navigate("Chat", { sessionID: session.id })}
-              >
-                <Text
-                  style={styles.cardTitle}
-                  numberOfLines={2}
-                >
-                  {session.title}
-                </Text>
-                {worktree !== undefined ? <Text style={styles.badge}>{worktree}</Text> : null}
-                <Text style={styles.cardMeta}>{relativeTime(session.time.updated)}</Text>
-              </TouchableOpacity>
-            );
-          })
+          <>
+            {unread.length > 0 ? (
+              <>
+                <Text style={styles.sectionHeading}>Unread</Text>
+                {unread.map((session) => sessionCard(session, true, "unread"))}
+              </>
+            ) : null}
+
+            {grouped ? (
+              <>
+                <Text style={styles.sectionHeading}>Recent</Text>
+                {recent.map((session) => sessionCard(session, true, "recent"))}
+                {worktreeGroups.map(([worktree, worktreeSessions]) => {
+                  const heading = displayWorktree(worktree) ?? (worktree === MAIN_WORKTREE ? "Main" : "Sessions");
+                  return (
+                    <React.Fragment key={worktree}>
+                      <Text style={styles.sectionHeading}>{heading}</Text>
+                      {worktreeSessions.slice(0, PER_GROUP).map((session) => sessionCard(session, false, worktree))}
+                      {worktreeSessions.length > PER_GROUP ? seeAllRow(worktree, worktreeSessions.length, heading) : null}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <Text style={styles.sectionHeading}>Sessions</Text>
+                {repoSessions.slice(0, PER_GROUP).map((session) => sessionCard(session, false, "flat"))}
+                {repoSessions.length > PER_GROUP ? seeAllRow(null, repoSessions.length, "Sessions") : null}
+              </>
+            )}
+          </>
         )}
       </Animated.ScrollView>
 
@@ -424,9 +487,22 @@ const styles = StyleSheet.create({
   sectionHeading: {
     color: colors.secondaryLabel,
     fontSize: 15,
-    marginTop: 4,
+    marginTop: 18,
     marginBottom: 10,
     marginHorizontal: 16,
+  },
+  seeAll: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 16,
+    marginTop: -2,
+    marginBottom: 4,
+    paddingVertical: 6,
+  },
+  seeAllText: {
+    color: colors.tint,
+    fontSize: 15,
   },
   empty: {
     color: colors.secondaryLabel,
