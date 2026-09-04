@@ -243,3 +243,15 @@ Build the **animation first**, results after. Owner will pick this up later — 
 The repo screen's scroll content (below the glass header), top to bottom: an **Unread** section (sessions updated since you last opened them), then a few **Recent** sessions across all worktrees, then sessions **grouped by worktree** (heading per worktree). One worktree or none → a flat **Sessions** list, no grouping. Each group shows the most-recent **5**; more than that adds a **"See all N sessions"** row → a full-list page (`SessionList` route: `{repo, worktree|null, title}`, native header). Built on `repoGrouping.groupByRepo` + the opencode session list.
 
 **Unread** is a new local store (`sessionReads.ts`, AsyncStorage): a session is unread when `time.updated` > **max(last-opened timestamp, setup date)**. The **setup date** is recorded once on first launch (established in `RootNavigator`), so a fresh install treats all pre-existing sessions as already-read instead of flooding Unread. `SessionChatScreen` marks read on open/leave; screens reload read-state on focus. (Currently surfaced on the repo screen; Home could adopt it too.)
+
+Per-session **indicator dots** map a kind → color (`unread`→themeSecondary blue, `response`→brand green, `question`→warning orange, `failure`→destructive red). Only `unread` is wired; the rest need a per-session status source — push `kind` ("idle"→response, "permission"→question) is the intended feed; `failure` has none yet. Group/Recent sizes come from `useGroupSize` (base 3, +1 per ~160pt above ~950pt), shared by Home and repo.
+
+## 12. Design language (BUILT / standard)
+
+- **Glass title pill** (`HeaderTitlePill`): every header title is a Liquid-Glass capsule with the title centered (optional trailing status dot). `SessionHeaderTitle` delegates to it. Use it for any header title going forward.
+- **Top blur feather** (`EdgeBlurBars variant="top"`): any header over scrolling content gets the feathered top blur (Home, Chat, repo screen, session list).
+- Colors from **theme tokens** (`colors.ts`), destined to be VS-Code-theme-driven — see [[reference-theme-colors]].
+
+## 13. Background wallpapers (PLANNED — not built)
+
+Upload a background image that sits **behind everything** (instead of the flat light/dark ground), scoped in three tiers: **app-wide default**, **per-repo**, and **per-worktree**, resolved worktree → repo → app → none. Prerequisites the owner must weigh: (1) needs native deps (`expo-image-picker` + `expo-file-system`) → a dev-client **rebuild**, not just Fast-Refresh; (2) screen backgrounds are currently the opaque `colors.background` in ~7 places — they'd need to go **translucent** so the wallpaper shows through, a real design shift (cards/glass over wallpaper). Plan: a store `wallpapers.ts` (tier → file URI, images copied into the app's document dir), a root background `<Image>` behind the navigator, and a resolver keyed by the current repo/worktree.
