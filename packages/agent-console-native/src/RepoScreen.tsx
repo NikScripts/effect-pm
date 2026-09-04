@@ -210,7 +210,12 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   ];
 
   // --- Collapse geometry -----------------------------------------------------
+  // Measured ONCE. The body's own clip animates its height, which re-fires the
+  // inner onLayout with the shrinking (clipped) value — measuring only the
+  // first real layout keeps that from corrupting the geometry and wedging it
+  // collapsed.
   const [bodyHeight, setBodyHeight] = React.useState(DEFAULT_BODY_HEIGHT);
+  const bodyMeasured = React.useRef(false);
   const collapsedH = insets.top + BAR_CONTENT_HEIGHT;
   const expandedH = collapsedH + TOP_MARGIN + BODY_TOP_GAP + bodyHeight + BODY_BOTTOM_PAD;
   const collapseDistance = expandedH - collapsedH;
@@ -335,7 +340,16 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         >
           {/* Inner wrapper is measured (natural height) so the outer clip's
            * animated height doesn't feed back into the measurement. */}
-          <View onLayout={(event) => setBodyHeight(event.nativeEvent.layout.height)}>
+          <View
+            onLayout={(event) => {
+              if (bodyMeasured.current) return;
+              const measured = event.nativeEvent.layout.height;
+              if (measured > 0) {
+                bodyMeasured.current = true;
+                setBodyHeight(measured);
+              }
+            }}
+          >
           <View style={styles.info}>
             <Text style={styles.infoMeta}>{metaParts.join(" · ")}</Text>
           </View>
