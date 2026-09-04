@@ -30,6 +30,8 @@ export type GitHubSearchHit = {
   readonly description: string | undefined;
   /** Owner (user/org) avatar — GitHub has no separate repo avatar. */
   readonly avatarUrl: string | undefined;
+  /** Drives avatar clip: users are circles; orgs are squircles. */
+  readonly ownerKind: "user" | "organization" | undefined;
 };
 
 /** Normalize paste targets like `owner/repo`, SSH, or https into a fetch URL. */
@@ -209,9 +211,13 @@ export const searchGitHubRepos = async (
       const description = (row as { description?: unknown }).description;
       const owner = (row as { owner?: unknown }).owner;
       let avatarUrl: string | undefined;
+      let ownerKind: "user" | "organization" | undefined;
       if (typeof owner === "object" && owner !== null) {
         const raw = (owner as { avatar_url?: unknown }).avatar_url;
         if (typeof raw === "string" && raw.length > 0) avatarUrl = raw;
+        const type = (owner as { type?: unknown }).type;
+        if (type === "User") ownerKind = "user";
+        else if (type === "Organization") ownerKind = "organization";
       }
       if (typeof fullName !== "string" || typeof htmlUrl !== "string") return [];
       return [
@@ -220,6 +226,7 @@ export const searchGitHubRepos = async (
           url: htmlUrl.endsWith(".git") ? htmlUrl : `${htmlUrl}.git`,
           description: typeof description === "string" ? description : undefined,
           avatarUrl,
+          ownerKind,
         },
       ];
     });

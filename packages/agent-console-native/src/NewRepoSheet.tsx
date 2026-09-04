@@ -106,20 +106,24 @@ const isFolderName = (raw: string): boolean =>
   raw.length > 0 && !raw.includes("/") && !raw.includes(":") && !/\s/.test(raw);
 
 const AVATAR_SIZE = 28;
-const avatarFrame = [
-  frame({ width: AVATAR_SIZE, height: AVATAR_SIZE }),
-  clipShape("circle"),
-] as const;
+/** Soft continuous corner — org / create / placeholder “squircle”. */
+const SQUIRCLE_RADIUS = 7;
+const avatarSizeFrame = frame({ width: AVATAR_SIZE, height: AVATAR_SIZE });
+const circleClip = [avatarSizeFrame, clipShape("circle")] as const;
+const squircleClip = [avatarSizeFrame, clipShape("roundedRectangle", SQUIRCLE_RADIUS)] as const;
 
-/** Owner avatar when present; SF Symbol placeholder otherwise. */
+/** User avatars are circles; orgs and placeholders are squircles. */
 const SuggestionAvatar = (props: {
   readonly avatarUrl: string | undefined;
-}): React.ReactElement =>
-  props.avatarUrl !== undefined ? (
-    <Image uiImage={props.avatarUrl} modifiers={[...avatarFrame]} />
+  readonly ownerKind: "user" | "organization" | undefined;
+}): React.ReactElement => {
+  const clip = props.ownerKind === "user" ? circleClip : squircleClip;
+  return props.avatarUrl !== undefined ? (
+    <Image uiImage={props.avatarUrl} modifiers={[...clip]} />
   ) : (
-    <Image systemName="shippingbox" size={AVATAR_SIZE} modifiers={[...avatarFrame, secondaryText]} />
+    <Image systemName="shippingbox" size={AVATAR_SIZE} modifiers={[...clip, secondaryText]} />
   );
+};
 
 export const NewRepoSheet = (props: Props): React.ReactElement => {
   const { client, address, rootDir } = useAppContext();
@@ -443,7 +447,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                         <Image
                           systemName="plus"
                           size={AVATAR_SIZE}
-                          modifiers={[...avatarFrame, primaryText]}
+                          modifiers={[...squircleClip, primaryText]}
                         />
                         <Text modifiers={[primaryText, multilineTextAlignment("leading")]}>
                           {`Create “${typedName}”`}
@@ -462,7 +466,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
                         alignment="center"
                         modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
                       >
-                        <SuggestionAvatar avatarUrl={hit.avatarUrl} />
+                        <SuggestionAvatar avatarUrl={hit.avatarUrl} ownerKind={hit.ownerKind} />
                         <VStack
                           spacing={2}
                           alignment="leading"
