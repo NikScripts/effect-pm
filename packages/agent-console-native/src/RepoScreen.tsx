@@ -79,7 +79,7 @@ const WORKSPACE_MENU: ReadonlyArray<MenuItem> = [
  */
 export type SessionIndicatorKind = "unread" | "response" | "question" | "failure";
 const INDICATOR_COLORS: Record<SessionIndicatorKind, ColorValue> = {
-  unread: colors.secondaryLabel,
+  unread: colors.themeSecondary,
   response: colors.brand,
   question: colors.warning,
   failure: colors.destructive,
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 11,
-    backgroundColor: colors.tint,
+    backgroundColor: colors.themeSecondary,
     alignItems: "center",
     justifyContent: "center",
   },

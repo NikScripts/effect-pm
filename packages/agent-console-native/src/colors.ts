@@ -30,8 +30,13 @@ export const colors = {
   /** Placeholder for the real logo/brand color (a green, per the chat-bubble
    * icon) — using systemGreen until real theme/brand color work happens.
    * Meant to be the one thing that changes when that lands, e.g. the send
-   * button's tint, rather than a one-off hardcoded choice. */
+   * button's tint, rather than a one-off hardcoded choice. This is the
+   * theme's PRIMARY accent. */
   brand: PlatformColor("systemGreen"),
+  /** The theme's SECONDARY accent (blue). Placeholder like `brand` — both
+   * become theme-driven once colors come from the selected VS Code theme.
+   * Used for the neutral "unread" indicator, distinct from status colors. */
+  themeSecondary: PlatformColor("systemBlue"),
   /** Low-opacity systemGreen background, paired with `brand` the same way
    * `accentTint` pairs with `tint` — for the user's own chat bubble, which
    * should read as this app's identity, not a generic iMessage blue. */
