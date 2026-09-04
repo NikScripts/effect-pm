@@ -28,6 +28,7 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-na
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { SFSymbol } from "sf-symbols-typescript";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
@@ -43,7 +44,22 @@ const BAR_CONTENT_HEIGHT = 44;
 const EXPANDED_EXTRA = 300;
 /** Horizontal inset of the squircle from the screen edges. */
 const SQUIRCLE_INSET = 10;
-const GLASS_BUTTON = 36;
+/** Glass back/3-dot circles — sized to match the app's native bar items. */
+const GLASS_BUTTON = 44;
+const BUTTON_ICON = 20;
+/** Inset of the inner-header row from the screen edges — where the chat bar's
+ * own items sit, so the collapsed state lines up with it. */
+const BAR_EDGE_INSET = 16;
+
+/**
+ * Glass-opacity easing for the squircle fading out — solid for the first
+ * stretch of the scroll, then ramping off fast (100·100·100·99·97·90·60·20·0).
+ * Precomputed to px against EXPANDED_EXTRA so the worklet only reads number
+ * arrays. This curve is ONLY for the glass; the body uses a faster, near-linear
+ * fade (see bodyStyle) so the hidden content disappears sooner.
+ */
+const GLASS_FADE_IN_PX = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1].map((f) => f * EXPANDED_EXTRA);
+const GLASS_FADE_OUT = [1, 1, 1, 0.99, 0.97, 0.9, 0.6, 0.2, 0];
 
 /**
  * How the squircle glass de-materializes — flip this on-device to compare,
@@ -88,14 +104,15 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
       };
     }
     return {
-      opacity: interpolate(scrollY.value, [0, collapseDistance * 0.85], [1, 0], Extrapolation.CLAMP),
+      // Solid first, then ramps off fast — see GLASS_FADE_OUT.
+      opacity: interpolate(scrollY.value, GLASS_FADE_IN_PX, GLASS_FADE_OUT, Extrapolation.CLAMP),
     };
   });
 
-  // Body (menu / favorites / plugins) fades out well before full collapse, so
-  // it's gone by the time the bar tightens up.
+  // The hidden content (menu / favorites / plugins) disappears FAST and nearly
+  // linear — gone by ~30% of the collapse, not eased like the glass.
   const bodyStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, collapseDistance * 0.55], [1, 0], Extrapolation.CLAMP),
+    opacity: interpolate(scrollY.value, [0, collapseDistance * 0.3], [1, 0], Extrapolation.CLAMP),
   }));
 
   // The name's own glass capsule fades IN as it collapses — 0 while expanded
@@ -144,22 +161,35 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
           />
         </Animated.View>
 
-        {/* Body — dummy stand-ins for the Menu / Favorites / Plugins sections. */}
+        {/* Body — the repo Menu as a real iOS grouped list, sitting on the
+         * glass (hairline-separated rows, SF icon · label · chevron). */}
         <Animated.View
           pointerEvents="box-none"
           style={[
             styles.body,
-            { top: insets.top + BAR_CONTENT_HEIGHT, left: SQUIRCLE_INSET + 8, right: SQUIRCLE_INSET + 8 },
+            { top: insets.top + BAR_CONTENT_HEIGHT + 8, left: SQUIRCLE_INSET + 6, right: SQUIRCLE_INSET + 6 },
             bodyStyle,
           ]}
         >
-          {BODY_SECTIONS.map((section) => (
-            <Text
-              key={section}
-              style={styles.bodySection}
+          {MENU_ITEMS.map((item, index) => (
+            <Pressable
+              key={item.label}
+              style={styles.menuRow}
+              onPress={() => {}}
             >
-              {section}
-            </Text>
+              {index > 0 ? <View style={styles.menuSeparator} /> : null}
+              <SystemIcon
+                name={item.icon}
+                size={20}
+                color={colors.tint}
+              />
+              <Text style={styles.menuLabel}>{item.label}</Text>
+              <SystemIcon
+                name="chevron.forward"
+                size={13}
+                color={colors.secondaryLabel}
+              />
+            </Pressable>
           ))}
         </Animated.View>
 
@@ -179,12 +209,15 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
             >
               <SystemIcon
                 name="chevron.backward"
-                size={17}
+                size={BUTTON_ICON}
                 color={colors.label}
               />
             </GlassView>
           </Pressable>
 
+          {/* Center: name over a glass capsule that fades in on collapse, so at
+           * p=1 it reads as the chat header's title pill (name + connection
+           * dot, 44pt capsule). */}
           <View style={{ width: pillWidth, height: BAR_CONTENT_HEIGHT }}>
             <Animated.View style={[StyleSheet.absoluteFill, nameGlassStyle]}>
               <GlassView
@@ -193,12 +226,15 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
               />
             </Animated.View>
             <View style={styles.nameTextWrap}>
+              <View style={styles.nameSpacer} />
               <Text
                 numberOfLines={1}
                 style={styles.nameText}
               >
                 effect-pm
               </Text>
+              <View style={styles.nameSpacer} />
+              <View style={styles.connectionDot} />
             </View>
           </View>
 
@@ -212,7 +248,7 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
             >
               <SystemIcon
                 name="ellipsis"
-                size={17}
+                size={BUTTON_ICON}
                 color={colors.label}
               />
             </GlassView>
@@ -224,7 +260,12 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
 };
 
 const DUMMY_ROWS = Array.from({ length: 30 }, (_, i) => `Scroll content row ${i + 1}`);
-const BODY_SECTIONS = ["Menu — Files · Docs · Commits · PRs", "Favorites", "Plugins (2)  ·  See all"];
+const MENU_ITEMS: ReadonlyArray<{ readonly label: string; readonly icon: SFSymbol }> = [
+  { label: "Files", icon: "folder" },
+  { label: "Docs", icon: "book" },
+  { label: "Commits", icon: "arrow.triangle.branch" },
+  { label: "Pull Requests", icon: "arrow.triangle.merge" },
+];
 
 const styles = StyleSheet.create({
   root: {
@@ -251,17 +292,33 @@ const styles = StyleSheet.create({
   },
   body: {
     position: "absolute",
-    gap: 14,
+    paddingHorizontal: 6,
   },
-  bodySection: {
-    color: colors.secondaryLabel,
-    fontSize: 15,
-    fontWeight: "600",
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+  },
+  menuSeparator: {
+    position: "absolute",
+    top: 0,
+    // Leading inset past the icon column, iOS-list style.
+    left: 44,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+  },
+  menuLabel: {
+    flex: 1,
+    color: colors.label,
+    fontSize: 17,
   },
   innerHeader: {
     position: "absolute",
-    left: SQUIRCLE_INSET + 8,
-    right: SQUIRCLE_INSET + 8,
+    left: BAR_EDGE_INSET,
+    right: BAR_EDGE_INSET,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -283,13 +340,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  nameSpacer: {
+    flex: 1,
   },
   nameText: {
     color: colors.label,
     fontSize: 15,
     fontWeight: "600",
+  },
+  connectionDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    marginLeft: 6,
+    backgroundColor: colors.brand,
   },
   contentRow: {
     paddingVertical: 14,
