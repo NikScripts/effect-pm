@@ -39,7 +39,13 @@
     },
     "plugins": [
       "expo-status-bar",
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow DoubleAgent to use a photo as the app background."
+        }
+      ]
     ],
     "experiments": {
       "autolinkingModuleResolution": true

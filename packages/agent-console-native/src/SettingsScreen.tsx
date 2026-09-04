@@ -44,6 +44,8 @@ import {
   type DefaultWorktreePreference,
 } from "./settings";
 import { SystemIcon } from "./SystemIcon";
+import { pickWallpaper, removeWallpaper, useWallpaper } from "./WallpaperProvider";
+import { loadWallpapers } from "./wallpapers";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
@@ -70,6 +72,23 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const [lastScanAt, setLastScanAt] = React.useState<number | undefined>(undefined);
   const [scanning, setScanning] = React.useState(false);
   const [scanError, setScanError] = React.useState<string | undefined>(undefined);
+
+  const { refresh: refreshWallpaper } = useWallpaper();
+  const [hasWallpaper, setHasWallpaper] = React.useState(false);
+  React.useEffect(() => {
+    void loadWallpapers().then((m) => setHasWallpaper(m.get("app") !== undefined));
+  }, []);
+  const onPickWallpaper = React.useCallback(async (): Promise<void> => {
+    if (await pickWallpaper({})) {
+      await refreshWallpaper();
+      setHasWallpaper(true);
+    }
+  }, [refreshWallpaper]);
+  const onRemoveWallpaper = React.useCallback(async (): Promise<void> => {
+    await removeWallpaper({});
+    await refreshWallpaper();
+    setHasWallpaper(false);
+  }, [refreshWallpaper]);
 
   React.useEffect(() => {
     setRootDirDraft(rootDir);
@@ -233,6 +252,27 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           {scanError !== undefined ? <Text style={styles.errorText}>{scanError}</Text> : null}
         </View>
 
+        <Text style={styles.sectionLabel}>Appearance</Text>
+        <View style={styles.card}>
+          <View style={styles.rowBetween}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Wallpaper</Text>
+              <Text style={styles.hint}>A background image behind the whole app.</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.actionChip}
+              onPress={() => void onPickWallpaper()}
+            >
+              <Text style={styles.actionChipText}>{hasWallpaper ? "Change" : "Choose"}</Text>
+            </TouchableOpacity>
+          </View>
+          {hasWallpaper ? (
+            <TouchableOpacity onPress={() => void onRemoveWallpaper()}>
+              <Text style={styles.removeText}>Remove wallpaper</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
         <Text style={styles.sectionLabel}>New repos (main checkout)</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Path template</Text>
@@ -371,7 +411,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: "transparent",
   },
   header: {
     flexDirection: "row",
@@ -514,5 +554,10 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.destructive,
     fontSize: 13,
+  },
+  removeText: {
+    color: colors.destructive,
+    fontSize: 15,
+    marginTop: 12,
   },
 });

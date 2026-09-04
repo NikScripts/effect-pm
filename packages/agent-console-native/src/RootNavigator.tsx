@@ -11,7 +11,6 @@ import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
 import { useColorScheme } from "react-native";
-import { colors } from "./colors";
 import { loadNotifications, payloadOfResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { HomeScreen } from "./HomeScreen";
@@ -43,8 +42,11 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
  * the navigator's own background (visible during the swipe-back gesture,
  * separately from each screen's own `contentStyle`) doesn't show through as
  * a mismatched "second background" under our content. */
-const LIGHT_THEME = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: "#F2F2F7", card: "#FFFFFF" } };
-const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "#000000", card: "#1C1C1E" } };
+// Transparent backgrounds so the WallpaperProvider's ground/wallpaper shows
+// through (during swipe-back and behind every screen). `card` stays opaque for
+// react-navigation surfaces that use it.
+const LIGHT_THEME = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: "transparent", card: "#FFFFFF" } };
+const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "transparent", card: "#1C1C1E" } };
 
 export const RootNavigator = (): React.ReactElement => {
   const scheme = useColorScheme();
@@ -92,7 +94,7 @@ export const RootNavigator = (): React.ReactElement => {
 
   return (
     <NavigationContainer ref={navigationRef} theme={scheme === "dark" ? DARK_THEME : LIGHT_THEME}>
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }}>
         {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
          * applies it via `useScrollEdgeEffects` after mount instead. See
          * that hook for why a static option silently does nothing. */}
