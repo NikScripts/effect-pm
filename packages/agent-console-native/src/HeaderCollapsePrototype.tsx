@@ -24,7 +24,7 @@
  */
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -38,12 +38,14 @@ type Props = NativeStackScreenProps<RootStackParamList, "HeaderPrototype">;
 /** The pinned inner-header row height — matches SessionHeaderTitle's 44pt pill
  * and the chat bar's item line, so the collapsed end-state lines up. */
 const BAR_CONTENT_HEIGHT = 44;
-/** How much taller the expanded squircle is than the collapsed bar — the body
- * (menu / favorites / plugins) lives in this band. Scrolling this far fully
- * collapses the header. */
-const EXPANDED_EXTRA = 300;
 /** Horizontal inset of the squircle from the screen edges. */
-const SQUIRCLE_INSET = 10;
+const SQUIRCLE_INSET = 12;
+/** Gap between the inner-header row and the menu, and below the menu — so the
+ * glass box is only as tall as (bar + gap + menu + gap), nothing more. */
+const BODY_TOP_GAP = 6;
+const BODY_BOTTOM_PAD = 10;
+/** Fallback body height before the menu has measured itself (onLayout). */
+const DEFAULT_BODY_HEIGHT = 210;
 /** Glass back/3-dot circles — sized to match the app's native bar items. */
 const GLASS_BUTTON = 44;
 const BUTTON_ICON = 20;
@@ -54,11 +56,11 @@ const BAR_EDGE_INSET = 16;
 /**
  * Glass-opacity easing for the squircle fading out — solid for the first
  * stretch of the scroll, then ramping off fast (100·100·100·99·97·90·60·20·0).
- * Precomputed to px against EXPANDED_EXTRA so the worklet only reads number
- * arrays. This curve is ONLY for the glass; the body uses a faster, near-linear
- * fade (see bodyStyle) so the hidden content disappears sooner.
+ * Fractions of the collapse distance (scaled to px in the component, since the
+ * distance is content-measured). ONLY the glass uses this; the body fades
+ * faster and near-linear (see bodyStyle).
  */
-const GLASS_FADE_IN_PX = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1].map((f) => f * EXPANDED_EXTRA);
+const GLASS_FADE_IN = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
 const GLASS_FADE_OUT = [1, 1, 1, 0.99, 0.97, 0.9, 0.6, 0.2, 0];
 
 /**
@@ -76,22 +78,25 @@ const SQUIRCLE_FADE_BY_TRANSLATE = false;
 
 export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+
+  // The menu measures its own height so the glass box hugs its contents rather
+  // than a fixed guess. Defaulted until the first onLayout.
+  const [bodyHeight, setBodyHeight] = React.useState(DEFAULT_BODY_HEIGHT);
 
   const collapsedH = insets.top + BAR_CONTENT_HEIGHT;
-  const expandedH = collapsedH + EXPANDED_EXTRA;
-  // Scrolling `EXPANDED_EXTRA` points takes p from 0 (expanded) to 1 (collapsed).
-  const collapseDistance = EXPANDED_EXTRA;
-  const pillWidth = Math.round(screenWidth * 0.5);
+  const expandedH = collapsedH + BODY_TOP_GAP + bodyHeight + BODY_BOTTOM_PAD;
+  // The scroll span that takes the header from expanded to collapsed.
+  const collapseDistance = expandedH - collapsedH;
+  // The glass ease-in breakpoints, scaled to px against the measured distance.
+  const glassFadeInPx = GLASS_FADE_IN.map((f) => f * collapseDistance);
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((event) => {
     scrollY.value = event.contentOffset.y;
   });
 
-  // Header shrinks from expandedH to collapsedH. overflow:hidden on the
-  // container clips the body away as it shrinks; the inner-header row is
-  // pinned at top:insets.top and never moves.
+  // Header shrinks from expandedH to collapsedH; the inner-header row is pinned
+  // at top:insets.top and never moves.
   const headerStyle = useAnimatedStyle(() => ({
     height: interpolate(scrollY.value, [0, collapseDistance], [expandedH, collapsedH], Extrapolation.CLAMP),
   }));
@@ -100,12 +105,12 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
   const squircleStyle = useAnimatedStyle(() => {
     if (SQUIRCLE_FADE_BY_TRANSLATE) {
       return {
-        transform: [{ translateY: interpolate(scrollY.value, [0, collapseDistance], [0, -EXPANDED_EXTRA], Extrapolation.CLAMP) }],
+        transform: [{ translateY: interpolate(scrollY.value, [0, collapseDistance], [0, -collapseDistance], Extrapolation.CLAMP) }],
       };
     }
     return {
       // Solid first, then ramps off fast — see GLASS_FADE_OUT.
-      opacity: interpolate(scrollY.value, GLASS_FADE_IN_PX, GLASS_FADE_OUT, Extrapolation.CLAMP),
+      opacity: interpolate(scrollY.value, glassFadeInPx, GLASS_FADE_OUT, Extrapolation.CLAMP),
     };
   });
 
@@ -113,12 +118,6 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
   // linear — gone by ~30% of the collapse, not eased like the glass.
   const bodyStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, collapseDistance * 0.3], [1, 0], Extrapolation.CLAMP),
-  }));
-
-  // The name's own glass capsule fades IN as it collapses — 0 while expanded
-  // (the squircle is the surface), 1 when collapsed (it becomes the chat pill).
-  const nameGlassStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [collapseDistance * 0.2, collapseDistance], [0, 1], Extrapolation.CLAMP),
   }));
 
   return (
@@ -165,9 +164,10 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
          * glass (hairline-separated rows, SF icon · label · chevron). */}
         <Animated.View
           pointerEvents="box-none"
+          onLayout={(event) => setBodyHeight(event.nativeEvent.layout.height)}
           style={[
             styles.body,
-            { top: insets.top + BAR_CONTENT_HEIGHT + 8, left: SQUIRCLE_INSET + 6, right: SQUIRCLE_INSET + 6 },
+            { top: insets.top + BAR_CONTENT_HEIGHT + BODY_TOP_GAP, left: SQUIRCLE_INSET + 6, right: SQUIRCLE_INSET + 6 },
             bodyStyle,
           ]}
         >
@@ -215,27 +215,20 @@ export const HeaderCollapsePrototype = (props: Props): React.ReactElement => {
             </GlassView>
           </Pressable>
 
-          {/* Center: name over a glass capsule that fades in on collapse, so at
-           * p=1 it reads as the chat header's title pill (name + connection
-           * dot, 44pt capsule). */}
-          <View style={{ width: pillWidth, height: BAR_CONTENT_HEIGHT }}>
-            <Animated.View style={[StyleSheet.absoluteFill, nameGlassStyle]}>
-              <GlassView
-                style={styles.namePill}
-                glassEffectStyle="regular"
-              />
-            </Animated.View>
-            <View style={styles.nameTextWrap}>
-              <View style={styles.nameSpacer} />
-              <Text
-                numberOfLines={1}
-                style={styles.nameText}
-              >
-                effect-pm
-              </Text>
-              <View style={styles.nameSpacer} />
-              <View style={styles.connectionDot} />
-            </View>
+          {/* Center: the name in a glass pill, sized to its own content — the
+           * chat header's title pill. Always glass (animating a GlassView's
+           * opacity stops it rendering glass, per expo-glass-effect). */}
+          <View style={styles.namePillWrap}>
+            <GlassView
+              style={styles.namePillGlass}
+              glassEffectStyle="regular"
+            />
+            <Text
+              numberOfLines={1}
+              style={styles.nameText}
+            >
+              effect-pm
+            </Text>
           </View>
 
           <Pressable
@@ -327,37 +320,31 @@ const styles = StyleSheet.create({
     width: GLASS_BUTTON,
     height: GLASS_BUTTON,
     borderRadius: GLASS_BUTTON / 2,
+    marginHorizontal: 6,
     alignItems: "center",
     justifyContent: "center",
   },
-  namePill: {
-    flex: 1,
+  // Pill sized to its own content — height fixed to the bar, width from the
+  // name plus padding, centered in the row.
+  namePillWrap: {
+    height: BAR_CONTENT_HEIGHT,
     borderRadius: BAR_CONTENT_HEIGHT / 2,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  nameTextWrap: {
+  namePillGlass: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-  },
-  nameSpacer: {
-    flex: 1,
+    borderRadius: BAR_CONTENT_HEIGHT / 2,
   },
   nameText: {
     color: colors.label,
     fontSize: 15,
     fontWeight: "600",
-  },
-  connectionDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    marginLeft: 6,
-    backgroundColor: colors.brand,
   },
   contentRow: {
     paddingVertical: 14,
