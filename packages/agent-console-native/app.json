@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "DoubleAgent",
+    "slug": "agent-console-native",
+    "scheme": "doubleagent",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nikolasstow.agentconsolenative",
+      "appleTeamId": "669Y72A3D7",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": true
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.nikolasstow.agentconsolenative"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-status-bar",
+      "@bacons/apple-targets",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow DoubleAgent to use a photo as the app background."
+        }
+      ]
+    ],
+    "experiments": {
+      "autolinkingModuleResolution": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "db68cda6-c5b3-4daa-bb09-daeead177a67"
+      }
+    },
+    "owner": "nikolasstow"
+  }
+}

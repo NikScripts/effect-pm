@@ -1,16 +1,17 @@
 import { expect, it } from "vitest";
 // Import from the package BARREL — exactly what the other repo's UI agent imports.
-import { Group, Process, Resource, specOf, methodMeta } from "../src";
+import { Group, Daemon, specOf, methodMeta } from "../src";
+import * as Node from "../src/Node";
 
 // A dashboard/TUI needs three things from the package, all proven here:
-//  1. walk a Group.Tag tree (members + nesting),
+//  1. walk a Group.Service tree (members + nesting),
 //  2. introspect each resource's contract (specOf + methodMeta → kind/description/destructive/streaming),
-//  3. drive it over the wire (Resource.client / httpClient — proven in the node/topology tests).
-class MiniNode extends Resource.Node<MiniNode>("ui/miniNode") {}
-class Roster extends Process.Tag<Roster>()("ui/Roster") {}
-class Poller extends Process.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}
-class Nwsl extends Group.Tag<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}
-class Hub extends Group.Tag<Hub>("ui/Hub")({ Nwsl }) {}
+//  3. drive it over the wire (Hyperlink.client / http — proven in the node/topology tests).
+class MiniNode extends Node.Service<MiniNode>()("ui/miniNode") {}
+class Roster extends Daemon.Service<Roster>()("ui/Roster") {}
+class Poller extends Daemon.Service<Poller>()("ui/Poller", { node: MiniNode }) {}
+class Nwsl extends Group.Service<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}
+class Hub extends Group.Service<Hub>("ui/Hub")({ Nwsl }) {}
 
 // the UI writes its OWN traversal — the package exposes members + the Group.isGroup discriminator
 // (note: tags are classes, so a naive `typeof === "object"` check would wrongly treat a subgroup
@@ -45,7 +46,7 @@ it("a UI can introspect each resource's contract to render widgets", () => {
     }));
     // live panel, read panel, and a confirm-before button all fall out of the metadata
     expect(methods.some((m) => m.name === "status" && m.streaming)).toBe(true);
-    expect(methods.some((m) => m.name === "logs.history" && m.kind === "query")).toBe(true);
+    expect(methods.some((m) => m.name === "run")).toBe(true);
     expect(methods.some((m) => m.name === "stop" && m.destructive)).toBe(true);
     // every method carries a human-readable description for the UI
     expect(methods.every((m) => typeof m.description === "string")).toBe(true);

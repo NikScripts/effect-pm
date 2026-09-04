@@ -1,0 +1,33 @@
+/**
+ * @module examples/node/nameless-ws-serve
+ *
+ * **(8b) Nameless `Node.ws(serve)`** — localhost WebSocket sibling of unix nameless (#5).
+ * Lookup Soft-baked when Identity is absent (same as unix / http / nPipe).
+ *
+ * ```bash
+ * pnpm exec tsx examples/node/nameless-ws-serve.ts
+ * ```
+ *
+ * Docs: `docs/examples/node/nameless-ws-serve.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
+ */
+
+// ---cut---
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
+import * as NodeServices from "@effect/platform-node/NodeServices"
+import { Effect, Layer, Schema } from "effect"
+import * as Node from "../../src/Node"
+import * as Hyperlink from "../../src/Hyperlink"
+
+class Jobs extends Hyperlink.Service<Jobs>()("ws/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
+}) {}
+
+const live = Node.ws(
+  Hyperlink.serve(Jobs, { jobs: Effect.succeed(7) }),
+)
+
+// ---cut-after---
+NodeRuntime.runMain(
+  Layer.launch(live).pipe(Effect.provide(NodeServices.layer)),
+)

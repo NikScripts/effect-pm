@@ -1,0 +1,1298 @@
+/* Matches the system light/dark setting (no in-app toggle) — light values
+   live on bare :root, dark is a full override under prefers-color-scheme,
+   so neither theme is ever a partial patch of the other. */
+:root {
+  color-scheme: light dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+  --bg: #ffffff;
+  --bg-raised: #f1f2f5;
+  --border: #dfe2e8;
+  --text: #14181f;
+  --text-dim: #6b7280;
+  --accent: #2f6fed;
+  --accent-strong: #2f6fed;
+  --user-bubble: #dce8fb;
+  --user-bubble-text: #0b2c5c;
+  --error-bg: #fbe4e2;
+  --error-text: #9c2a20;
+  --success: #16a34a;
+  --danger: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0e14;
+    --bg-raised: #151922;
+    --border: #242a36;
+    --text: #e8eaed;
+    --text-dim: #8a91a0;
+    --accent: #6ea8fe;
+    --accent-strong: #4c8dff;
+    --user-bubble: #1c3a5e;
+    --user-bubble-text: #dce8fb;
+    --error-bg: #3a1c1c;
+    --error-text: #ffb4ab;
+    --success: #4ade80;
+    --danger: #ff7b72;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Keyboard focus indicator — there was none anywhere before this (one spot
+   even explicitly suppressed it, see .composer textarea below), which fails
+   basic keyboard-navigation accessibility. :focus-visible (not :focus) so
+   this only shows for keyboard/assistive-tech focus, not every mouse click. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+html,
+body {
+  margin: 0;
+  /* Prevent iOS's rubber-band pan from revealing background outside the app shell. */
+  overscroll-behavior-y: none;
+  /* No layout here is meant to scroll sideways — a wide code block should scroll
+     inside its own box (see .code-block), never the page. */
+  overflow-x: hidden;
+  /* Base for the standalone-mode height override below — 100% on its own
+     here doesn't affect anything (every full-height container below sets
+     its own explicit height regardless of display mode). */
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100dvh;
+}
+
+a {
+  color: var(--accent);
+}
+
+.hint {
+  padding: 0 1rem;
+  color: var(--text-dim);
+}
+
+.error-banner {
+  margin: 0.5rem 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: var(--error-bg);
+  color: var(--error-text);
+  font-size: 0.9rem;
+}
+
+.error-banner button {
+  margin-left: 0.4rem;
+  color: inherit;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+
+/* ── Session list ────────────────────────────────────────────────────────── */
+
+.session-list {
+  height: 100dvh;
+  overflow-y: auto;
+}
+
+/* ── Home top bar — avatar/settings left, search + new-repo right, no
+   title (matches the iOS Cursor app's own top bar: identity + actions,
+   the page's own heading does the "what screen is this" job instead). ── */
+
+.home-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(0.7rem + env(safe-area-inset-top)) 0.9rem 0.7rem;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.topbar-avatar,
+.topbar-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  background: var(--bg-raised);
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+
+.topbar-avatar:active,
+.topbar-icon-button:active {
+  background: color-mix(in srgb, var(--bg-raised) 80%, white 6%);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.new-session-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 550;
+  font-size: 0.9rem;
+}
+
+.scanning-hint {
+  color: var(--text-dim);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.session-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+}
+
+.session-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-raised);
+  color: inherit;
+  font: inherit;
+  padding: 0.8rem 0.9rem;
+}
+
+.session-card:active {
+  background: color-mix(in srgb, var(--bg-raised) 80%, white 6%);
+}
+
+.session-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.session-card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-weight: 560;
+  line-height: 1.25;
+}
+
+.session-fork-badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.session-card-location {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.session-repo-badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text-dim);
+  font-weight: 550;
+}
+
+.session-card-preview {
+  margin-top: 0.3rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+
+.session-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.session-stats {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+}
+
+.stat-fixed {
+  /* Never clip mid-word — the whole badge disappears if the row runs out of
+     room, instead of "edits" truncating to "edi". */
+  flex-shrink: 0;
+}
+
+.stat-add {
+  color: var(--success);
+}
+
+.stat-del {
+  color: var(--danger);
+}
+
+.stat-files {
+  color: var(--text-dim);
+}
+
+.status-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--success);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: status-pulse 1.4s infinite ease-in-out;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+
+.session-time {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── Chat ────────────────────────────────────────────────────────────────── */
+
+/* 100dvh (not 100vh) — iOS Safari's address bar collapsing on scroll shrinks the
+   *visual* viewport without shrinking 100vh, leaving a sliver of dead space under
+   fixed-height layouts; dvh tracks the visual viewport instead. */
+.session-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.chat-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  /* env(safe-area-inset-top) — see .list-header for why. */
+  padding: calc(0.6rem + env(safe-area-inset-top)) 0.75rem 0.6rem;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.back-link {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  background: none;
+  border-radius: 999px;
+  color: var(--text);
+}
+
+.chat-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 560;
+}
+
+.back-link:active {
+  background: var(--bg-raised);
+}
+
+.transcript {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem 1rem 0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.empty-chat {
+  padding: 2rem 0.5rem;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.message {
+  display: flex;
+  margin-bottom: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.message-assistant {
+  justify-content: flex-start;
+}
+
+.message-user {
+  justify-content: flex-end;
+}
+
+.bubble {
+  max-width: 88%;
+}
+
+.message-user .bubble {
+  background: var(--user-bubble);
+  color: var(--user-bubble-text);
+  padding: 0.6rem 0.9rem;
+  border-radius: 18px 18px 4px 18px;
+}
+
+.message-assistant .bubble {
+  max-width: 100%;
+}
+
+.bubble p {
+  margin: 0.4rem 0;
+}
+
+.bubble p:first-child {
+  margin-top: 0;
+}
+
+.bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.typing {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+}
+
+.typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  animation: typing-bounce 1.1s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* ── Tool calls ──────────────────────────────────────────────────────────── */
+
+.tool-call {
+  margin: 0.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-raised);
+}
+
+.tool-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
+  align-items: baseline;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+}
+
+.tool-name {
+  color: var(--accent);
+  text-transform: lowercase;
+  /* `.message`'s inherited `overflow-wrap: anywhere` + a long sibling (.tool-path)
+     in this flex row let the browser shrink this to near-zero and wrap "edit"
+     one character per line — reset both so the tool name never breaks or shrinks. */
+  overflow-wrap: normal;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tool-path {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.tool-meta {
+  color: var(--text-dim);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tool-status {
+  padding: 0 0.7rem 0.6rem;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.tool-output {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid var(--border);
+}
+
+.tool-error {
+  color: var(--danger);
+}
+
+.tool-call .code-block pre {
+  border-radius: 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Composer ────────────────────────────────────────────────────────────── */
+
+.composer {
+  padding: 0.6rem 0.75rem;
+  /* iOS home-indicator / notch clearance when the composer sits at the screen edge. */
+  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.composer-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 0.3rem 0.4rem 0.3rem 0.9rem;
+}
+
+/* The textarea's own outline is suppressed below (it'd draw a rectangle
+   poking out of this rounded pill) — this border-color change on the pill
+   itself is the replacement focus indicator, not a removal with nothing
+   standing in for it. */
+.composer-field:focus-within {
+  border-color: var(--accent);
+}
+
+.composer textarea {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: inherit;
+  resize: none;
+  min-height: 1.9rem;
+  max-height: 40vh;
+  padding: 0.45rem 0;
+  /* >=16px — iOS Safari auto-zooms the page on focusing a smaller input. */
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+.composer textarea:focus-visible {
+  /* Replaced by .composer-field:focus-within's border above, not just removed. */
+  outline: none;
+}
+
+.send-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.send-button:disabled {
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+.code-block pre {
+  overflow-x: auto;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  /* Narrow phone widths stay edge-to-edge; wider viewports (tablet/desktop) get a
+     centered reading column. These containers keep their own internal flex
+     alignment (space-between on headers, etc.) — only their own box narrows and
+     centers, nothing here touches how their children lay out inside them. */
+  .transcript,
+  .session-cards,
+  .list-header,
+  .chat-header,
+  .composer-field {
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+/* Recent shows only its first 2 cards on mobile — cards are tall now (repo +
+   worktree + context stats), 4 stacked would run long on a phone — and all
+   4 (Home.tsx's RECENT_COUNT) from the desktop breakpoint up. */
+.recent-section .session-cards > .session-card:nth-child(n + 3) {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  .recent-section .session-cards > .session-card:nth-child(n + 3) {
+    display: flex;
+  }
+}
+
+.crash-screen {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.crash-screen pre {
+  max-width: 100%;
+  overflow-x: auto;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
+/* ── Home (repo/worktree browsing) ──────────────────────────────────────── */
+
+/* .home-composer-bar was `position: fixed`, and iOS Safari (confirmed
+   hands-on, standalone/home-screen mode specifically) doesn't recompute
+   fixed-position bottom offsets against env(safe-area-inset-bottom)
+   reliably as the dynamic viewport settles — it showed up as the bar
+   sitting inconsistently close to or far from the true bottom edge across
+   reloads. .session-chat's own .composer never had this problem because
+   it was never `position: fixed` to begin with — a normal flex child at
+   the bottom of a `display: flex; flex-direction: column; height: 100dvh`
+   layout, which is exactly what this now matches instead. */
+.home-page {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.section-heading {
+  margin: 0.9rem 0.9rem 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.recent-section {
+  /* No enforced height here — capped at RECENT_COUNT (Home.tsx) cards, which
+     naturally lands around 1/3-1/2 the viewport on a phone; the page itself
+     scrolls as one unit, this doesn't get its own inner scroll region. */
+}
+
+.repo-list-section {
+  padding-bottom: 1rem;
+}
+
+/* Flat rows with hairline dividers, not individual cards — folder icon,
+   name, session count, chevron, matching the iOS Cursor app's own
+   "Workspaces" list. */
+.workspace-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.9rem;
+}
+
+.workspace-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0.8rem 0;
+}
+
+.workspace-list .workspace-row:last-child {
+  border-bottom: none;
+}
+
+.workspace-row:active {
+  background: var(--bg-raised);
+}
+
+.workspace-row-icon {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.workspace-row-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-row-count {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.workspace-row-chevron {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.session-worktree-badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+/* ── Repo sessions (worktree pill filters) ──────────────────────────────── */
+
+.repo-sessions-page {
+  height: 100dvh;
+  overflow-y: auto;
+}
+
+.worktree-pills {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.worktree-pill {
+  flex-shrink: 0;
+  min-height: 2rem;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  font: inherit;
+}
+
+.worktree-pill-active {
+  border-color: transparent;
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+/* ── New-session picker ──────────────────────────────────────────────────── */
+
+.picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  background: color-mix(in srgb, black 55%, transparent);
+}
+
+/* ── Home's collapsed bottom bar — a tap target styled like a composer,
+   not an editable one; tapping it (anywhere) opens the real composer
+   sheet below. Matches the iOS Cursor app's own bottom bar. ── */
+
+.home-composer-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  margin: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
+  padding: 0 0.4rem 0 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.home-composer-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+.home-composer-placeholder {
+  flex: 1;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-composer-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+/* ── New-session composer sheet — repo/worktree selector, a real
+   composer, and a send button that creates the session and delivers
+   the typed text as its first message. ── */
+
+.composer-sheet {
+  width: 100%;
+  max-height: 80dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-radius: 20px 20px 0 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  padding: 0.5rem 0.9rem 0.9rem;
+  padding-bottom: calc(0.9rem + env(safe-area-inset-bottom));
+}
+
+.composer-sheet-handle {
+  align-self: center;
+  width: 2.25rem;
+  height: 4px;
+  margin-bottom: 0.6rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.composer-sheet-selector-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.composer-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 60%;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-selector:disabled {
+  opacity: 0.5;
+}
+
+.composer-sheet textarea {
+  width: 100%;
+  min-height: 2.6rem;
+  max-height: 40vh;
+  border: none;
+  background: none;
+  color: inherit;
+  resize: none;
+  padding: 0.4rem 0;
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+.composer-sheet textarea:focus-visible {
+  outline: none;
+}
+
+.composer-sheet-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.composer-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+}
+
+.composer-plus:disabled {
+  opacity: 0.5;
+}
+
+.composer-model-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-model-selector:disabled {
+  opacity: 0.5;
+}
+
+/* The repo/worktree/model selection sheet — a second, full-height sheet
+   stacked over the composer sheet when a selector pill (or the model
+   button) is tapped, matching the reference: close button + centered
+   title, a search field, current pick called out with an up/down
+   chevron, everything else a flat divided list. */
+.selection-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.selection-sheet-handle {
+  align-self: center;
+  width: 2.25rem;
+  height: 4px;
+  /* This sheet is `position: fixed; inset: 0`, covering the notch area
+     too — needs its own top clearance, not inherited from anything else. */
+  margin: calc(0.6rem + env(safe-area-inset-top)) 0 0.5rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.selection-sheet-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.9rem 0.7rem;
+}
+
+.selection-sheet-header .picker-close {
+  position: absolute;
+  left: 0.9rem;
+}
+
+.selection-sheet-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.picker-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+}
+
+.selection-sheet-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0.9rem 0.9rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+}
+
+.selection-sheet-search input {
+  flex: 1;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+
+.selection-sheet-search input:focus-visible {
+  outline: none;
+}
+
+.selection-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+}
+
+.selection-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0.8rem 0;
+}
+
+.selection-list .selection-option:last-child {
+  border-bottom: none;
+}
+
+.selection-option:active {
+  background: var(--bg-raised);
+}
+
+.selection-option-icon {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.selection-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-option-active .selection-option-label {
+  font-weight: 620;
+}
+
+.selection-option-chevron {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.picker-new-worktree {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.picker-new-worktree input {
+  flex: 1;
+  min-height: 2.6rem;
+  padding: 0 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+}
+
+.picker-new-worktree button {
+  flex-shrink: 0;
+  min-height: 2.6rem;
+  padding: 0 0.9rem;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+/* ── Setup ───────────────────────────────────────────────────────────────── */
+
+.setup-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  height: 100dvh;
+  padding: 1.5rem;
+  justify-content: center;
+}
+
+.setup-screen h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.setup-screen code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  color: var(--text);
+}
+
+.setup-screen form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.setup-input {
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: inherit;
+  font: inherit;
+}
+
+.setup-submit {
+  min-height: 2.75rem;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 560;
+}
+
+.setup-submit:disabled {
+  opacity: 0.5;
+}
+
+/* ── Settings ────────────────────────────────────────────────────────────── */
+
+.settings-page {
+  height: 100dvh;
+  overflow-y: auto;
+}
+
+.settings-body {
+  padding: 0.5rem 0.9rem 1.5rem;
+}
+
+.settings-section {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-section .section-heading {
+  margin: 0 0 0.35rem;
+  padding: 0;
+}
+
+.settings-section .hint {
+  padding: 0;
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+}
+
+.settings-section code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  color: var(--text);
+}
+
+.settings-field input {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: inherit;
+  font: inherit;
+}
+
+.settings-rescan-button {
+  min-height: 2.6rem;
+  padding: 0 1rem;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 550;
+}
+
+.settings-rescan-button:disabled {
+  opacity: 0.5;
+}
+
+.crash-screen button {
+  min-height: 2.5rem;
+  padding: 0 1.2rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+/* ── Standalone-mode height override ────────────────────────────────────────
+   Confirmed hands-on across two rounds: `100dvh` is unreliable in a
+   standalone PWA after backgrounding/resuming (tracks window.innerHeight,
+   which can silently grow to the full screen height), and switching to a
+   `%` chain (html/body height:100%) turned out to be *consistently* short
+   by exactly the top safe-area amount instead — document.documentElement's
+   own clientHeight, which `%` resolves against, apparently excludes the
+   status-bar region from its box without the box itself starting below
+   it, so the container's bottom edge never reached the true screen bottom.
+   `window.screen.height` was the one number that stayed identical across
+   every state observed (it's a fixed hardware property, not a viewport
+   measurement) — screenHeightVar.ts sets it as --screen-height once at
+   load and on resize/orientationchange, and every full-height container
+   uses that directly in standalone mode instead. Regular-tab behavior
+   (where dvh really is tracking Safari's address bar correctly) is
+   untouched. Placed at the end of the file on purpose — same specificity
+   as the 100dvh rules above, so source order is what makes this win when
+   the media query matches. */
+@media (display-mode: standalone) {
+  /* The actual bug, confirmed hands-on: without this, only #root/the page
+     containers got --screen-height (932px) while html/body stayed sized
+     to the layout viewport (873px, resolved from their own `height: 100%`
+     rule earlier in this file) — #root ended up taller than its own
+     parent body. With body's overflow-y: auto, that doesn't clip outright;
+     it just makes body itself an outer scroll container holding a mostly-
+     invisible 59px of unreachable content at the bottom, which is
+     indistinguishable from clipping without actually scrolling body one
+     more level up — nobody would do that. html/body need the same
+     explicit height so nothing in the chain is shorter than its child. */
+  html,
+  body,
+  #root,
+  .session-chat,
+  .home-page,
+  .repo-sessions-page,
+  .setup-screen,
+  .settings-page,
+  .crash-screen {
+    height: var(--screen-height, 100dvh);
+  }
+}

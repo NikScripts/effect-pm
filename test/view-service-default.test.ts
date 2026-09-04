@@ -1,0 +1,118 @@
+/**
+ * View.make(key, default) — Context.Reference slot; override via provideService.
+ * Const Layers — no `static layer`.
+ */
+import { describe, expect, it } from "@effect/vitest";
+import { Context, Effect, Layer } from "effect";
+import * as React from "react";
+import { renderToString } from "react-dom/server";
+import * as Last from "last-ts/Last";
+import * as View from "last-ts/View";
+
+class Sidebar extends View.make<Sidebar>()(
+  "test/view-default/Sidebar",
+  () => React.createElement("nav", { "data-sidebar": "default" }, "Menu"),
+) {}
+
+class Shell extends View.make<Shell>()("test/view-default/Shell") {}
+
+const shellLayer = Layer.effect(
+  Shell,
+  Effect.gen(function* () {
+    const Side = yield* Sidebar;
+    return () =>
+      React.createElement(
+        "div",
+        { "data-shell": "ok" },
+        React.createElement(Side),
+        React.createElement("main", null, "body"),
+      );
+  }),
+);
+
+describe("View.make default (Reference)", () => {
+  it("yields the default component with no Layer for the slot", () => {
+    const App = Last.provide(Shell, shellLayer);
+    const html = renderToString(React.createElement(App));
+    expect(html).toContain("data-sidebar=\"default\"");
+    expect(html).toContain("Menu");
+    expect(html).toContain("data-shell=\"ok\"");
+  });
+
+  it("swaps the slot via Effect.provideService (nested settings chrome)", () => {
+    class SettingsShell extends View.make<SettingsShell>()(
+      "test/view-default/SettingsShell",
+    ) {}
+
+    const settingsShellLayer = Layer.effect(
+      SettingsShell,
+      Effect.gen(function* () {
+        const Side = yield* Sidebar;
+        return () =>
+          React.createElement(
+            "div",
+            null,
+            React.createElement(Side),
+            React.createElement("main", null, "settings"),
+          );
+      }).pipe(
+        Effect.provideService(
+          Sidebar,
+          () =>
+            React.createElement(
+              "nav",
+              { "data-sidebar": "settings" },
+              "Settings nav",
+            ),
+        ),
+      ),
+    );
+
+    const App = Last.provide(SettingsShell, settingsShellLayer);
+    const html = renderToString(React.createElement(App));
+    expect(html).toContain("data-sidebar=\"settings\"");
+    expect(html).toContain("Settings nav");
+    expect(html).not.toContain("data-sidebar=\"default\"");
+  });
+
+  it("swaps the slot via Layer.provideMerge (theme / section)", () => {
+    // Reference is not in R — Layer.provide won't attach it; provideMerge does.
+    class ThemedShell extends View.make<ThemedShell>()(
+      "test/view-default/ThemedShell",
+    ) {}
+
+    const themedShellLayer = Layer.effect(
+      ThemedShell,
+      Effect.gen(function* () {
+        const Side = yield* Sidebar;
+        return () =>
+          React.createElement(
+            "div",
+            { "data-shell": "themed" },
+            React.createElement(Side),
+          );
+      }),
+    ).pipe(
+      Layer.provideMerge(
+        Layer.succeed(
+          Sidebar,
+          () =>
+            React.createElement(
+              "nav",
+              { "data-sidebar": "theme" },
+              "Themed",
+            ),
+        ),
+      ),
+    );
+
+    const App = Last.provide(ThemedShell, themedShellLayer);
+    const html = renderToString(React.createElement(App));
+    expect(html).toContain("data-sidebar=\"theme\"");
+    expect(html).toContain("Themed");
+  });
+
+  it("is a Context.Reference", () => {
+    expect(Context.isReference(Sidebar)).toBe(true);
+  });
+});

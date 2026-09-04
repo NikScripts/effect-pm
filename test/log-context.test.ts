@@ -1,7 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
+import { LogAnnotationKeys } from "../src/LogContext";
 import { logEntryMatchesScope, resolveLogScope } from "../src/internal/manager/logScope";
 import type { LogEntry } from "../src/LogEntry";
+
+import { testBillingNodeKey, testSyncDaemonKey } from "./fixtures/logKeys";
+import { kind as daemonKind } from "../src/Daemon";
 
 const entry = (
   annotations: LogEntry["annotations"],
@@ -14,17 +18,16 @@ const entry = (
 });
 
 describe("logContext", () => {
-  it("matches process scope by annotation", () => {
+  it("matches daemon scope by lineage key", () => {
     const scope = {
-      _tag: "process" as const,
-      groupId: "workshop-group",
-      processId: "billing/sync",
+      _tag: daemonKind,
+      wireKey: testBillingNodeKey,
+      key: testSyncDaemonKey,
     };
     assert.strictEqual(
       logEntryMatchesScope(
         entry({
-          groupId: "workshop-group",
-          processId: "billing/sync",
+          [LogAnnotationKeys.lineage]: JSON.stringify([testSyncDaemonKey]),
         }),
         scope,
       ),
@@ -32,31 +35,33 @@ describe("logContext", () => {
     );
     assert.strictEqual(
       logEntryMatchesScope(
-        entry({ groupId: "workshop-group", processId: "other" }),
+        entry({
+          [LogAnnotationKeys.lineage]: JSON.stringify(["billing/OtherWorker"]),
+        }),
         scope,
       ),
       false,
     );
   });
 
-  it("resolves a process target without a group flag", () =>
+  it("resolves a daemon target without a group flag", () =>
     Effect.gen(function* () {
       const scope = yield* resolveLogScope(
-        [{ key: "workshop-group" }],
-        Option.some("sync"),
+        [{ key: testBillingNodeKey }],
+        Option.some("SyncWorker"),
         [
           {
-            key: "billing/sync",
-            kind: "process",
-            groupId: "workshop-group",
+            key: testSyncDaemonKey,
+            kind: daemonKind,
+            wireKey: testBillingNodeKey,
             controls: [],
           },
         ],
       );
-      assert.strictEqual(scope._tag, "process");
-      if (scope._tag === "process") {
-        assert.strictEqual(scope.groupId, "workshop-group");
-        assert.strictEqual(scope.processId, "billing/sync");
+      assert.strictEqual(scope._tag, daemonKind);
+      if (scope._tag === daemonKind) {
+        assert.strictEqual(scope.wireKey, testBillingNodeKey);
+        assert.strictEqual(scope.key, testSyncDaemonKey);
       }
     }));
 });

@@ -1,0 +1,69 @@
+/* Minimal styles for docs/last/site ViewDemo island (slot panel demo). */
+
+.toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.toggle button {
+  border: 1px solid var(--border, #d0d7de);
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.35rem 0.65rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--muted-foreground, #656d76);
+}
+
+.toggle button.on {
+  border-color: var(--accent, #1a7f4b);
+  background: color-mix(in srgb, var(--accent, #1a7f4b) 12%, white);
+  color: var(--accent, #1a7f4b);
+  font-weight: 500;
+}
+
+.slot-panel {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border, #d0d7de);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.slot-nav {
+  padding: 0.65rem;
+  border-radius: 6px;
+  background: #eef5f0;
+  font-size: 0.85rem;
+}
+
+.slot-nav.settings {
+  background: #f3efe6;
+}
+
+.slot-label {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground, #656d76);
+}
+
+.slot-nav p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.slot-body {
+  display: flex;
+  align-items: center;
+  color: var(--muted-foreground, #656d76);
+  font-size: 0.9rem;
+}

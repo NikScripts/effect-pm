@@ -41,8 +41,8 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  * You model “we are down until **T**” with:
  *
  * - **`armed: Ref false`** — gate closed; **no** polling ticks.
- * - **`nextScheduleTransition: Ref Some(T)`** — tells **`Process`** “something about the gate
- *   might change near **T**”, so **`computeDisarmedIdleSleep`** can sleep **toward **T****
+ * - **`nextScheduleTransition: Ref Some(T)`** — tells **`Daemon`** “something about the gate
+ *   might change near **T**”, so the supervisor can sleep **toward **T****
  *   instead of only a coarse fallback interval.
  *
  * **Important:** the hint does **not** flip **`armed`** for you. Another fiber (or your ops
@@ -53,7 +53,7 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  *
  * ## Demo 3 — Dynamic toggles (feature flag / circuit breaker)
  *
- * Same primitive as **`examples/forms/polling/`** demos: a boolean **`armed`** ref.
+ * Same primitive as **`examples/polling/`** demos: a boolean **`armed`** ref.
  * A **`policyFiber`** flips **`armed`** at
  * fixed simulated offsets so you can see “ticks while open, ~none while closed, ticks again
  * after reopen” under **`TestClock`** without real delays.
@@ -62,9 +62,8 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  *
  * ## Automated tests (library behavior, not this file)
  *
- * - **`test/process-schedule.test.ts`** — schedule entry storage + mutation semantics.
- * - **`test/process.test.ts`** — schedule-driven instance behavior.
- * - **`test/disarmedIdleSleep.test.ts`** — pure sleep policy.
+ * - **`test/daemon-schedule.test.ts`** — schedule entry storage + mutation semantics.
+ * - **`test/daemon.test.ts`** — schedule-driven instance behavior.
  */
 
 import { Cron, Duration, Effect, Option, Ref } from "effect";
@@ -100,7 +99,7 @@ export const allocateMaintenanceGate = (): Effect.Effect<{
 
 /**
  * After **`delayMs`** simulated sleep: open the gate and clear the transition hint.
- * Fork alongside the process under the same **`TestClock`**.
+ * Fork alongside the daemon under the same **`TestClock`**.
  */
 export const maintenanceReopenFiber = (
   armed: Ref.Ref<boolean>,

@@ -1,18 +1,20 @@
-# @nikscripts/effect-pm
+# Effect Hyperlink (`hyperlink-ts`)
 
-Effect-first **process orchestration** and **location-transparent resources** for long-running
-applications — managed processes, priority queues, and schedules that you drive with the **same
+The web made documents location-transparent; Effect Hyperlink does it for services.
+
+Effect-first **process orchestration** and **location-transparent services** for long-running
+applications — managed daemons, work pools, and schedules that you drive with the **same
 `yield* Tag` code whether they run local or remote**.
 
 ```bash
-pnpm add @nikscripts/effect-pm effect
+pnpm add hyperlink-ts effect
 ```
 
-> Pre-1.0 (`0.8.0-beta.x`). Breaking changes land as minor bumps until 1.0.
+> Pre-1.0 (`0.9.0-beta.x`). Breaking changes land as minor bumps until 1.0.
 
 ## The model
 
-Everything is a **`Resource`** — a tag whose contract is the spec. The *same* code reads and
+Everything is a **`Hyperlink`** — a tag whose contract is the spec. The *same* code reads and
 controls it; only the provided layer decides where it runs:
 
 ```ts
@@ -21,31 +23,30 @@ yield* queue.add(job);
 yield* queue.status.get;
 ```
 
-- **`Resource`** — the foundation: `Tag` + `layer` (local), `serve` / `serveRemote` (host, composed
-  with `httpServer`), `client` / `connect` (remote), `Host` / `serveInstances` (many instances behind
-  one transport). Contracts are introspectable via `specOf` / `methodMeta` (build generic UIs).
-- **`QueueResource`** — three-level **priority** queues with concurrency, optional `rateLimit`,
-  `attempts` retry, `captureLogs`, **`refill`** (self-feeding from a source), and **`persist`**
-  (durable, at-least-once).
-- **`Process`** — a managed process: lifecycle (`start`/`stop`/`runImmediately`), observability
-  (reactive `status` + `logs.live` / `logs.history`), inline or referenced **schedule** control, and
-  an optional reactive `result`. One module carrying the `Process.Tag` toolkit, the `Process.make`
-  engine, and `Polling` (in-instance cadence); **`Process.Schedule`** is a reusable schedule resource
-  (full CRUD + a reactive `entries` ref) that can gate one or more processes.
-- **`Group`** — organize member tags (nestable; members may live on the same or different hosts).
+- **`Hyperlink`** — the foundation: `Tag` + `layer` (local), `serve` (host, composed with
+  `Node.httpServer` / `wsServer`), `client` / `connect` (remote). Contracts are introspectable
+  via `specOf` / `methodMeta` (build generic UIs).
+- **`WorkPool`** — priority **work pools** with concurrency, optional `rateLimit`, `attempts` retry,
+  **`refill`** (self-feeding from a source), and durable history via `WorkPool.store` on a
+  `Store.Service`. Per-HyperService logs use the **`Logs`** platform + **`Hyperlink.logs`**.
+- **`Daemon`** — a supervised long-running process: lifecycle (`start`/`stop`/`run`), reactive
+  `status`, schedule control, optional reactive `result`. Logs via **`Hyperlink.logs`**.
+- **`Group`** — organize member tags (nestable; members may live on the same or different nodes).
 
 ## Quick start
 
-### A priority queue
+### A work pool
 
 ```ts
 import { Effect, Layer, Schema, Stream } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
+import * as WorkPool from "hyperlink-ts/WorkPool";
 
 const Job = Schema.Struct({ id: Schema.String });
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
+class RosterQueue extends WorkPool.Service<RosterQueue>()("nwsl/RosterQueue", {
+  payload: Job,
+}) {}
 
-const layer = QueueResource.layer(RosterQueue, {
+const layer = WorkPool.layer(RosterQueue, {
   effect: (job) => importRoster(job),
   concurrency: 4,
   attempts: 3,
@@ -58,66 +59,80 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(layer), Effect.scoped);
 ```
 
-A **self-feeding** queue (the toolkit equivalent of `onStart` / `onDrained` refill):
+A **self-feeding** pool:
 
 ```ts
-QueueResource.layer(RosterQueue, {
+WorkPool.layer(RosterQueue, {
   effect,
   refill: { onStart: true, onDrained: true, load: (queue) => loadFromDb(queue) },
 });
 ```
 
-### A managed process
+### A managed daemon
 
 ```ts
-import { Process } from "@nikscripts/effect-pm";
+import * as Daemon from "hyperlink-ts/Daemon";
 
-class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
+class LiveScores extends Daemon.Service<LiveScores>()("nwsl/LiveScores") {}
 
-const layer = Process.layer(LiveScores, {
+const layer = Daemon.layer(LiveScores, {
   effect: pollLiveScores,
-  // `polling` sets the cadence; add a schedule at definition with `.pipe(Process.schedule([…]))`
+  // `polling` sets the cadence; add a schedule at definition with `.pipe(Daemon.schedule([…]))`
 });
-// elsewhere: yield* (yield* LiveScores).runImmediately
+// elsewhere: yield* (yield* LiveScores).run
 ```
 
 ### Remote (the dashboard path)
 
 ```ts
-// host (Droplet / Mini)
-Resource.httpServer([QueueResource.serve(RosterQueue, { effect, captureLogs: true })])
-  .pipe(Layer.provide(HistoryStore.layerMemory()));
+import { Effect, Layer, Stream } from "effect";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
+import * as Node from "hyperlink-ts/Node";
+import * as Store from "hyperlink-ts/Store";
+import * as WorkPool from "hyperlink-ts/WorkPool";
+import * as LogEntry from "hyperlink-ts/LogEntry";
 
-// dashboard (browser) — same Tag, over the wire (from Resource.client(RosterQueue))
-const queue = yield* RosterQueue;
-const recent = yield* queue.logHistory({ limit: 200 });               // backfill
-yield* queue.logs.pipe(Stream.runForEach(render), Effect.forkScoped); // then tail
+class Droplet extends Node.Service<Droplet>()("hub/droplet") {}
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Droplet.logs,
+  WorkPool.store(RosterQueue),
+) {}
+
+// host — engines soft-default Memory; AppStore overrides Soft capture (bakes Logs + journals)
+Node.httpServer([WorkPool.serve(RosterQueue, { effect })]).pipe(
+  Layer.provide(AppStore.layerMemory),
+);
+
+// dashboard — same Tag over RPC; node-handle logs + lineage filter
+// (see docs/guides/logs.md — Remote clients)
+const n = yield* Droplet;
+n.logs.stream.pipe(Stream.filter(LogEntry.hasKey(RosterQueue.key)));
+const { stream, query } = yield* Hyperlink.logs(RosterQueue); // local Storage / remote node handle
 ```
+
+Dial a nodeless tag over http with `Hyperlink.connect(tag, Hyperlink.protocolHttp(3009))`
+(bare ports resolve via `HYPERLINK_CLIENT_HOST`, default `localhost`).
 
 ## Persistence
 
 Two planes, both opt-in, same `yield* Tag` surface, in-memory or SQLite:
 
-- **Durability** — `DurableQueueStore` (priority-native, at-least-once + dedup). Enable with
-  `persist` on the queue; a restart recovers in-flight work.
-- **Observability history** — `HistoryStore` backs `logHistory` / `metricsHistory`; runtime-wide logs
-  are durably stored by `HostLogs.persistLayer(host)` (into `LogStore`) and read back with
-  `HostLogs.byHost` / `HostLogs.byResource`. `SQLiteHistoryStore.layer` / `SQLiteDurableQueueStore.layer`
-  from `@nikscripts/effect-pm/storage/sqlite` make these durable across restarts.
-
-Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStorage`
-(`@nikscripts/effect-pm/storage/{sqlite,redis}`).
+- **Durability** — queue/engine journals via toolkit `*.store(tag)` on a `Store.Service`. Enable
+  persistence on the pool; a restart recovers in-flight work.
+- **Observability history** — runtime-wide logs use `Node.logs` / toolkit `*.store` on a
+  `Store.Service` and read back with `Logs.byNode` / `Logs.byHyperlink` / `Hyperlink.logs(tag)`.
+  Persist the store with `AppStore.layer({ filename })`. Status / logs / ping on a remote node are
+  `(yield* MyNode).status` / `.logs` / `.ping`.
 
 ## Docs
 
 | Doc | What |
 |---|---|
-| [docs/guides/toolkit-by-example.md](./docs/guides/toolkit-by-example.md) | Every resource / group / host / UI pattern |
-| [docs/guides/history-and-persistence.md](./docs/guides/history-and-persistence.md) | History, durable queue, the dashboard data layer |
-| [docs/PROCESS-API.md](./docs/PROCESS-API.md) | Spec tables for `Process`, `Polling`, and `Process.Schedule` |
-| [docs/STORAGE.md](./docs/STORAGE.md) | Persistence model (the SSOT) |
-| [docs/PACKAGE-GUIDE.md](./docs/PACKAGE-GUIDE.md) | Narrative architecture |
-| [docs/AGENTS.md](./docs/AGENTS.md) | Repo map for agents |
+| [docs/guides/logs.md](./docs/guides/logs.md) | Logs platform — keys, `Hyperlink.logs`, remote node-handle tails |
+| [docs/guides/work-pools.md](./docs/guides/work-pools.md) | Work pools end to end |
+| [docs/guides/stores.md](./docs/guides/stores.md) | Store composition recipe |
+| [docs/index.md](./docs/index.md) | Live book |
+| [AGENTS.md](./AGENTS.md) | Repo map / branch policy for agents |
 
 ## License
 

@@ -1,0 +1,133 @@
+# Agent 1 — Docs corpus: handoffs → plans → legacy (Draft)
+
+**Status:** **PHASE 1 A–E DONE** · **PHASE 2 P1–P4 LANDED** · **PHASE 3 UNLOCKED** (2026-07-15).  
+**Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md).  
+**Phase 2 plan:** [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md) — `docs/plans/` is the living roadmap.  
+**Phase 3 plan:** [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md) — legacy → live book + Draft content convention.  
+**Agent:** **1**.  
+**Branch from:** **`integration`**.  
+**Working branch:** `cursor/docs-corpus-phase3-ce05`.
+
+**Docs bus:** [`agent-status.md`](../../../agent-status.md) · [`owner-decisions.md`](../../../owner-decisions.md) · [`docs/standards/documentation.md`](../../../../standards/documentation.md) · [`docs/nav.ts`](../../../../nav.ts) · [`docs/site/src/lib/content.ts`](../../../../site/src/lib/content.ts)
+
+---
+
+## Owner steer
+
+- **UI / docs-site chrome / dashboard / Tailscale preview UX** — reserved for **lettered local agents** (B owns `docs/site/`; A/C/D as assigned). **Agent 1 does not touch** `docs/site/**` UI, Twoslash popover CSS, dual-preview chrome, or `src/web` / `src/ui`.
+- **Work the written corpus instead**, in this order:
+  1. **Handoffs cleanup** (this phase — start here)
+  2. **Plans refactor + migration** (after owner unlocks)
+  3. **Port legacy docs** into the live book — with a **Draft** page label (details owner will refine after this brief is assigned; do **not** invent the Draft UX in site code)
+- **Plan first** for Phase 1: inventory + proposed action per file/class. Then stop for approval. No mass deletes without owner go.
+
+---
+
+## Current docs map (facts on `integration`)
+
+| Area | Path | Served by site? | Format today |
+|------|------|-----------------|--------------|
+| Live book | `docs/index.md`, `getting-started/`, `resources/`, `guides/`, `observe/`, `standards/` | **Yes** (`content.ts` glob) | `.md` with Djot-style `{#id title=…}` blocks (Djot prototype — see standards *Documentation*) |
+| Handoffs | `docs/handoffs/**` | **No** | Agent/session notes, reviews, decision SSOTs |
+| Plans | `docs/plans/` | **No** | Future-only roadmap + design specs |
+| Orphan roots | e.g. `docs/LOGS.md` | **No** (not in glob) | Should eventually live under `guides/` or similar |
+| Pre-site corpus | `docs/legacy/**` | **No** | Port candidates for Phase 3 — living docs must not cite this tree |
+**Important:** There are **zero** `.dj` files in-repo. The site still loads **`.md`**. “Convert to Djot” means align content with the Djot **conventions** in `documentation.md` (page blocks, rule blocks) — not a mass rename to `.dj` unless owner later unlocks a site change (that’s lettered-agent territory).
+
+---
+
+## Phase 1 — Handoffs cleanup (START HERE)
+
+### Goal
+
+Make `docs/handoffs/` legible again: what is **active**, what is **historical SSOT**, what can be **archived or deleted**, without breaking the supervisor bus.
+
+### Keep live (do not archive without owner)
+
+| File | Role |
+|------|------|
+| `agent-status.md` | Supervisor dashboard |
+| `owner-decisions.md` | Locked steers |
+| `supervisor-protocol.md` (if present) | Daemon |
+| Active agent briefs with open work | e.g. Agent 3 logs follow-ups, Agent D handle follow-ups, Agent B/C plan-first |
+| **Decision SSOTs still cited by code/docs** | e.g. `multi-host-instances-decisions.md`, `queue-handle-convergence-decisions.md`, store transform decisions |
+
+### Likely archive / trim candidates (confirm in plan — do not mass-delete in plan-only)
+
+| Class | Examples | Proposed fate options |
+|-------|----------|------------------------|
+| Merged closeouts | Agent 1/2 closeouts, process-run-rpc, queue wire 1a, store-cutover-*.md when marked done | `handoffs/archive/` **or** delete + pointer in status |
+| Date-stamped findings | `2026-07-01-*.md` | Archive folder by month |
+| Withdrawn briefs | `agent-cursor-logs-store-cutover.md`, superseded prototypes | Delete or archive with “superseded by …” one-liner |
+| Duplicate reviews | phase5 review once P1 absorbed | Fold into `whats-changed` / LOGS / delete |
+| Reports bus | `handoffs/reports/` | Keep index; archive stale agent reports |
+
+### Phase 1 deliverable (plan only — post in owner chat)
+
+1. **Inventory table** of every `docs/handoffs/*` file (or grouped by class): path · one-line role · **active / historical SSOT / archive / delete** · evidence (merged PR, superseded by X).  
+2. **Proposed tree** (e.g. `handoffs/archive/2026-07/`, keep root for live bus only).  
+3. **Rules** for what stays at root forever (`agent-status`, `owner-decisions`, …).  
+4. **Ripple check:** links from `docs/legacy/`, guides, `AGENTS.md`, standards — what breaks if we move files.  
+5. **Out of scope list:** anything under `docs/site/`, Dashboard, UI.
+
+Then **stop**. After owner unlocks: execute moves/deletes + fix links + update `agent-status` pointers; commit + push.
+
+---
+
+## Phase 2 — Plans refactor & migration (**done**)
+
+Living roadmap: [`docs/plans/README.md`](../../../../plans/README.md). Specs beside it. Owner locks recorded in [`owner-decisions.md`](../../../owner-decisions.md) + [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md).
+
+---
+
+## Phase 3 — Legacy docs → live book + Draft label (**unlocked**)
+
+**Plan:** [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md).
+
+### Goal
+
+Port still-useful `docs/legacy/**` content into the live book (`getting-started` / `resources` /
+`guides` / `observe`), then retire or shrink legacy.
+
+### Draft label (content-side — locked)
+
+See Phase 3 plan + [`docs/standards/documentation.md`](../../../../standards/documentation.md):
+`status="draft"` + `{.draft}` callout on ports; no site chrome.
+
+---
+
+## Hard boundaries
+
+| Do | Do not |
+|----|--------|
+| Edit `docs/handoffs/`, `docs/legacy/`, live book `.md` content | Edit `docs/site/**` UI/CSS/Twoslash chrome |
+| Fix broken links after moves | Touch `src/web`, `src/ui`, dashboard widgets |
+| Align page blocks with Documentation standard | Rename everything to `.dj` / change Vite globs without owner + B |
+| Plan-first each phase | Mass-delete handoffs without inventory approval |
+| Push on `cursor/docs-…-a009` off `integration` | Mix Logs/handles/engine work into this track |
+
+---
+
+## Verification (when executing)
+
+- Inventory committed; no dangling links from live book → moved paths.  
+- `pnpm run docs:manifest:check` (or project equivalent) if standards pages change.  
+- Do **not** require Tailscale/`docs:serve` for Agent 1 — lettered agents verify site UX.
+
+---
+
+## Short prompt (paste to Agent 1)
+
+```
+Branch from integration:
+  git fetch origin integration && git checkout integration && git pull
+
+Read docs/handoffs/archive/2026-07/agents/agent-01-docs-corpus.md
+
+You are Agent 1. Docs corpus track. UI / docs-site chrome / dashboard = lettered agents only — do not touch docs/site UI.
+
+PHASE 1 ONLY for now: handoffs cleanup. PLAN FIRST.
+Deliver the inventory table (every handoffs file or grouped class → active / historical SSOT / archive / delete), proposed tree, keep-forever rules, and link-ripple check. Do not mass-delete yet. Then stop for owner approval.
+
+Phases 2–3 (plans migration; legacy port + Draft label) wait for later unlock.
+```

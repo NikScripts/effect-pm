@@ -1,50 +1,57 @@
-import { Duration, Effect, Layer } from "effect";
+import { Duration, Effect } from "effect";
 import { expect, it } from "vitest";
-import { NodeLogs } from "../src";
+import * as Logs from "../src/Logs";
 import { LogAnnotationKeys } from "../src/LogContext";
-import * as ProcessStorage from "../src/ProcessStorage";
+import * as Daemon from "../src/Daemon";
+import * as Store from "../src/Store";
+import { testBillingNodeKey, testSyncDaemonKey } from "./fixtures/logKeys";
+import * as Node from "../src/Node";
 
-// NodeLogs.layer (runtime-wide capture + relay) + persistLayer(node) → durable LogStore (memory
-// backend via ProcessStorage). Bare Effect.log* lines are captured, batched, persisted bucketed by
-// node, and readable **by node** or **by resource**.
-const HOST = "wnba";
-const storage = NodeLogs.persistLayer(HOST).pipe(
-  Layer.provideMerge(Layer.mergeAll(NodeLogs.layer, ProcessStorage.layer)),
-);
+class BillingNode extends Node.Service<BillingNode>()(testBillingNodeKey) {}
+
+class SyncProc extends Daemon.Service<SyncProc>()(testSyncDaemonKey).pipe(
+  Daemon.schedule([]),
+) {}
+
+class AppStore extends Store.Service<AppStore>("@test/host-logs/Store")(
+  BillingNode.logs,
+  Daemon.store(SyncProc),
+) {}
 
 it("persists runtime logs bucketed by node — readable by node and by resource", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       yield* Effect.logInfo("node-wide line");
-      yield* Effect.annotateLogs(Effect.logInfo("worker line"), {
-        [LogAnnotationKeys.processId]: "worker-1",
-      });
+      yield* Effect.logInfo("worker line").pipe(Logs.withScope(SyncProc));
 
-      // the persist writer batches on a ~250ms window — poll until both lines land
       yield* Effect.gen(function* () {
-        while ((yield* NodeLogs.byNode(HOST)).length < 2) {
+        while (
+          (yield* Logs.byNode(BillingNode)).length < 2 ||
+          !(yield* Logs.byHyperlink(testSyncDaemonKey)).some(
+            (row) => row.message === "worker line",
+          )
+        ) {
           yield* Effect.sleep(Duration.millis(20));
         }
       }).pipe(Effect.timeout(Duration.seconds(3)));
 
-      const nodeRows = yield* NodeLogs.byNode(HOST, { limit: 50 });
+      const nodeRows = yield* Logs.byNode(BillingNode, { limit: 50 });
       expect(nodeRows.length).toBeGreaterThanOrEqual(2);
-      // every stored line carries the node annotation (the bucket)
       expect(
-        nodeRows.every((row) => row.annotations[LogAnnotationKeys.node] === HOST),
+        nodeRows.every(
+          (row) => row.annotations[LogAnnotationKeys.node] === testBillingNodeKey,
+        ),
       ).toBe(true);
       expect(nodeRows.some((row) => row.message.includes("node-wide line"))).toBe(true);
 
-      // by resource: only the line annotated with that processId
-      const workerRows = yield* NodeLogs.byResource({ processId: "worker-1" });
-      expect(workerRows.length).toBe(1);
-      expect(workerRows[0]?.message).toBe("worker line");
-    }).pipe(Effect.provide(storage), Effect.scoped),
+      const workerRows = yield* Logs.byHyperlink(testSyncDaemonKey);
+      expect(workerRows.some((row) => row.message === "worker line")).toBe(true);
+    }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   ));
 
-it("byResource is empty for a resource with no logs (graceful, not an error)", () =>
+it("byHyperlink is empty for a resource with no logs (graceful, not an error)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      expect(yield* NodeLogs.byResource({ queueId: "never" })).toEqual([]);
-    }).pipe(Effect.provide(storage), Effect.scoped),
+      expect(yield* Logs.byHyperlink("never")).toEqual([]);
+    }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   ));

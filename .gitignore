@@ -7,10 +7,14 @@ REVIEW.md
 AI_CONTEXT.md
 
 # Dependencies
-node_modules/
+node_modules
+# The wrong-package-manager lockfiles stay ignored — this repo is pnpm.
 package-lock.json
 yarn.lock
-pnpm-lock.yaml
+# pnpm-lock.yaml is deliberately committed: EAS Build installs with
+# --frozen-lockfile and detects the package manager from the lockfile in the
+# uploaded archive. With it ignored, EAS found no lockfile, defaulted to
+# yarn, and then failed on the root packageManager: pnpm@ field.
 
 # Build outputs
 dist/
@@ -20,6 +24,11 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.keys
+# dotenvx: encrypted docs/site/.env is commit-safe (private key stays in .env.keys)
+!docs/site/.env
+!docs/site/.env.example
+docs/site/.env.keys
 
 # IDE
 .vscode/
@@ -42,6 +51,10 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
+# Dream-redeploy active worker (file-swap target; regenerated each run)
+examples/launcher/dream-redeploy-worker.active.ts
+examples/launcher/dream-redeploy-worker.active-*.ts
+
 # Misc
 scratchpad/
 .turbo
@@ -55,3 +68,7 @@ Thumbs.db
 # Not committed. `npm run test:nwsl` / `example:nwsl-http-api-resource` no-op cleanly when absent.
 examples/nwslsoccer/
 examples/resource-tui/.bundle.mjs
+
+# Agent debris — screenshots / test runner residue
+.cursor/artifacts/
+test-results/

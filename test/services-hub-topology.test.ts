@@ -2,45 +2,46 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Group from "../src/Group";
+import * as Node from "../src/Node";
 
 // The real target topology: a ServicesHub group containing league groups (nesting), where almost
 // everything runs LOCAL on one Droplet (provided by its `.layer`) and one member runs REMOTE on
 // the Mini (a different node, reached by a client). One runtime, one group tree, mixed provision —
-// reached uniformly through the group accessors. This is the ProcessManager-free deploy shape.
+// reached uniformly through the group accessors. This is the DaemonManager-free deploy shape.
 
-class MiniNode extends Resource.Node<MiniNode>("hub/miniNode") {}
+class MiniNode extends Node.Service<MiniNode>()("hub/miniNode") {}
 
 // Local on the Droplet (no node) — stands in for a roster import queue.
-class RosterQueue extends Resource.Tag<RosterQueue>()("hub/RosterQueue", {
-  count: Resource.effect(Schema.Number),
+class RosterQueue extends Hyperlink.Service<RosterQueue>()("hub/RosterQueue", {
+  count: Hyperlink.effect(Schema.Number),
 }) {}
 
 // Remote on the Mini (node-bound) — stands in for the one poller that runs on the mini.
-class LiveScorePoller extends Resource.Tag<LiveScorePoller>()("hub/LiveScorePoller", 
-  { where: Resource.effect(Schema.String) },
+class LiveScorePoller extends Hyperlink.Service<LiveScorePoller>()("hub/LiveScorePoller", 
+  { where: Hyperlink.effect(Schema.String) },
   { node: MiniNode },
 ) {}
 
 // Nested groups: Hub → Nwsl league → members. (Two more leagues would just be more members.)
-class NwslLeague extends Group.Tag<NwslLeague>("hub/Nwsl")({
+class NwslLeague extends Group.Service<NwslLeague>("hub/Nwsl")({
   RosterQueue,
   LiveScorePoller,
 }) {}
-class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
+class ServicesHub extends Group.Service<ServicesHub>("hub/ServicesHub")({
   Nwsl: NwslLeague,
 }) {}
 
 // The Mini nodes the poller.
-const MiniServer = Resource.httpServer([
-  Resource.serve(LiveScorePoller, {
+const MiniServer = Node.httpServer([
+  Hyperlink.serve(LiveScorePoller, {
     where: Effect.succeed("poller@mini"),
   }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 // The Droplet runs the roster queue locally.
-const RosterLocal = Resource.layer(RosterQueue, { count: Effect.succeed(42) });
+const RosterLocal = Hyperlink.layer(RosterQueue, { count: Effect.succeed(42) });
 
 const portOf = (ctx: Context.Context<HttpServer.HttpServer>): number => {
   const address = Context.get(ctx, HttpServer.HttpServer).address;
@@ -55,9 +56,9 @@ it("nested hub group: local members + one remote (mini) member, one runtime", ()
       // The Droplet runtime: local layer for the queue + a client for the mini poller.
       const dropletRuntime = Layer.mergeAll(
         RosterLocal,
-        Resource.client(LiveScorePoller).pipe(
+        Hyperlink.client(LiveScorePoller).pipe(
           Layer.provide(
-            Resource.httpClient(MiniNode, {
+            Hyperlink.http(MiniNode, {
               url: `http://127.0.0.1:${portMini}/rpc`,
             }),
           ),

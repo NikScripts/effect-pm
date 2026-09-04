@@ -1,0 +1,161 @@
+{
+  "name": "last-ts",
+  "version": "0.0.1",
+  "description": "Last.ts — Effect + React building blocks (View DI, Route/Router, Page marks, AtomReact, file-router codegen, docgen).",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nikolas Stow",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikolasstow/Hyperlink.git",
+    "directory": "packages/last-ts"
+  },
+  "homepage": "https://github.com/nikolasstow/Hyperlink/tree/integration/packages/last-ts",
+  "bugs": {
+    "url": "https://github.com/nikolasstow/Hyperlink/issues"
+  },
+  "keywords": [
+    "effect",
+    "react",
+    "router",
+    "file-router",
+    "last-ts"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./Page": {
+      "types": "./src/Page.ts",
+      "default": "./src/Page.ts"
+    },
+    "./Page/react": {
+      "types": "./src/Page/react.tsx",
+      "default": "./src/Page/react.tsx"
+    },
+    "./Route": {
+      "types": "./src/Route.ts",
+      "default": "./src/Route.ts"
+    },
+    "./Router": {
+      "types": "./src/Router.ts",
+      "default": "./src/Router.ts"
+    },
+    "./RouterBuilder": {
+      "types": "./src/RouterBuilder.ts",
+      "default": "./src/RouterBuilder.ts"
+    },
+    "./History": {
+      "types": "./src/History.ts",
+      "default": "./src/History.ts"
+    },
+    "./Memory": {
+      "types": "./src/Memory.ts",
+      "default": "./src/Memory.ts"
+    },
+    "./Waku": {
+      "types": "./src/Waku.ts",
+      "default": "./src/Waku.ts"
+    },
+    "./Layout": {
+      "types": "./src/Layout.tsx",
+      "default": "./src/Layout.tsx"
+    },
+    "./RootLayout": {
+      "types": "./src/RootLayout.tsx",
+      "default": "./src/RootLayout.tsx"
+    },
+    "./Document": {
+      "types": "./src/Document.tsx",
+      "default": "./src/Document.tsx"
+    },
+    "./AtomReact": {
+      "types": "./src/AtomReact.tsx",
+      "default": "./src/AtomReact.tsx"
+    },
+    "./View": {
+      "types": "./src/View.tsx",
+      "default": "./src/View.tsx"
+    },
+    "./Last": {
+      "types": "./src/Last.ts",
+      "default": "./src/Last.ts"
+    },
+    "./Link": {
+      "types": "./src/Link.tsx",
+      "default": "./src/Link.tsx"
+    },
+    "./vite": {
+      "types": "./src/vite/fileRouter.ts",
+      "default": "./src/vite/fileRouter.ts"
+    },
+    "./config": {
+      "types": "./src/config.ts",
+      "default": "./src/config.ts"
+    },
+    "./package.json": "./package.json",
+    "./docgen": {
+      "types": "./src/docgen/index.ts",
+      "default": "./src/docgen/index.ts"
+    },
+    "./docgen/*": {
+      "types": "./src/docgen/*.ts",
+      "default": "./src/docgen/*.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@effect/platform-node": "^4.0.0-beta.102",
+    "effect": "^4.0.0-beta.102",
+    "prettier": ">=2",
+    "react": ">=18",
+    "shiki": "^4.3.1",
+    "typescript": "^5.9.0",
+    "vite": "^6.0.0 || ^7.0.0",
+    "waku": ">=1.0.0-beta.3"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "@effect/platform-node": {
+      "optional": true
+    },
+    "waku": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "prettier": {
+      "optional": true
+    },
+    "shiki": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@effect/platform-node": "4.0.0-beta.102",
+    "@types/prettier": "2.7.3",
+    "@types/react": "^19.2.0",
+    "effect": "4.0.0-beta.102",
+    "prettier": "2.8.8",
+    "react": "^19.2.0",
+    "shiki": "^4.3.1",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "waku": "1.0.0-beta.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

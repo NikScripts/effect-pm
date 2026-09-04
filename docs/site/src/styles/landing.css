@@ -1,0 +1,161 @@
+/**
+ * Self-contained coming-soon lockup. Loaded only by `/` (and inlined there) so the
+ * brand host never depends on the docs stylesheet or a successful `/assets/*` fetch.
+ * Hex + system fonts first; oklch where supported matches the docs theme.
+ */
+:root {
+  color-scheme: light dark;
+  --landing-bg: #fafbfc;
+  --landing-fg: #2a2f38;
+  --landing-muted: #6b7280;
+  --landing-panel: #f0f2f5;
+  --landing-border: #e2e6eb;
+  --landing-primary: #2f6fed;
+  --landing-yield: #c26a1a;
+  --landing-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --landing-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+}
+@supports (color: oklch(0% 0 0)) {
+  :root {
+    --landing-bg: oklch(99% 0.004 260);
+    --landing-fg: oklch(24% 0.01 260);
+    --landing-muted: oklch(50% 0.01 260);
+    --landing-panel: oklch(96.5% 0.005 260);
+    --landing-border: oklch(90% 0.008 260);
+    --landing-primary: oklch(55% 0.16 250);
+    --landing-yield: oklch(62% 0.17 55);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --landing-bg: #141619;
+    --landing-fg: #e8eaed;
+    --landing-muted: #9aa3ad;
+    --landing-panel: #1c2026;
+    --landing-border: #2f353d;
+    --landing-primary: #6ea8ff;
+    --landing-yield: #e0a054;
+  }
+  @supports (color: oklch(0% 0 0)) {
+    :root {
+      --landing-bg: oklch(16% 0.01 260);
+      --landing-fg: oklch(92% 0.01 260);
+      --landing-muted: oklch(64% 0.01 260);
+      --landing-panel: oklch(19% 0.012 260);
+      --landing-border: oklch(30% 0.01 260);
+      --landing-primary: oklch(74% 0.14 250);
+      --landing-yield: oklch(75% 0.16 60);
+    }
+  }
+}
+
+html {
+  background: var(--landing-bg);
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--landing-bg);
+  color: var(--landing-fg);
+  font-family: var(--landing-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.landing {
+  width: 100%;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: left;
+  padding: 1.6rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+.landing-inner {
+  max-width: 70rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.landing-title {
+  margin: 0;
+  font-size: 1em;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: var(--landing-primary);
+}
+.landing-sub {
+  margin: 0.4rem 0 0;
+  font-size: 0.27em;
+  font-weight: 500;
+  color: var(--landing-muted);
+  letter-spacing: 0.01em;
+}
+.landing-mark {
+  width: fit-content;
+  margin-inline: auto;
+  font-size: clamp(3.6rem, 13vw, 7.5rem);
+  margin-block: clamp(1.2rem, 3.5vh, 2.4rem) clamp(0.9rem, 2.5vh, 1.8rem);
+}
+.landing-mark .landing-sub {
+  text-align: left;
+  margin-top: -0.05em;
+  padding-left: 0.18em;
+}
+.landing-motto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  align-self: center;
+  gap: 0.5rem;
+  margin: clamp(1.4rem, 3.5vh, 2.2rem) 0 1.2rem;
+  font-size: clamp(1.15rem, 2.6vw, 1.55rem);
+  letter-spacing: 0.005em;
+  color: var(--landing-muted);
+}
+.landing-motto span:nth-child(2) {
+  color: var(--landing-fg);
+  opacity: 0.78;
+}
+.landing-motto span:nth-child(1) {
+  transform: translateX(-3.5rem);
+}
+.landing-motto .landing-motto-accent {
+  transform: translateX(3.5rem);
+}
+@media (max-width: 520px) {
+  .landing-motto span:nth-child(1) {
+    transform: translateX(-2rem);
+  }
+  .landing-motto .landing-motto-accent {
+    transform: translateX(2rem);
+  }
+}
+.landing-motto-accent {
+  color: var(--landing-fg);
+  font-weight: 550;
+}
+.landing-motto code {
+  font-family: var(--landing-mono);
+  color: var(--landing-yield);
+  background: none;
+  padding: 0;
+  border: none;
+  font-size: 0.95em;
+}
+.landing-soon {
+  align-self: center;
+  margin: 1.9rem 0 2.2rem;
+  padding: 0.5rem 1.3rem;
+  border: 1px solid var(--landing-border);
+  border-radius: 999px;
+  font-family: var(--landing-mono);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--landing-muted);
+  background: var(--landing-panel);
+}

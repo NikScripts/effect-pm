@@ -1,0 +1,11 @@
+packages:
+  - "."
+  - "packages/*"
+  - "docs/last/site"
+  - "examples/last/spine"
+
+# Expo/Metro hierarchical lookup from bob packages (react-native-marked src)
+# fails on pnpm peer symlinks inside .pnpm. Hoist the peer to the workspace
+# root node_modules so default Metro resolution finds it.
+publicHoistPattern:
+  - "*react-native-svg*"

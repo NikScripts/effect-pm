@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+/* The dashboard widgets now live in the package source (src/web, src/ui), which is outside
+   this example's Vite root — Tailwind only auto-scans its root, so point it at the source or
+   the utility classes the widgets use never get generated (unstyled: no padding, flat charts).
+   Consumers of the installed package use `@source ".../node_modules/hyperlink-ts/dist"`
+   instead — see docs/guides/setup.md §2b. */
+@source "../../src";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* dark by default — this is an ops dashboard */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.92 0.01 260);
+  --card: oklch(0.2 0.012 260);
+  --card-foreground: oklch(0.92 0.01 260);
+  --popover: oklch(0.2 0.012 260);
+  --popover-foreground: oklch(0.92 0.01 260);
+  --primary: oklch(0.7 0.15 250);
+  --primary-foreground: oklch(0.16 0.01 260);
+  --secondary: oklch(0.27 0.01 260);
+  --secondary-foreground: oklch(0.92 0.01 260);
+  --muted: oklch(0.27 0.01 260);
+  --muted-foreground: oklch(0.65 0.01 260);
+  --accent: oklch(0.27 0.02 260);
+  --accent-foreground: oklch(0.92 0.01 260);
+  --destructive: oklch(0.62 0.2 25);
+  --border: oklch(0.3 0.01 260);
+  --input: oklch(0.3 0.01 260);
+  --ring: oklch(0.7 0.15 250);
+}
+
+* {
+  border-color: var(--border);
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Device safe areas (notch / camera / home indicator): viewport-fit=cover lets the page
+   extend under the cutouts, so inset the dashboard chrome by the env() insets — keeping
+   the normal 0.75rem padding as a floor — so the title/back button and bottom controls
+   clear the hardware. */
+.safe-area {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+/* View transitions (grid ↔ detail / drill-down): a resource/group card morphs to fill
+   the screen. Slow the box morph a touch, and ease the incoming content in — start it
+   slightly smaller and transparent and scale up to fill, so it doesn't pop in at full
+   size before the box has grown. Honor reduced-motion by skipping the animation. */
+::view-transition-group(*) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes vt-grow-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+::view-transition-new(*) {
+  animation: vt-grow-in 0.42s cubic-bezier(0.2, 0, 0, 1) both;
+  transform-origin: center;
+}
+::view-transition-old(*) {
+  animation: vt-fade-out 0.2s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

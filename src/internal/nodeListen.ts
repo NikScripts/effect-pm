@@ -1,0 +1,134 @@
+/**
+ * Neutral {@link listen} spine — no transport bind; use {@link unix} / {@link http} / {@link ws}.
+ *
+ * @internal
+ */
+import { Effect, Layer } from "effect"
+import * as Hyperlink from "../Hyperlink"
+import {
+  AnyNode,
+  catalogSym,
+  ListenNode,
+  ListenOptions,
+} from "./nodeCore"
+import { unaddressedLayer } from "./nodeConnect"
+import {
+  failListenTagNode,
+  failUseProtocol,
+  isDynamicInstanceNode,
+  isHttpListenNode,
+  isIpcListenNode,
+  isPrototypeNode,
+  isHyperlinkTagArg,
+  isWsListenNode,
+  type CatalogROut,
+  type ServeLayerList,
+  type ServesForCatalog,
+} from "./nodeListenCommon"
+
+/**
+ * Neutral catalog spine (C2) — **no transport bind**. Prefer {@link unix} / {@link http} / {@link ws}.
+ *
+ * **IpcSocket, Http, WebSocket, address-less, nameless, and Tag+impl fail with
+ * {@link ListenUseProtocol}** → use the matching protocol entry.
+ *
+ * @category listen
+ * @public
+ */
+export function listen<
+  Self,
+  S extends Hyperlink.Spec,
+  HSelf,
+  R = never,
+>(
+  tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  options?: ListenOptions,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function listen<
+  Node extends AnyNode & { readonly [catalogSym]?: unknown },
+  const Serves extends ServeLayerList,
+>(
+  node: Node,
+  serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
+  options?: ListenOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]> | ListenNode,
+  Layer.Error<Serves[number]>,
+  Layer.Services<Serves[number]>
+>;
+export function listen(
+  nodeOrTag: AnyNode | Hyperlink.PipeableTag,
+  _servesOrImpl?: Layer.Any | ServeLayerList | object,
+  _options?: ListenOptions,
+): Layer.Any {
+  if (isHyperlinkTagArg(nodeOrTag)) {
+    const tag = nodeOrTag;
+    const tagKey = (() => {
+      const key = (tag as unknown as { readonly key?: unknown }).key;
+      return typeof key === "string" ? key : "unknown";
+    })();
+    const bound = Hyperlink.nodeOf(tag);
+    const fleet = Hyperlink.nodesOf(
+      tag as unknown as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
+    );
+    if (bound === undefined) {
+      return failListenTagNode({
+        tag: tagKey,
+        reason: fleet.length > 1 ? "Ambiguous" : "Missing",
+        count: fleet.length,
+      });
+    }
+    if (isIpcListenNode(bound as AnyNode)) {
+      return failUseProtocol(
+        "unix",
+        `Tag "${tagKey}" is bound to an IpcSocket Node`,
+      );
+    }
+    if (isHttpListenNode(bound as AnyNode)) {
+      return failUseProtocol(
+        "http",
+        `Tag "${tagKey}" is bound to an Http Node`,
+      );
+    }
+    if (isWsListenNode(bound as AnyNode)) {
+      return failUseProtocol(
+        "ws",
+        `Tag "${tagKey}" is bound to a WebSocket Node`,
+      );
+    }
+    return failUseProtocol(
+      "unix",
+      `Tag "${tagKey}" has no protocol-bound Node — use Node.unix / Node.http / Node.ws`,
+    );
+  }
+
+  const node = nodeOrTag as AnyNode;
+
+  if (isPrototypeNode(node)) {
+    return unaddressedLayer(node.key);
+  }
+  if (isIpcListenNode(node) || isDynamicInstanceNode(node)) {
+    return failUseProtocol(
+      "unix",
+      `node "${node.key}" needs IpcSocket bind`,
+    );
+  }
+  if (isHttpListenNode(node)) {
+    return failUseProtocol("http", `node "${node.key}" needs Http bind`);
+  }
+  if (isWsListenNode(node)) {
+    return failUseProtocol("ws", `node "${node.key}" needs WebSocket bind`);
+  }
+  return failUseProtocol(
+    "unix",
+    `node "${node.key}" — use Node.unix / Node.http / Node.ws`,
+  );
+}

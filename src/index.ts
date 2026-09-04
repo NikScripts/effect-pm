@@ -1,78 +1,71 @@
 /**
  * @packageDocumentation
  *
- * **effect-pm** (`@nikscripts/effect-pm`) — Effect-first **process orchestration** and **queue
- * resources** for long-running applications.
+ * **hyperlink-ts** — Effect Hyperlink: location-transparent **services** for Effect (WorkPool,
+ * Daemon, Gate, stores, logs, dashboards).
  *
  * @remarks
  * ## What this package provides
  *
- * - **`Process`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
- *   long-lived driver follows a schedule and spawns process instances; each instance checks its
+ * - **`Daemon`**, **`Polling`** — Build a **managed daemon** with a trigger-driven runtime: a
+ *   long-lived driver follows a schedule and spawns run instances; each instance checks its
  *   schedule and exits naturally when disarmed while `Polling` controls in-instance repeat cadence.
- *   Optional `polling` / `schedule` layers on `Process.make` are merged into `process.effect` so
+ *   Optional `polling` / `schedule` layers on `Daemon.make` are merged into the daemon effect so
  *   fork-time requirements stay accurate in TypeScript. Run windows are built with
- *   `Process.scheduleInMemory` / `scheduleDefine` (and the toolkit `Process.Schedule` resource /
- *   `Process.window` / `Process.at`).
- * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
+ *   `Daemon.scheduleInMemory` / `scheduleDefine` (and the toolkit `Daemon.Schedule` resource /
+ *   `Daemon.window` / `Daemon.at`).
+ * - **`WorkPool`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
- *   service with a `.layer`.
- * - **`ProcessStore`** — In-memory (or **SQLite**) **analytics**: execution rows + lifecycle
- *   events for processes.
- * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
- *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
- *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
- *   on it — the toolkit process (`Process.Tag` / `Process.Schedule`, from
- *   `@nikscripts/effect-pm/Process`) and the toolkit queue (from
- *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `serve` /
- *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
- *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
- *   See `docs/guides/toolkit-by-example.md`.
- * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
- *   Optional building blocks for **gated** HTTP and reusable resource patterns.
- * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
- *   (metrics/logs history); in-memory or SQLite (`@nikscripts/effect-pm/storage/sqlite`).
- * - **`DisarmedIdleSleep`** — Policy helpers for custom schedule layers (root aliases:
- *   `computeDisarmedIdleSleep`, `DEFAULT_SCHEDULE_POLL_WHILE_DISARMED`, …).
+ *   service with a `.layer`. `WorkPool.priority` adds named N-lane queues.
+ * - **`Store`** — EventJournal-backed execution / queue / gate / log history; daemon stores via
+ *   `Daemon.store(tag)` and `Store.Service`.
+ * - **Toolkit (location-transparent services)** — **`Hyperlink`** is the foundation: a service is
+ *   driven by the same `yield* Service` code whether it runs **local or remote** (`Hyperlink.client` /
+ *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included kinds build on it —
+ *   `Daemon.Service` / `Daemon.Schedule` and `WorkPool.Service` / `WorkPool.priority` — each with
+ *   `Service` / `layer` / `configure` / `serve` / `serveRemote` (baked config+layer factories are
+ *   `*.define`). **`Group`** organizes member services
+ *   (nestable; members may be on the same or different nodes). Contracts are introspectable via
+ *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/services/` and
+ *   `docs/guides/`.
+ * - **`Gate`**, **`HttpClientGate`**, **`Gate.HttpApiClient`** —
+ *   Optional building blocks for **gated** HTTP and reusable service patterns.
+ * - **Persistence** — `DurableWorkPoolStore` (durable priority queue) + `HistoryStore`
+ *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
  *
  * ## Where to read next
  *
- * - Toolkit by example (every resource/group/node/UI pattern): `docs/guides/toolkit-by-example.md`
- * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
- * - API tables (Process, Polling, Schedule): `docs/PROCESS-API.md`
+ * - Live book: `docs/index.md`, `docs/services/`, `docs/guides/`, `docs/standards/`
+ * - Logs: `docs/guides/logs.md` (and `docs/LOGS.md` while the guide absorbs it)
  * - Runnable teaching scripts: `examples/README.md`
  * - Future roadmap (priority order, **not** shipped API truth): `docs/plans/README.md`
- * - Agent-oriented repo map: `docs/AGENTS.md`
+ * - Agent / supervisor bus: `docs/handoffs/agent-status.md`
  *
  * ## Import style
  *
- * Every public API lives under a **namespace** in its source module (`Query`,
- * `ResourceConfigure`, …). The root barrel re-exports the same bindings under **short
- * names** (`And`, `Node`, …) so you can choose `import { And }` or `import { Query }`
- * with `Query.And` — they are identical.
+ * Every public API lives under a **namespace** in its source module
+ * (`HyperlinkConfigure`, `Store`, …). The root barrel re-exports the same bindings under
+ * short names where useful.
  *
  * ## Dedicated subpaths
  *
- * Service/resource subpaths mirror namespaces: **`@nikscripts/effect-pm/Process`**,
- * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/Query`**,
- * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessStore`**,
- * **`@nikscripts/effect-pm/RuntimeStorage`**, and **`@nikscripts/effect-pm/Logs`**.
+ * Service/resource subpaths mirror namespaces: **`hyperlink-ts/Daemon`**,
+ * **`hyperlink-ts/WorkPool`**, **`hyperlink-ts/HyperlinkConfigure`**,
+ * **`hyperlink-ts/Store`**, and **`hyperlink-ts/Logs`**.
  *
- * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
- * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue),
- * **`@nikscripts/effect-pm/Group`**,
- * **`@nikscripts/effect-pm/NodeLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
- * and **`@nikscripts/effect-pm/DurableQueueStore`**.
+ * Toolkit subpaths: **`hyperlink-ts/Hyperlink`** (foundation + `specOf` / `methodMeta`),
+ * **`hyperlink-ts/WorkPool`** (toolkit queue),
+ * **`hyperlink-ts/MultiNode`** (multi-instance gather/fold),
+ * **`hyperlink-ts/Group`**,
+ * **`hyperlink-ts/HistoryStore`**,
+ * and **`hyperlink-ts/DurableWorkPoolStore`**.
  *
- * Structured log persistence: `ProcessStore.Log` (also exported as the
- * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
- * pipeline: `@nikscripts/effect-pm/Logs`.
- * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStorage.layer`).
- * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
+ * Durable logs: register `Node.logs` / toolkit `*.store(tag)` on a {@link Store.Service}
+ * (`layerMemory` / `layer` bake in capture + per-registration tails). Capture/relay:
+ * `hyperlink-ts/Logs`.
  *
- * Storage adapters use lower-case subpaths:
- * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/redis`**
- * for durable runtime records.
+ * Durable adapters: **`hyperlink-ts/storage/sqlite`**
+ * (`SQLiteDurableWorkPoolStore`, `SQLiteHistoryStore`).
  *
  * ## Source-only helpers
  *
@@ -87,44 +80,32 @@
  * at script entry (`examples/shared/demo-harness.ts`, same idea as `@effect/platform-node`
  * samples). **Tests** may use `Effect.provide` with layers, matching Effect’s own suites.
  *
- * @module @nikscripts/effect-pm
+ * @module hyperlink-ts
  */
 
 // ============================================================================
-// effect-pm - Main exports (see @packageDocumentation above)
+// hyperlink-ts - Main exports (see @packageDocumentation above)
 // ============================================================================
 
-export {
-  computeDisarmedIdleSleep,
-  resolveDisarmedFallbackPoll,
-  DEFAULT_SCHEDULE_POLL_WHILE_DISARMED,
-  MIN_SCHEDULE_POLL_WHILE_DISARMED,
-  DISARMED_HINT_SLEEP_MIN,
-  DISARMED_HINT_SLEEP_MAX,
-  DisarmedIdleSleep,
-} from "./disarmedIdleSleep";
-
-// The single unified `Process` namespace. `export * as` (module namespace, Effect-style) so member
-// access tree-shakes: `Process.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
-// engine only when used. Engine + Resource toolkit are both members (`Process.make`, `Process.Tag`, …).
-export * as Process from "./Process";
-export { ProcessMakeInvalidLayerArgument } from "./Process";
-export type { ProcessSnapshot } from "./Process";
-export { Polling } from "./Polling";
-// The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
-// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
+// The single unified `Daemon` namespace. `export * as` (module namespace, Effect-style) so member
+// access tree-shakes: `Daemon.Service` pulls zero engine code; `make` / `layer` / `serve` pull the
+// engine only when used. Engine + Hyperlink toolkit are both members (`Daemon.make`, `Daemon.Service`, …).
+export * as Daemon from "./Daemon";
+export { DaemonMakeInvalidLayerArgument } from "./Daemon";
+export type { DaemonSnapshot } from "./Daemon";
+export * as Polling from "./Polling";
+// The single unified WorkPool namespace. `export * as` (module namespace, Effect-style) so
+// member access tree-shakes: `WorkPool.Service` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
-export * as QueueResource from "./QueueResource";
-export * as RunResource from "./RunResource";
-export * as HttpClientRunGate from "./HttpClientRunGate";
+export * as WorkPool from "./WorkPool";
+export * as Gate from "./Gate";
+export * as HttpClientGate from "./HttpClientGate";
 export {
   acceptJson,
   instrumentEndpoints,
-  type HttpApiResourceConfig,
-  type HttpApiResourceLayerEffectConfig,
-} from "./HttpApiResource";
-export * as HttpApiResource from "./HttpApiResource";
-export * as ApiMetrics from "./ApiMetrics";
+  type HttpApiClientConfig,
+  type HttpApiClientLayerEffectConfig,
+} from "./Gate";
 export {
   apiUsageEndpointMetrics,
   apiUsageMetrics,
@@ -133,22 +114,63 @@ export {
   type ApiUsageSnapshot,
 } from "./ApiUsageSchema";
 export * as Telemetry from "./Telemetry";
+export * as FleetHealth from "./FleetHealth";
+export * as ShardMap from "./ShardMap";
+export * as DynamicConfig from "./DynamicConfig";
 export {
-  DuplicateGroupId,
-  DuplicateInstance,
-  DuplicateResourceKey,
-  InstanceRoutingError,
-  LocalOnlyMethod,
-  MissingContractMethod,
-  // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
-  // per method from its kind/description/destructive/streaming). See examples/resource-tui.
-  methodMeta,
-  specOf,
-} from "./Resource";
-// `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Node`
-// pull only what's used. Import `* as Resource` from the subpath, or `{ Resource }` from here.
-export * as Resource from "./Resource";
+  ConfigKeyNotSwappable,
+  DynamicConfigStore,
+} from "./DynamicConfig";
 export type {
+  AllConfig,
+  ConfigBag,
+  ConfigField,
+  FixedField,
+  SwappableField,
+} from "./DynamicConfig";
+export {
+  DuplicateWireKey,
+  DuplicateSharedInstance,
+  DuplicateDefaultKey,
+  DuplicateHyperlinkKey,
+  EffectFnMissingPayload,
+  SharedRoutingError,
+  IdentityMultiNode,
+  IdentitySelfRequired,
+  LocalOnlyMethod,
+  LookupClientError,
+  MissingClientProtocol,
+  MissingContractMethod,
+  ProtocolMismatch,
+  // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
+  // per method from its kind/description/destructive/streaming). See examples/apps/tui.
+  methodMeta,
+  isVoidCommand,
+  isEffect,
+  specOf,
+} from "./Hyperlink";
+// `Hyperlink` as a tree-shakeable module namespace (Effect-style): `Hyperlink.Service` /
+// `Node.Service` pull only what's used. Import `* as Hyperlink` / `* as Node` from the subpath.
+export * as Hyperlink from "./Hyperlink";
+export * as Node from "./Node";
+export * as Launcher from "./Launcher";
+export * as MultiNode from "./MultiNode";
+export * as Lookup from "./Lookup";
+// Sibling Tag modules — `import * as Advice from "hyperlink-ts/Advice"` → `Advice.Service` /
+// `Advice.changes`. Never nest Tags under Lookup.
+export * as Advice from "./Advice";
+export * as Dialers from "./Dialers";
+export * as Directory from "./Directory";
+export * as Identity from "./Identity";
+export * as Address from "./Address";
+export * as LookupPolicy from "./LookupPolicy";
+export * as NodePolicy from "./NodePolicy";
+export * as PolicyBuilder from "./PolicyBuilder";
+export * as Lifecycle from "./Lifecycle";
+export * as Versioned from "./Versioned";
+export * as Update from "./Update";
+export type {
+  AnyDefaultMethod,
   AnyLocalMethod,
   AnyMethod,
   Local,
@@ -156,115 +178,58 @@ export type {
   LocalMethod,
   LocalShape,
   LocalShapeOf,
-  NodeKey,
-  NodeTagFactory,
   Of,
   Method,
   MethodAnnotations,
   MethodKind,
   MethodMeta,
-  ResourceInstance,
-  ResourceTag,
+  HyperlinkTag,
   ServiceOf,
   Shape,
   ShapeOf,
+  SharedTagFactory,
   Spec,
-  TagFactory,
+  DefaultMethod,
+  DefaultsBag,
+  DefaultsInput,
+  DefaultsOf,
+  TagWithDefaults,
+  WithDefaults,
+  ImplWithDefaultOverrides,
   TagHandlers,
   Wire,
   WireOf,
   WireShape,
-} from "./Resource";
-export * as ProcessStorage from "./ProcessStorage";
-
-
-// Query / Runtime Storage
-export * as Query from "./Query";
-export {
-  And,
-  Attributes,
-  Created,
-  Delete,
-  Id,
-  IndexA,
-  IndexB,
-  IndexC,
-  IndexD,
-  IndexE,
-  IndexF,
-  IndexG,
-  IndexH,
-  Insert,
-  Key,
-  Limit,
-  Occurred,
-  Offset,
-  Or,
-  OrderBy,
-  Payload,
-  ProcessId,
-  ProcessType,
-  Readonly,
-  RunId,
-  Select,
-  SubjectId,
-  SubjectType,
-  Type,
-  Update,
-  Upsert,
-  Where,
-} from "./Query";
+} from "./Hyperlink";
 export type {
-  RuntimeRecordAssignment,
-  RuntimeRecordComparison,
-  RuntimeRecordOrderBy,
-  RuntimeRecordOrderField,
-  RuntimeRecordPatch,
-  RuntimeRecordPredicate,
-  RuntimeRecordQuery,
-} from "./Query";
-export {
-  RuntimeStorage,
-  RuntimeStorageConnectionError,
-  RuntimeStorageDecodeError,
-  RuntimeStorageDuplicateRecordError,
-  RuntimeStorageEncodeError,
-  RuntimeStorageQueryError,
-  RuntimeStorageReadonlyRecordError,
-  RuntimeStorageSchemaError,
-  RuntimeStorageTransactionError,
-  RuntimeStorageUnavailableError,
-  selectRuntimeRecords,
-  applyRuntimeRecordPatch,
-} from "./RuntimeStorage";
-export type {
-  DeleteResult,
-  RuntimeRecord,
-  RuntimeStorageAdapter,
-  RuntimeStorageError,
-  RuntimeStorageLogicalError,
-  RuntimeStorageOperation,
-  RuntimeStorageOperationalFields,
-  RuntimeStorageOperationalError,
-  RuntimeStorageService,
-  UpdateResult,
-} from "./RuntimeStorage";
+  AnyNode,
+  AddressedNode,
+  CatalogNode,
+  DialableTarget,
+  ListenOptions,
+  NamelessListenOptions,
+  HttpListenArg,
+  WsListenArg,
+  IpcListenArg,
+  NodeKey,
+  ProtocolKind,
+} from "./Node";
 
 /**
- * Layer-composed configure patches for {@link Process.Service}, {@link QueueResource.Service},
- * and {@link RunResource.Service}. See `docs/guides/resource-configure.md`.
+ * Layer-composed configure patches for {@link Daemon.define}, {@link WorkPool.define},
+ * and {@link Gate.define}.
  */
 export {
   configureLayer,
   foldConfig,
   resourceConfigureTagKey,
-} from "./ResourceConfigure";
-export * as ResourceConfigure from "./ResourceConfigure";
-export type { ConfigPatch } from "./ResourceConfigure";
+} from "./HyperlinkConfigure";
+export * as HyperlinkConfigure from "./HyperlinkConfigure";
+export type { ConfigPatch } from "./HyperlinkConfigure";
 
 // CLI
 
-// Process Manager
+// Daemon Manager
 export {
   encodeLogEntryNdjson,
   decodeLogEntryNdjson,
@@ -272,226 +237,63 @@ export {
   LogEntrySchema,
 } from "./LogEntry";
 export * as LogEntry from "./LogEntry";
-export {
-  LogRelay,
-  captureLogger,
-  captureLoggerLayer,
-  relayLayer,
-  logsRelayLayer,
-  replayLogEntry,
-  relayOnlyLayer as logRelayLayer,
-  relayWithCaptureLoggerLayer,
-} from "./Logs";
-// Module namespace (Effect-style) so `Logs.captureLoggerLayer` etc. resolve the
-// same bindings as the flat root re-exports above.
+// Module namespace (Effect-style): `Logs.layer` / `Logs.Relay` / `Logs.replay`.
 export * as Logs from "./Logs";
-export * as NodeLogs from "./NodeLogs";
-export type { NodeLogEntry } from "./NodeLogs";
-export * as NodeStatus from "./NodeStatus";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 export {
-  DurableQueueStore,
-  DurableQueueError,
+  DurableWorkPoolStore,
+  DurableWorkPoolError,
   durablePriorityRank,
-} from "./DurableQueueStore";
+} from "./DurableWorkPoolStore";
 export type {
   DurableEntry,
   DurableEntryInput,
   DurablePriority,
-  DurableQueueStoreShape,
+  DurableWorkPoolStoreShape,
   DurableSizes,
   FailResult,
   OfferResult,
-} from "./DurableQueueStore";
+} from "./DurableWorkPoolStore";
 export * as Group from "./Group";
 export * as Store from "./Store";
 export {
   LogAnnotationKeys,
   withNodeLogAnnotations,
-  withProcessLogAnnotations,
-  withQueueLogAnnotations,
 } from "./LogContext";
 export * as LogContext from "./LogContext";
-export type { LogEntryRecordedEvent } from "./store/log";
-export { isLogEntryRecorded } from "./store/log";
-
-// Process Store
-export {
-  ProcessStore,
-  ProcessStoreDuplicateRecordError,
-  ProcessStoreReadonlyRecordError,
-  ProcessStoreStorageError,
-  type AnalyticsEventBase,
-  type ProcessStoreWriteError,
-  type QueryOpts,
-} from "./ProcessStore";
-
-export { LogStore } from "./store/log";
-export type { LogStoreApi } from "./store/log";
-export { RunResourceStore } from "./store/runResource";
-export { ProcessExecutionStore } from "./store/processExecution";
-export { ProcessLifecycleStore } from "./store/processLifecycle";
+// Types - Daemon
 export type {
-  ProcessExecutionCompletedEvent,
-  ProcessExecutionFinishInput,
-  ProcessExecutionQuery,
-  ProcessExecutionScopedFinishInput,
-  ProcessExecutionScopedQuery,
-  ProcessExecutionStatus,
-} from "./store/processExecution";
-export type {
-  ProcessLifecycleChangedEvent,
-  ProcessLifecycleRecordInput,
-  ProcessLifecycleTag,
-} from "./store/processLifecycle";
-export type {
-  QueueResourceStoreDedupeKeyStatus,
-  QueueResourceStoreEntryStatus,
-  QueueResourceStoreLifecycleTag,
-  QueueResourceStorePriority,
-  QueueDedupeKeyAddedChange,
-  QueueDedupeKeyChange,
-  QueueDedupeKeyChangeType,
-  QueueDedupeKeyHydratedChange,
-  QueueDedupeKeyQuery,
-  QueueDedupeKeyReleasedChange,
-  QueueEntryCompletedFact,
-  QueueEntryDeadLetteredFact,
-  QueueEntryDroppedFact,
-  QueueEntryEnqueuedFact,
-  QueueEntryExhaustedFact,
-  QueueEntryFact,
-  QueueEntryFactType,
-  QueueEntryFailedFact,
-  QueueEntryQuery,
-  QueueEntryReleasedFact,
-  QueueEntryRetriedFact,
-  QueueEntryStartedFact,
-  QueueLifecycleChange,
-  QueueLifecycleChangeType,
-  QueueLifecycleClearedChange,
-  QueueLifecycleDrainedChange,
-  QueueLifecyclePausedChange,
-  QueueLifecycleQuery,
-  QueueLifecycleResumedChange,
-  QueueLifecycleShutdownChange,
-  QueueLifecycleStartedChange,
-  QueueRateLimitExceededFact,
-  QueueRateLimitExceededFactType,
-  QueueRateLimitQuery,
-} from "./store/queueResource";
-export { QueueResourceStore } from "./store/queueResource";
-export type {
-  RunResourceFact,
-  RunResourceFactQuery,
-  RunResourceFactType,
-  RunResourceRef,
-  RunResourceRun,
-  RunResourceRunCompletedFact,
-  RunResourceRunCompletedPayload,
-  RunResourceRunFailedFact,
-  RunResourceRunFailedPayload,
-  RunResourceRunStartedFact,
-  RunResourceRunStartedPayload,
-  RunResourceScopedFactQuery,
-  RunResourceScopedStateHistoryQuery,
-  RunResourceState,
-  RunResourceStateChange,
-  RunResourceStateChangeReason,
-  RunResourceStateHistoryQuery,
-} from "./store/runResource";
-
-// Types - Process
-export type {
-  Process as ProcessInterface,
-  ProcessDefinition,
-  ProcessServiceDefinition,
-  ProcessMakeConfig,
-  ProcessMakeOptions,
-  ProcessSupervisorRequirements,
-  ProcessPollingInput,
-  ProcessScheduleInput,
-  ProcessScheduleLayerInput,
-  ProcessMake,
-  ProcessServiceBuilder,
-  ProcessServiceFactory,
-} from "./Process";
+  Daemon as DaemonInterface,
+  DaemonDefinition,
+  DaemonServiceDefinition,
+  DaemonMakeConfig,
+  DaemonMakeOptions,
+  DaemonSupervisorRequirements,
+  DaemonPollingInput,
+  DaemonScheduleInput,
+  DaemonScheduleLayerInput,
+  DaemonMake,
+  DaemonServiceBuilder,
+  DaemonServiceFactory,
+} from "./Daemon";
 
 // Types - Polling
-export type { PollingService, AcceleratingPollConfig } from "./Polling";
 
-// Types - QueueResource
+// Types - WorkPool (the leveled queue folded into WorkPool.priority)
 export type {
-  QueueHandle,
-  QueueEnqueue,
-  QueueResourceDefinition,
-  QueueResourceMetadata,
-  QueueResourceServiceDefinition,
-  QueueResourceConfig,
-  QueueResourceConfigBase,
-  QueueResourceRateLimitOptions,
-  QueueResourceConfigWithoutItemSchema,
-  QueueResourceConfigWithItemSchema,
-  QueueResourceOptionsWithoutItemSchema,
-  QueueResourceOptionsWithItemSchema,
-  QueueConfigFromEffect,
-  QueueWorkerEffect,
-  QueueShutdownError,
-  EffectContext,
-  QueueBatch,
-  QueueEncodedEntry,
-  QueueEntry,
-  QueueEntrySelector,
-  QueueEntryTimestamps,
-  QueueEnqueueEntries,
-  QueueEvent,
-  QueueStatus,
-  QueueMetrics,
-  QueueFailureDisposition,
-  QueueOnFailure,
-  QueueReleaseOptions,
-  QueueRouteOptions,
-  QueueReleaseEncodingError,
-  Priority,
-  BuiltInTakeAlgorithm,
-  TakeAlgorithm,
-  TakeAlgorithmPick,
-  TakeAlgorithmPickContext,
-  CustomTakeAlgorithm,
-  QueueItemCodecDescriptor,
-  InferQueueEnqueueError,
-  InferQueueItem,
-  InferQueueWorkerError,
-  InferQueueWorkerRequirements,
-  ConsumeResult,
-} from "./internal/queueResource";
-
-export * as CustomQueueResource from "./CustomQueueResource";
-
-export type {
-  CustomQueueHandle,
-  CustomQueueEnqueue,
-  CustomQueueLevelConfig,
-  CustomQueueRefill,
-  CustomQueueResourceConfig,
-  CustomQueueResourceConfigWithoutItemSchema,
-  CustomQueueResourceConfigWithItemSchema,
-  CustomQueueStatus,
-} from "./internal/customQueueResource";
-
-export type {
-  CustomQueueTagOptions,
-} from "./CustomQueueResource";
+  PriorityTagConfig,
+  PriorityStatus,
+} from "./WorkPool";
 
 export {
-  customQueueControlSpec,
-  customQueueEntry,
-  customQueueLevel,
-  customQueueSizes,
-  customQueueSpec,
-  customQueueStatus,
-} from "./CustomQueueResource";
+  priorityControlSpec,
+  priorityEntry,
+  priorityLane,
+  prioritySizes,
+  prioritySpec,
+  priorityStatus,
+} from "./WorkPool";
 
 export {
   QueueItemCodecDescriptorSchema,
@@ -504,14 +306,34 @@ export {
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
   queueRateLimiterLayer,
-} from "./internal/queueResource";
+} from "./WorkPool";
 
-// Types - RunResource
+// Types - Gate
 export type {
-  RunResourceConfig,
-  RunGate,
-  RunResourceRunner,
-  RunResourceRunnerConfig,
-} from "./RunResource";
+  RunHandle,
+  Status as GateStatus,
+  Config as GateConfig,
+  Handle,
+  LayerConfig as GateLayerConfig,
+  LayerEffect as GateLayerEffect,
+  Runner,
+  RunnerConfig,
+  ServiceConfig as GateServiceConfig,
+  ServiceDefinition as GateServiceDefinition,
+  ServiceEffect as GateServiceEffect,
+  StaticRun as GateStaticRun,
+  TagDefinition as GateTagDefinition,
+  TagSchemas as GateTagSchemas,
+  WireSchemas as GateWireSchemas,
+  InstanceSpec as GateInstanceSpec,
+} from "./Gate";
+export {
+  gateStatus,
+  gateSpec,
+  kind as gateKind,
+  layer as gateLayer,
+  serve as gateServe,
+  serveRemote as gateServeRemote,
+} from "./Gate";
 
 // Types - Control Service

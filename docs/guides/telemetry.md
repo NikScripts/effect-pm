@@ -1,99 +1,132 @@
-# Metrics — OTEL for pro tools, Telemetry for custom
+{#telemetry title="Telemetry" status="draft" done="api previews types verified" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://dev.hyperlink.cool/docs/telemetry>.
+<!-- docs-site-link:end -->
+# Telemetry
 
-Every effect-pm host emits into Effect's per-process **`Metric` registry** (queues, processes, API
-clients, and Effect's own runtime metrics). That one registry feeds **two** independent sinks — pick per
-need, or run both:
+Every hyperlink-ts node already writes into Effect's `Metric` registry — WorkPools, Daemons, HTTP
+clients, runtime gauges. **Telemetry** serves that registry as a Hyperlink: leaf fields for this
+node, fleet folds when the tag is meshed. OTEL stays the professional sink; Telemetry is for custom
+glass (CLI, TUI, web) over the same tags.
 
-| | What | When |
-|---|---|---|
-| **OTEL export** | wire `@effect/opentelemetry`, push OTLP to a collector | you want a **professional** stack — Sentry, Grafana, Honeycomb, alerting, retention |
-| **`Telemetry` resource** | serve the registry as a `Resource` (`snapshot` + `live`) | you want to build something **custom** in-app — a fleet page, a TUI, a `pm metrics` command — with no external infra |
+## Declare the glass
 
-They don't compete: same source, different readers. `Telemetry` is deliberately **thin** — it serves the
-data; it does not retain, alert, or query. That's OTEL/Grafana's job.
+One tag. Distribute it across the droplets you actually run — Context service keys, not nicknames.
 
-## OTEL export (the professional path — doc only, no effect-pm dependency)
+{.twoslash}
+``` ts
+import * as Telemetry from "hyperlink-ts/Telemetry"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
+// ---cut---
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 
-effect-pm ships **no** OTEL code: the metrics are standard Effect `Metric`, so they export as-is. Add
-`@effect/opentelemetry` as a **peer** and provide its metric layer, pointing OTLP at your collector.
-Representative wiring (check `@effect/opentelemetry` for the current layer names):
-
-```ts
-import { NodeSdk } from "@effect/opentelemetry";
-import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
-import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-
-// wow's Sentry free tier: Sentry ingests OTLP — point the exporter at its endpoint + auth header
-const TelemetryOtel = NodeSdk.layer(() => ({
-  resource: { serviceName: "services-hub" },
-  metricReader: new PeriodicExportingMetricReader({
-    exporter: new OTLPMetricExporter({
-      url: "https://<org>.ingest.sentry.io/api/<project>/otlp/v1/metrics",
-      headers: { "x-sentry-auth": `Bearer ${process.env.SENTRY_DSN_TOKEN}` },
-    }),
-  }),
-}));
-
-// provide TelemetryOtel to your runtime — every Metric now exports to Sentry
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
+) {}
 ```
 
-Swap the exporter for Grafana/Honeycomb/Prometheus and nothing else changes. This is the path for
-dashboards, alerting, and history.
+## Serve it on a droplet
 
-## Telemetry resource (the custom path)
+`Telemetry.serve` forks the sampler and mounts leaf + fleet handlers. Discharge the mesh with
+`Hyperlink.peersLayer` so fleet fields can fold the other nodes' leaf `snapshot`s.
 
-Declare a tag, serve it on each host, and read it anywhere with `Resource.client`.
+{.twoslash}
+``` ts
+import * as Telemetry from "hyperlink-ts/Telemetry"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
+import { Duration, Layer } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
+) {}
+const nodeServer = (port: number) => <A, E, R>(serviceKey: Layer.Layer<A, E, R>) =>
+  Node.httpServer(serviceKey).pipe(
+    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+  )
+// ---cut---
+const east = Telemetry.serve(FleetMetrics, {
+  interval: Duration.seconds(1),
+}).pipe(
+  Layer.provide(Hyperlink.peersLayer(FleetMetrics, DropletEast)),
+  nodeServer(3001),
+)
+// east: Layer — this droplet samples its registry and reaches West + Central for fleet folds
+```
 
-```ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry";
+A single-node app with no peers uses `Telemetry.alone` instead of `peersLayer`:
 
-// hostless — the dashboard reaches each host via client(FleetTelemetry, host)
-class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
+{.twoslash}
+``` ts
+import * as Telemetry from "hyperlink-ts/Telemetry"
+import { Layer } from "effect"
+class FleetTelemetry extends Telemetry.Service<FleetTelemetry>()() {}
+// ---cut---
+const local = Telemetry.layer(FleetTelemetry).pipe(
+  Layer.provide(Telemetry.alone(FleetTelemetry)),
+)
+// local: Layer — leaf snapshot/live + fleet fields that only see this node
+```
 
-// serve it on a host (like a queue/process) — the sampler runs in the served scope
-const host = Resource.httpServer([Telemetry.serve(FleetTelemetry)]).pipe(
-  Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
-);
+## Read this node's registry
 
-// read it — snapshot (point-in-time) or live (~1s stream)
+`snapshot` is point-in-time. `live` is a ~1s push of the same envelope. Same handle, local or remote.
+
+{.twoslash}
+``` ts
+import * as Telemetry from "hyperlink-ts/Telemetry"
+import { Effect } from "effect"
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()() {}
 const program = Effect.gen(function* () {
-  const t = yield* FleetTelemetry;
-  const snap = yield* t.snapshot;             // MetricsSnapshot { ts, metrics: [...] }
-  const roster = snap.metrics.find((m) => m.id === "queue_enqueued_total" && m.labels.queue === "roster");
-});
-// provided with: Resource.client(FleetTelemetry).pipe(Layer.provide(connectHttp(host, …)))
+// ---cut---
+const glass = yield* FleetMetrics
+const snap = yield* glass.snapshot       // MetricsSnapshot { ts, metrics }
+const probe = snap.metrics.find((m) => m.id === "queue_enqueued_total")
+const mine = Telemetry.inFlightOf(snap)  // number — queue_in_flight on this node (0 if absent)
+// ---cut-after---
+})
 ```
 
-### The `MetricsSnapshot` envelope (the wire contract)
+## Show the fleet
 
-A tagged union — `counter` / `gauge` / `histogram` — each with `id` + `labels`, plus its state. Histogram
-`buckets` are cumulative `[{ le, count }]`. (`Frequency`/`Summary` are deferred — added additively.)
+Fleet fields fold each peer's **leaf** `snapshot` (peers never expose fleet fields, so a fold can't
+recurse). One yield, columns + total:
 
-```ts
-type MetricDatum =
-  | { _tag: "counter";   id: string; labels: Record<string,string>; count: number }
-  | { _tag: "gauge";     id: string; labels: Record<string,string>; value: number }
-  | { _tag: "histogram"; id: string; labels: Record<string,string>;
-      buckets: ReadonlyArray<{ le: number; count: number }>; count: number; sum: number };
-type MetricsSnapshot = { ts: number; metrics: ReadonlyArray<MetricDatum> };
+{.twoslash}
+``` ts
+import * as Telemetry from "hyperlink-ts/Telemetry"
+import { Effect } from "effect"
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()() {}
+const program = Effect.gen(function* () {
+// ---cut---
+const glass = yield* FleetMetrics
+
+const columns = yield* glass.inFlightByNode
+// columns: Record<string, number> — e.g. { "app/DropletEast": 5, "app/DropletWest": 3 }
+
+const total = yield* glass.fleetInFlight
+// total: number — sum of queue_in_flight across self + peers
+// ---cut-after---
+})
 ```
 
-### Fleet fan-out
+`Telemetry.inFlightMetricId` is `"queue_in_flight"` — the gauge queue engines already emit.
 
-Because each host serves its own `FleetTelemetry`, the **host axis is free** — it's *which* host you
-connected to. `client(FleetTelemetry, host)` per host, stamp each snapshot with the host, then group/sum
-by `{ host, id, labels }` — **overall** (sum across hosts), **per-host** (by connection), **per-label**
-(by `client` / `status`). Configure the cadence via `Telemetry.layer(tag, { interval })` (default ~1s;
-sliding buffer so a slow reader can't backpressure the sampler).
+## OTEL stays the grown-up sink
 
-## Cardinality — keep labels cheap
+Telemetry does not retain, alert, or query history. Wire `@effect/opentelemetry` when you need
+collectors; keep Telemetry when you want the registry on a Hyperlink tag your CLI / TUI / web already
+speak.
 
-`host` / `client` / `status` are low-cardinality — good. **Do not** add per-endpoint or per-entity labels
-to metrics (a metric per URL or per queue entry explodes cardinality). Per-**entity** *current* state
-(this queue's depth right now) is read from the entity's own `status`/`snapshot` stream, **not** from
-Telemetry. Telemetry is for aggregate rates and counts across the host.
-
-## History
-
-`Metric` is live-only (no persistence). `snapshot`/`live` are live; retained history is an OTEL/collector
-concern (or your own store), mirroring the queue's `metrics` vs `metricsHistory` split.
+Runnable form: `pnpm run example:fleet-telemetry-glass`. For readiness across the same mesh
+(Reachable / Unreachable, not metric skip-omit), see [Fleet Health](/docs/fleet-health). Also
+[Fleets & Peers](/docs/fleets-and-peers).

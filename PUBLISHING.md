@@ -1,115 +1,77 @@
 # Publishing Guide
 
-## Publishing a New Version
+Current package version: see `package.json` (prerelease line `0.9.0-beta.n` as of this writing).
 
-### Prerequisites
-- Ensure you're logged in to npm: `npm whoami`
-- If not logged in: `npm login`
-- Ensure all changes are committed
+## Prerequisites
 
-### Steps to Publish
+- `npm whoami` (or `npm login`)
+- Working tree clean on the release tip
+- Owner approval before **`pnpm run version`** and publish (agents may create `.changeset/*.md` freely)
 
-#### 1. Create a Changeset (if not already created)
+## Steps
 
-```bash
-npm run changeset
-# Follow prompts to describe changes
-# Select: patch, minor, or major
-```
-
-**Prerelease (`0.x.0-beta.n`):** In `pre` mode, `changeset version` may bump the **prerelease segment** (e.g. `0.7.0-beta.0` → `0.7.0-beta.1`) rather than opening a new minor line. For a deliberate new beta line, set `package.json` and `CHANGELOG.md` explicitly and keep stray `.changeset/*.md` files out of the folder.
-
-#### 2. Version Bump
+### 1. Changesets
 
 ```bash
-npm run version
+pnpm run changeset
 ```
 
-This will:
-- Consume all changesets in `.changeset/`
-- Update version in `package.json`
-- Generate/update `CHANGELOG.md`
-- Create a version commit
+Pending files live in `.changeset/`. Before a first public release, consolidate intermediate
+add/remove churn into coherent release notes rather than shipping every historical note verbatim.
 
-#### 3. Build
+**Prerelease:** with changesets in `pre` mode, `changeset version` may bump only the prerelease
+segment (`0.9.0-beta.0` → `0.9.0-beta.1`). For a new beta line, set `package.json` / `CHANGELOG.md`
+deliberately under owner direction.
+
+### 2. Version (owner-approved)
 
 ```bash
-npm run build
+pnpm run version
 ```
 
-Verify the build completes successfully.
+This consumes `.changeset/*.md`, updates `package.json`, and regenerates `CHANGELOG.md`.
+It does **not** create a git commit (`changeset` config `commit: false`) — commit yourself.
 
-#### 4. Publish to npm
+### 3. Build & verify
 
 ```bash
-npm publish
+pnpm run build
+pnpm run typecheck
+pnpm pack --dry-run   # confirm published paths (handoffs/plans/site excluded)
 ```
 
-Or use the all-in-one release script:
+### 4. Publish
 
 ```bash
-npm run release
+pnpm run release
+# or: npm publish --tag beta
 ```
 
-#### 5. Push to GitHub
+### 5. Push
 
 ```bash
 git push --follow-tags
 ```
 
-This pushes both commits and version tags.
+## What ships on npm
 
-### Version History
+Via `package.json` `"files"` + `.npmignore`:
 
-- **v0.7.0-beta.0** — Effect-first process runtime (`Polling` + `ProcessSchedule` layers, supervisor, exports). See `CHANGELOG.md`, `docs/PROCESS-API.md`, and `docs/RESOURCE-API.md`.
-- **v0.6.0-beta.x** — `ProcessStore` foundation, queue / `ProcessGroup` typing work
-- **v0.1.0** - Initial release
-- **v0.1.1** - Bug fixes and type exports
-- **v0.2.0** - API improvements
-- **v0.3.0** - Breaking changes: API modernization
+- **Included:** `dist/`, `src/`, living docs (guides/services/getting-started/…), README, LICENSE, CHANGELOG
+- **Excluded:** `docs/handoffs/`, `docs/plans/`, `docs/site/`, `docs/docgen/`, `examples/` (clone the repo), agent/supervisor material, `dev/`, `scripts/`
 
-### Changeset Types
-
-- **patch** (0.0.x) - Bug fixes, docs, non-breaking additions
-- **minor** (0.x.0) - New features, non-breaking additions
-- **major** (x.0.0) - Breaking changes (before 1.0.0, this means significant API changes)
-
-### Quick Reference
+## Quick checks
 
 ```bash
-# Check current version
-npm run version:check
-
-# Dry run (test publish without actually publishing)
 npm publish --dry-run
-
-# View what will be published
 npm pack --dry-run
-
-# Check published package info
-npm info @nikscripts/effect-pm
+npm info hyperlink-ts
 ```
 
-### Troubleshooting
+## Troubleshooting
 
-**"Version already exists":**
-- You forgot to run `npm run version` before publishing
-- Run it now and try again
+**"Version already exists"** — run `pnpm run version` (or bump) before publish.
 
-**"Not logged in":**
-```bash
-npm login
-```
+**"Not logged in"** — `npm login`.
 
-**Build fails:**
-```bash
-npm run clean
-npm install
-npm run build
-```
-
-**Want to unpublish (within 72 hours):**
-```bash
-npm unpublish @nikscripts/effect-pm@0.x.x
-```
-⚠️ Only use for serious issues, not recommended
+**Build fails** — `pnpm run clean && pnpm install && pnpm run build`.

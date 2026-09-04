@@ -1,0 +1,39 @@
+/**
+ * @module examples/node/nameless-unix-call
+ *
+ * Nameless listen — call (second process).
+ *
+ * ```bash
+ * pnpm exec tsx examples/node/nameless-unix-call.ts
+ * ```
+ *
+ * Docs: `docs/examples/node/nameless-unix-call.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
+ */
+
+// ---cut---
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
+import * as NodeServices from "@effect/platform-node/NodeServices"
+import { Effect, Schema } from "effect"
+import * as Hyperlink from "../../src/Hyperlink"
+
+class Jobs extends Hyperlink.Service<Jobs>()("nameless/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
+}) {}
+
+class Emails extends Hyperlink.Service<Emails>()("nameless/Emails", {
+  emails: Hyperlink.effect(Schema.String),
+}) {}
+
+const clients = Hyperlink.discoverClients(Jobs, Emails)
+
+const program = Effect.gen(function* () {
+  const jobs = yield* Jobs
+  const emails = yield* Emails
+  const n = yield* jobs.jobs
+  const s = yield* emails.emails
+  yield* Effect.logInfo(`jobs=${n} emails=${s}`)
+}).pipe(Effect.provide(clients), Effect.scoped, Effect.provide(NodeServices.layer))
+
+// ---cut-after---
+NodeRuntime.runMain(program)

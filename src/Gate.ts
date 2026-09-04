@@ -1,0 +1,1330 @@
+/**
+ * Gate — concurrency gate for effects.
+ *
+ * Wraps any effect with bounded concurrency via `Semaphore`, and optionally an
+ * Effect {@link RateLimiter} (`rateLimit`) that consumes **before** the
+ * semaphore — same orthogonal split as {@link WorkPool}. Unlike WorkPool, there
+ * are no queues, priorities, or background workers — the gate is applied inline
+ * at the call site. Each `run` acquires a permit, executes the effect, and
+ * releases the permit on completion.
+ *
+ * ## Rate limiting
+ *
+ * `rateLimit: { limit, window, … }` is **consume policy only** — you do **not**
+ * pass an Effect `RateLimiter` instance there. `RateLimiter` / `RateLimiterStore`
+ * are Context services: provide them with layers at the app root (e.g.
+ * `RateLimiter.layerStoreRedis` + `RateLimiter.layer`), or omit them and the
+ * gate Soft-builds an in-memory limiter. Default `onExceeded` is `"delay"`.
+ *
+ * ## Entry points
+ *
+ * | Function | Purpose |
+ * |----------|---------|
+ * | `Gate.Service` / `Gate.define` | Participating handle — Lifecycle + observation + wire `run` |
+ * | `Gate.layer` / `serve` / `serveRemote` | Layers from a Tag (Lifecycle + RPC) |
+ * | `Gate.configure` | Config patch layer for a tag (Tag path) |
+ * | `Gate.store` | Register built-in run facts + state history on an app {@link Store.Service} |
+ * | `Gate.make` | Local scoped `.run` only — **no** Lifecycle / Subscribables |
+ * | `Gate.makeRunner` | Generic semaphore runner (wraps arbitrary effects; no Lifecycle) |
+ *
+ * ## Store provision
+ *
+ * {@link layer}, {@link serve}, and {@link serveRemote} soft-default {@link Store.layerDefaultMemory}
+ * via {@link Store.withDefaultStorage} — **R is fulfilled** out of the box. Override by providing
+ * your {@link Store.Service} into the toolkit layer so Soft unwrap captures that bridge:
+ *
+ * ```ts
+ * Gate.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * ```
+ *
+ * {@link layerMemory} / {@link serveMemory} / {@link serveRemoteMemory} are aliases of the same
+ * soft-default. {@link make} still needs {@link Store.Storage} on the effect (see tests).
+ *
+ * ## Remote usage
+ *
+ * Declare wire schemas on the tag, then serve or connect like {@link WorkPool} / {@link Daemon}:
+ *
+ * ```ts
+ * class FetchGate extends Gate.Service<FetchGate>()("@app/FetchGate", {
+ *   payload: SymbolSchema,
+ *   success: PriceSchema,
+ *   error: FetchErrSchema,
+ * }) {}
+ *
+ * // unit gate — bare effect, wire slots default to Void / Never
+ * class Tick extends Gate.define<Tick>()("@app/Tick", {
+ *   effect: Effect.sleep("1 second"),
+ * }) {}
+ * ```
+ *
+ * ## Observable handles (Service / define / layer)
+ *
+ * `yield* Service` returns a toolkit service with `.run` plus {@link Subscribable} views
+ * (`status`, `waiting`, `inFlight`, `completed`, …). Read with `yield* handle.waiting.get`
+ * or subscribe via `handle.waiting.changes`.
+ *
+ * Service and define also expose a static `.run` shortcut that requires the service in `R`.
+ *
+ * @module Gate
+ */
+
+import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
+import * as Hyperlink from "./Hyperlink";
+import * as Lifecycle from "./Lifecycle";
+import type {
+  Driver,
+  HandlerContextOf,
+  ImplOf,
+  Local,
+  HyperlinkTag,
+} from "./Hyperlink";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import {
+  makeGateStoreAnalyticsContract,
+  type GateStoreAnalyticsContract,
+} from "./internal/store/gateStoreSpec";
+import type { StoreShapes } from "./internal/store/contractDef";
+import type { StoreScopeTag } from "./internal/store/registration";
+import {
+  configureLayer,
+  configureWrapEffectField,
+  foldConfiguredSpec,
+  type ConfigPatch,
+} from "./HyperlinkConfigure";
+import * as internal from "./internal/gate";
+import {
+  metricsKeyOf as metricsKeyOfInternal,
+  rateLimitKeyOf as rateLimitKeyOfInternal,
+  stampGateMetricsMetadata,
+  stampGateWireSchemas,
+} from "./internal/gateTagSchemas";
+import * as Store from "./Store";
+import {
+  gateStatus,
+  gateSpec,
+  gateSetRateLimitPayload,
+  type GateInstanceSpec,
+  type WithGateRunErrors,
+  GateStopped as GateStoppedSchema,
+} from "./internal/gateSchema";
+import { RateLimiterError } from "effect/unstable/persistence/RateLimiter";
+
+// ============================================================================
+// Public wire schemas + spec
+// ============================================================================
+
+/**
+ * Live gate counters on the wire — element of the reactive `status` ref.
+ *
+ * @public
+ */
+export { gateStatus };
+
+/**
+ * This contract's canonical **kind** — stamped on every gate tag.
+ *
+ * @category utils
+ * @public
+ */
+export const kind = "hyperlink-ts/Gate";
+
+/**
+ * Build a gate **instance** spec from wire schemas — pass to {@link Hyperlink.Service} or use via
+ * {@link Tag} / {@link Service}.
+ *
+ * @public
+ */
+export { gateSpec };
+
+/**
+ * Instance spec for a gate typed by its wire schemas — namespaced short form of
+ * internal `GateInstanceSpec` (`import * as Gate` → `Gate.InstanceSpec`).
+ *
+ * @category models
+ * @public
+ */
+export type InstanceSpec<
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> = GateInstanceSpec<I, A, E>;
+
+// ============================================================================
+// Public Types
+// ============================================================================
+
+/**
+ * Live gate status snapshot — namespaced short form of internal `GateStatus`
+ * (`import * as Gate` → `Gate.Status`).
+ *
+ * @category models
+ * @public
+ */
+export type Status = internal.GateStatus;
+
+/**
+ * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` / `Off`),
+ * or a waiting call is failed by a `stopMode: "failWaiting"` stop. In-flight bodies always
+ * finish.
+ *
+ * @remarks
+ * Wire-encodable (`Schema.TaggedErrorClass`) and always present on Tag / Service `run`
+ * alongside Effect's {@link RateLimiterError} (`Effect.catchTag("GateStopped", …)`).
+ * Also on local {@link make} handles.
+ *
+ * @category errors
+ * @public
+ */
+export const GateStopped = GateStoppedSchema;
+
+/**
+ * The {@link GateStopped} error type ({@link https://effect.website | Effect} tagged error).
+ *
+ * @category errors
+ * @public
+ */
+export type GateStopped = GateStoppedSchema;
+
+/**
+ * How a `stop` treats calls already **waiting** for a permit / resume:
+ * - `"failWaiting"` (default) — fail them with {@link GateStopped}.
+ * - `"finishWaiting"` — let them acquire + run; only new calls are rejected.
+ *
+ * In-flight bodies always finish regardless.
+ *
+ * @category models
+ * @public
+ */
+export type StopMode = internal.GateStopMode;
+
+/**
+ * Minimal handle from {@link Gate.make} — `.run` only.
+ *
+ * @category models
+ * @public
+ */
+export type RunHandle<T, A, E> = internal.GateRunHandle<T, A, E>;
+
+/**
+ * Observable handle from {@link Gate.make} with observation disabled, or the local-only
+ * engine handle. Prefer the toolkit service from {@link Tag} / {@link Service} for RPC.
+ *
+ * @category models
+ * @public
+ */
+export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
+
+/**
+ * A gate handle — the value `yield* MyGate` produces. The **named** compact form of a gate's
+ * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so it
+ * hovers as `Gate<Ticket, Price>` instead of the expanded `ServiceOf<…>` member wall; the docs
+ * popover / prettify-ts expand it to the full shape on demand.
+ *
+ * @typeParam Payload - the decoded gate input (`run(input)`; `void` → the gate is a bare {@link Effect})
+ * @typeParam Success - the gated effect's success value
+ * @typeParam Error - the wire `run` failure channel (declared effect errors **plus**
+ *   {@link GateStopped} and Effect {@link RateLimiterError})
+ * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol` for
+ *   a remote {@link Hyperlink.client})
+ *
+ * @category models
+ * @public
+ */
+export interface GateMetrics {
+  /** Tokens remaining after the last rate-limit consume (idle `0` without `rateLimit`). */
+  readonly remaining: Hyperlink.Subscribable<number>;
+  /** Milliseconds until the window fully resets (last consume). */
+  readonly resetAfter: Hyperlink.Subscribable<number>;
+  /** Count of delay/reject exceed events since the gate built. */
+  readonly exceeded: Hyperlink.Subscribable<number>;
+}
+
+/** @public */
+export interface Gate<
+  Payload,
+  Success = void,
+  Error = never,
+  Requirements = never,
+> {
+  /** Live gate counters (waiting / in-flight / completed / failed / interrupted / durations). */
+  readonly status: Hyperlink.Subscribable<Status>;
+  /** Count of runs waiting for a concurrency permit. */
+  readonly waiting: Hyperlink.Subscribable<number>;
+  /** Count of runs currently executing. */
+  readonly inFlight: Hyperlink.Subscribable<number>;
+  /** Count of runs that completed successfully. */
+  readonly completed: Hyperlink.Subscribable<number>;
+  /** Count of runs that failed (excluding interrupts). */
+  readonly failed: Hyperlink.Subscribable<number>;
+  /** Count of runs interrupted while waiting or executing. */
+  readonly interrupted: Hyperlink.Subscribable<number>;
+  /**
+   * Limiter live fields (flat under nest key `"metrics"`). Updates when `rateLimit` is set;
+   * otherwise idle zeros. Stable key metadata lives on the Tag (`rateLimitKeyOf` /
+   * `metricsKeyOf`), not under this nest.
+   */
+  readonly metrics: GateMetrics;
+  /**
+   * Acquire a permit, run the gated effect, release the permit on completion. A unit gate (`void`
+   * input) is a bare {@link Effect}; a parameterized gate is `(input) => Effect`.
+   */
+  readonly run: [Payload] extends [void]
+    ? Effect.Effect<Success, Error, Requirements>
+    : (input: Payload) => Effect.Effect<Success, Error, Requirements>;
+  /** Shared {@link Lifecycle.State} badge (`_tag`) — SSOT from the gate's {@link Lifecycle}. */
+  readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
+  /** Lifecycle transition stream ({@link Lifecycle.Event}). */
+  readonly lifecycleEvents: Stream.Stream<Lifecycle.Event>;
+  /** Start the gate (Idle → Running). No-op once past Idle; idempotent. */
+  readonly start: Effect.Effect<void>;
+  /** Pause admission — new calls latch-block (including waiters) until {@link resume}. */
+  readonly pause: Effect.Effect<void>;
+  /** Resume after {@link pause} — latch opens, held callers proceed. */
+  readonly resume: Effect.Effect<void>;
+  /**
+   * Stop the gate (graceful). New calls fail {@link GateStopped}; in-flight always finishes.
+   * Waiting calls fail or finish per `stopMode`. Awaits drain, then Off.
+   */
+  readonly stop: Effect.Effect<void>;
+  /** Live-resize the concurrency limit (`Semaphore.resize` + bump `configVersion`). */
+  readonly setConcurrency: (concurrency: number) => Effect.Effect<void>;
+  /** Live-reconfigure the rate limit (bumps `configVersion`); `null` clears it. */
+  readonly setRateLimit: (
+    rateLimit: Hyperlink.Decoded<typeof gateSetRateLimitPayload>,
+  ) => Effect.Effect<void>;
+}
+
+/**
+ * Static `.run` shortcut on {@link Tag} / {@link Service} — adds the tag to `R`.
+ *
+ * @category models
+ * @public
+ */
+export type StaticRun<I, A, E, Self> = [Schema.Schema.Type<I>] extends [void]
+  ? Effect.Effect<A, E, Self>
+  : (input: Schema.Schema.Type<I>) => Effect.Effect<A, E, Self>;
+
+/**
+ * Service factory result — tag surface plus baked-in layer and configure helpers.
+ *
+ * @category models
+ * @public
+ */
+export interface ServiceDefinition<
+  Self,
+  Name extends string,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+> extends TagDefinition<Self, I, A, E> {
+  readonly defaultSpec: ServiceConfig<I, A, E, R> & { readonly name: Name };
+  readonly layer: Layer.Layer<Self | Store.Storage, never, R>;
+  readonly configure: (
+    patch: ConfigPatch<
+      LayerConfig<
+        Schema.Schema.Type<I>,
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>,
+        R
+      >
+    >,
+  ) => Layer.Layer<never>;
+  readonly wrapGate: (
+    fn: (
+      previous: LayerConfig<
+        Schema.Schema.Type<I>,
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>,
+        R
+      >["effect"],
+    ) => LayerConfig<
+      Schema.Schema.Type<I>,
+      Schema.Schema.Type<A>,
+      Schema.Schema.Type<E>,
+      R
+    >["effect"],
+  ) => Layer.Layer<never>;
+}
+
+/**
+ * Tag + static `.run` shortcut, whose service value is the **named** {@link Gate} handle (via the
+ * `Svc` seam on {@link HyperlinkTag}), so `yield* MyGate` hovers as `Gate<Ticket, Price>` rather
+ * than the expanded `ServiceOf<…>` wall. @internal
+ */
+/** Decoded wire `run` error for a Tag's declared error schema `E`. @internal */
+type WireRunErrorOf<E extends Schema.Top> = Schema.Schema.Type<WithGateRunErrors<E>>;
+
+/**
+ * Effect rate-limit failure — always on Tag/Service wire `run` (with {@link GateStopped}).
+ * Re-exported so apps `catchTag` / `instanceof` without a deep Effect import.
+ *
+ * @category errors
+ * @public
+ */
+export { RateLimiterError };
+
+type GateTagWithStaticRun<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> = HyperlinkTag<
+  Self,
+  InstanceSpec<I, A, E>,
+  Gate<Hyperlink.Decoded<I>, Schema.Schema.Type<A>, WireRunErrorOf<E>>
+> & {
+  readonly run: StaticRun<I, Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>;
+};
+
+/**
+ * Tag factory result — Hyperlink tag + wire schemas + static {@link StaticRun}.
+ *
+ * @category models
+ * @public
+ */
+export type TagDefinition<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> = GateTagWithStaticRun<Self, I, A, E>;
+
+/**
+ * Wire schemas shared by {@link Tag} and {@link Service}.
+ *
+ * @category models
+ * @public
+ */
+export interface WireSchemas<
+  I extends Schema.Top = typeof Schema.Void,
+  A extends Schema.Top = typeof Schema.Void,
+  E extends Schema.Top = typeof Schema.Never,
+> {
+  /** Wire input schema; defaults to {@link Schema.Void} (unit gate). */
+  readonly payload?: I;
+  /** Wire success schema; defaults to {@link Schema.Void}. Omitted slots are not store-stamped. */
+  readonly success?: A;
+  /** Wire error schema; defaults to {@link Schema.Never}. Omitted slots are not store-stamped. */
+  readonly error?: E;
+}
+
+/**
+ * Schema-only options for {@link Tag} — pair with {@link layer} for the gated effect.
+ *
+ * @category models
+ * @public
+ */
+export interface TagSchemas<
+  I extends Schema.Top = Schema.Top,
+  A extends Schema.Top = Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> extends WireSchemas<I, A, E> {
+  readonly description?: string;
+  /**
+   * Optional rate-limit policy declaration on the Tag — stamps `rateLimitKey`
+   * metadata for widgets. Engine still needs `rateLimit` on {@link layer} /
+   * {@link Service} config to enforce.
+   */
+  readonly rateLimit?: RateLimitOptions;
+}
+
+/**
+ * Gated effect for {@link layer} / {@link serve} — unit gates (`void` input) accept a bare
+ * {@link Effect.Effect} or `() => Effect`; parameterized gates use `(input) => Effect`.
+ *
+ * @category models
+ * @public
+ */
+export type LayerEffect<I, A, E, R> = [I] extends [void]
+  ? Effect.Effect<A, E, R> | (() => Effect.Effect<A, E, R>)
+  : (input: I) => Effect.Effect<A, E, R>;
+
+/**
+ * Gated effect for {@link Service} — same rules as {@link LayerEffect} at the decoded type.
+ *
+ * @category models
+ * @public
+ */
+export type ServiceEffect<
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+  R,
+> = [Schema.Schema.Type<I>] extends [void]
+  ? Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
+    | (() => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>)
+  : (input: Schema.Schema.Type<I>) => Effect.Effect<
+      Schema.Schema.Type<A>,
+      Schema.Schema.Type<E>,
+      R
+    >;
+
+/**
+ * Full {@link Service} config — wire schemas and the gated effect in one object.
+ *
+ * @category models
+ * @public
+ */
+export interface ServiceConfig<
+  I extends Schema.Top = typeof Schema.Void,
+  A extends Schema.Top = typeof Schema.Void,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+> extends WireSchemas<I, A, E> {
+  /** Unit gates may pass a bare effect; parameterized gates use `(input) => Effect`. */
+  readonly effect: ServiceEffect<I, A, E, R>;
+  /**
+   * Max concurrent executions through this gate.
+   * @default 1
+   */
+  readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
+  /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
+}
+
+/**
+ * Layer / serve config — the tag carries wire schemas; this supplies the gated effect.
+ *
+ * @category models
+ * @public
+ */
+export interface LayerConfig<I, A, E, R> {
+  /** Override telemetry / status `resourceId`; defaults to the tag key. */
+  readonly name?: string;
+  /** Unit gates may pass a bare effect; parameterized gates use `(input) => Effect`. */
+  readonly effect: LayerEffect<I, A, E, R>;
+  /**
+   * Max concurrent executions through this gate.
+   * @default 1
+   */
+  readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
+  /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
+  /**
+   * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
+   * `(from, to, ctx) => Effect<void | HandoffOutcome>`. Gates default to non-transferable (#34), so
+   * this is opt-in; omit ⇒ not migrated. Threaded to {@link Hyperlink.serve}'s options.
+   */
+  readonly handoff?: Hyperlink.HandoffFn;
+}
+
+/**
+ * Configuration for {@link Gate.make} — local scoped handle, no RPC.
+ *
+ * @category models
+ * @public
+ */
+export interface Config<T, A, E> {
+  readonly name?: string;
+  readonly effect: (input: T) => Effect.Effect<A, E>;
+  readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
+  /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
+}
+
+/**
+ * Configuration for {@link Gate.makeRunner}.
+ *
+ * @category models
+ * @public
+ */
+export interface RunnerConfig {
+  readonly name?: string;
+  readonly concurrency?: number;
+}
+
+/**
+ * A generic runner that wraps any effect with concurrency gating.
+ *
+ * @category models
+ * @public
+ */
+export type Runner = internal.GateRunner;
+
+/**
+ * Effect `RateLimiter.consume` / `makeWithRateLimiter` options for a gate
+ * (`key` optional — defaults to the gate hyperlink / tag id). Policy only; the
+ * `RateLimiter` / `RateLimiterStore` services are presence-driven in Context.
+ *
+ * @category models
+ * @public
+ */
+export type RateLimitOptions = internal.GateRateLimitOptions;
+
+/**
+ * Effect's `RateLimiter.consume` options shape (key required). Prefer
+ * {@link RateLimitOptions} on Gate configs.
+ *
+ * @category models
+ * @public
+ */
+export type RateLimiterConsumeOptions = internal.RateLimiterConsumeOptions;
+
+/**
+ * Soft in-memory rate-limiter layer (built automatically when `rateLimit` is set
+ * and no ambient `RateLimiterStore` is present). Prefer composing
+ * `RateLimiter.layerStoreRedis` at the app root for fleet budgets.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const rateLimiterLayer = internal.gateRateLimiterLayer;
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+/**
+ * Resolve an optional wire schema to its {@link Schema.Void} default while keeping the caller's `S`
+ * clean: the public overload returns `S` (not the `S | typeof Schema.Void` union a bare `?? Schema.Void`
+ * yields). Sound — a caller whose `S` is not `typeof Schema.Void` always supplies the schema (the type
+ * param is inferred from it), so the `?? Schema.Void` branch runs only when `S` really is
+ * `typeof Schema.Void`. A function-overload narrowing — no cast. @internal
+ */
+function withVoidDefault<S extends Schema.Top>(schema: S | undefined): S;
+function withVoidDefault(schema: Schema.Top | undefined): Schema.Top {
+  return schema ?? Schema.Void;
+}
+
+/** Mirror of {@link withVoidDefault} for the wire **error** schema (default {@link Schema.Never}). @internal */
+function withNeverDefault<S extends Schema.Top>(schema: S | undefined): S;
+function withNeverDefault(schema: Schema.Top | undefined): Schema.Top {
+  return schema ?? Schema.Never;
+}
+
+/** Resolved wire schemas with RPC defaults applied. @internal */
+const resolveRunWireSchemas = <
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  config: WireSchemas<I, A, E>,
+): { readonly payload: I; readonly success: A; readonly error: E } => ({
+  payload: withVoidDefault(config.payload),
+  success: withVoidDefault(config.success),
+  error: withNeverDefault(config.error),
+});
+
+/** Normalize bare unit-gate effects and thunk forms into `(input) => Effect`. @internal */
+const toRunFn = <I, A, E, R>(
+  effect: LayerEffect<I, A, E, R>,
+): ((input: I) => Effect.Effect<A, E, R>) => {
+  if (Effect.isEffect(effect)) {
+    return (() => effect) as (input: I) => Effect.Effect<A, E, R>;
+  }
+  return effect as (input: I) => Effect.Effect<A, E, R>;
+};
+
+/**
+ * Build the tag's static `.run` shortcut. Whether the gate is inputless (a bare {@link Effect}) or
+ * parameterized (`(input) => Effect`) is decided by the resolved `payload` schema — no spec
+ * introspection. Returns the concrete Effect-or-function union; {@link nameRunService}'s single cast
+ * later blesses it as the deferred `StaticRun` conditional (which TS can't reduce for
+ * generic params), so this builder needs no return cast. @internal
+ */
+const makeStaticRun = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  // Svc is left open (`any`) so the pre-naming `ServiceOf` tag (from {@link materializeGateTag}) is
+  // accepted; `svc.run` is read below through a concrete union regardless. The result — a bare Effect
+  // (unit) or an input function (parameterized) — is blessed as the deferred `StaticRun`
+  // conditional by {@link nameRunService}'s single cast, so this builder needs no return cast.
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
+  payload: Schema.Top,
+):
+  | Effect.Effect<Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>
+  | ((
+      input: Schema.Schema.Type<I>,
+    ) => Effect.Effect<Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>) => {
+  type Out = Schema.Schema.Type<A>;
+  type Err = WireRunErrorOf<E>;
+  // The gate's `run` is a deferred `[void] extends …` conditional — a bare Effect (unit) or an input
+  // function (parameterized) — that TS can't reduce for generic params, so it is read through this one
+  // documented boundary. The `Effect.isEffect` guard picks the runtime form, so both callers are safe.
+  const runOf = (svc: { readonly run: unknown }) =>
+    svc.run as
+      | Effect.Effect<Out, Err>
+      | ((input: unknown) => Effect.Effect<Out, Err>);
+  const inputless: Effect.Effect<Out, Err, Self> = Effect.flatMap(tag, (svc) => {
+    const run = runOf(svc);
+    return Effect.isEffect(run) ? run : run(undefined);
+  });
+  const parameterized = (
+    input: Schema.Schema.Type<I>,
+  ): Effect.Effect<Out, Err, Self> =>
+    Effect.flatMap(tag, (svc) => {
+      const run = runOf(svc);
+      return Effect.isEffect(run) ? run : run(input);
+    });
+  return payload === Schema.Void ? inputless : parameterized;
+};
+
+const isGateTagSchemaConfig = (value: unknown): value is TagSchemas =>
+  typeof value === "object" && value !== null && !Schema.isSchema(value);
+
+/**
+ * Name the built gate tag's service as {@link Gate}. The single deliberate cast in this
+ * module: `ServiceOf<InstanceSpec<I, A, E>>` and
+ * `Gate<Decoded<I>, A["Type"], WireRunErrorOf<E>, never>` are **mutually assignable** — proven
+ * bidirectionally in `test/gate-handle.test-d.ts` — but TS can't verify that equality for *generic*
+ * params at the invariant service-`Shape` position, so the generic factory needs one assertion here.
+ * The `.test-d.ts` is the soundness guard: if the shapes ever drift, it fails the build. @internal
+ */
+const nameRunService = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  // `run` is accepted loosely (the concrete Effect/function {@link makeStaticRun} builds): this one cast
+  // blesses both the invariant service `Shape` (`ServiceOf ⇄ Gate`) *and* the static `.run`'s
+  // deferred `[void] extends …` conditional in a single boundary.
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>> & { readonly run: unknown },
+): GateTagWithStaticRun<Self, I, A, E> =>
+  tag as unknown as GateTagWithStaticRun<Self, I, A, E>;
+
+// Two-stage (`<Self>()` then the config): `Self` is provided by the caller (the outer `runTag<Self>`),
+// so it is never left to infer from arguments — where it appears only in the return position and would
+// resolve to `unknown`, leaking an unprovidable `unknown` requirement onto the tag's static `.run`
+// (`Effect<…, Self>`) and tripping effect-LSP `missingEffectContext`. `I`/`A`/`E` still infer from the
+// config in the second stage. @internal
+const materializeGateTag = <Self>() =>
+  <
+    I extends Schema.Top = typeof Schema.Void,
+    A extends Schema.Top = typeof Schema.Void,
+    E extends Schema.Top = typeof Schema.Never,
+  >(
+    key: string,
+    config: TagSchemas<I, A, E> & { readonly defaults?: Hyperlink.DefaultsBag },
+  ): GateTagWithStaticRun<Self, I, A, E> => {
+    const resolved = resolveRunWireSchemas(config);
+    const spec = gateSpec(resolved.payload, resolved.success, resolved.error);
+    // Do not pass `defaults` into Hyperlink.Service — nameRunService remaps Svc and would wipe them.
+    const tag = Hyperlink.Service<Self>()(key, spec, {
+      description: config.description,
+      kind,
+    });
+    const ready = Hyperlink.withReadiness(tag, (svc) =>
+      Effect.map(svc.lifecycle.get, (state) => ({
+        // Idle (deferred start) / Running / Paused stay dialable; Draining / Off do not.
+        ready:
+          state._tag === "Running" ||
+          state._tag === "Idle" ||
+          state._tag === "Paused",
+        ...(state._tag === "Running"
+          ? {}
+          : { detail: `lifecycle: ${state._tag}` }),
+      })),
+    );
+    const stamped = stampGateWireSchemas(ready, {
+      success: config.success,
+      error: config.error,
+    });
+    // Nest path is always `"metrics"` in v1; bucket key stamped when Tag declares rateLimit.
+    const withMeta = stampGateMetricsMetadata(stamped, {
+      metricsKey: "metrics",
+      rateLimitKey:
+        config.rateLimit === undefined
+          ? undefined
+          : (config.rateLimit.key ?? key),
+    });
+    const named = nameRunService(
+      Object.assign(withMeta, { run: makeStaticRun(withMeta, resolved.payload) }),
+    );
+    return Hyperlink.applyTagDefaults(named, config.defaults) as GateTagWithStaticRun<
+      Self,
+      I,
+      A,
+      E
+    >;
+  };
+
+/**
+ * Define a run (concurrency-gated effect) as a named service {@link Tag}:
+ * `class Backup extends Gate.Service<Backup>()("@app/Backup", { payload: ArgsSchema }) {}`. The
+ * class *is* the Tag — `yield* Backup` resolves the {@link Gate} handle (its `.run` applies
+ * the bounded-concurrency gate inline), while {@link layer} provides it and {@link serve} exposes it
+ * over RPC. `payload` is the argument schema; optional `success` / `error` declare the result and
+ * failure wire schemas.
+ *
+ * @public
+ * @category constructors
+ */
+type GateTagPositionalOptions = {
+  readonly description?: string;
+};
+
+const runTag = <Self>() => {
+  function build(key: string): GateTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top,
+    const D extends Hyperlink.DefaultsBag,
+  >(
+    key: string,
+    config: TagSchemas<I, A, E> & { readonly defaults: Hyperlink.DefaultsInput<D> },
+  ): Hyperlink.TagWithDefaults<GateTagWithStaticRun<Self, I, A, E>, D>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top = typeof Schema.Never,
+  >(
+    key: string,
+    config: TagSchemas<I, A, E>,
+  ): GateTagWithStaticRun<Self, I, A, E>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    const D extends Hyperlink.DefaultsBag,
+  >(
+    key: string,
+    payload: I,
+    success: A,
+    options: { readonly description?: string; readonly defaults: Hyperlink.DefaultsInput<D> },
+  ): Hyperlink.TagWithDefaults<
+    GateTagWithStaticRun<Self, I, A, typeof Schema.Never>,
+    D
+  >;
+  function build<I extends Schema.Top, A extends Schema.Top>(
+    key: string,
+    payload: I,
+    success: A,
+    options?: GateTagPositionalOptions,
+  ): GateTagWithStaticRun<Self, I, A, typeof Schema.Never>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top,
+    const D extends Hyperlink.DefaultsBag,
+  >(
+    key: string,
+    payload: I,
+    success: A,
+    error: E,
+    options: { readonly description?: string; readonly defaults: Hyperlink.DefaultsInput<D> },
+  ): Hyperlink.TagWithDefaults<GateTagWithStaticRun<Self, I, A, E>, D>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top,
+  >(
+    key: string,
+    payload: I,
+    success: A,
+    error: E,
+    options?: GateTagPositionalOptions,
+  ): GateTagWithStaticRun<Self, I, A, E>;
+  function build(
+    key: string,
+    inputOrSchemas?: Schema.Top | TagSchemas,
+    success?: Schema.Top,
+    errorOrOptions?:
+      | Schema.Top
+      | (GateTagPositionalOptions & { readonly defaults?: Hyperlink.DefaultsBag }),
+    maybeOptions?: GateTagPositionalOptions & {
+      readonly defaults?: Hyperlink.DefaultsBag;
+    },
+  ): any {
+    if (inputOrSchemas === undefined) {
+      return materializeGateTag<Self>()(key, {});
+    }
+    if (isGateTagSchemaConfig(inputOrSchemas)) {
+      return materializeGateTag<Self>()(
+        key,
+        inputOrSchemas as TagSchemas & { readonly defaults?: Hyperlink.DefaultsBag },
+      );
+    }
+    const payload = inputOrSchemas;
+    // `Schema.isSchema` is a type guard, so the 4th positional arg narrows cleanly into either the
+    // `error` schema or the trailing `{ description }` options — no cast at either branch.
+    const error =
+      errorOrOptions !== undefined && Schema.isSchema(errorOrOptions)
+        ? errorOrOptions
+        : undefined;
+    const options =
+      errorOrOptions !== undefined && !Schema.isSchema(errorOrOptions)
+        ? errorOrOptions
+        : maybeOptions;
+    return materializeGateTag<Self>()(key, {
+      payload,
+      success: withVoidDefault(success),
+      ...(error !== undefined ? { error } : {}),
+      description: options?.description,
+      defaults: options?.defaults,
+    });
+  }
+  return build;
+};
+
+/**
+ * Whether the tag's `run` spec verb is an inputless unit gate — its `run` method carries no `payload`
+ * (an inputless {@link Hyperlink.effect}) vs a parameterized {@link Hyperlink.effectFn}. A `LocalMethod`
+ * has no `payload` field, so `"payload" in m` narrows the erased flat-spec member
+ * (`AnyMethod | AnyLocalMethod`) to the wire {@link Hyperlink.Method} cast-free. @internal
+ */
+const runVerbIsInputless = (tag: {
+  readonly [Hyperlink.specSym]: Hyperlink.FlatSpec;
+}): boolean => {
+  const method = tag[Hyperlink.specSym].run;
+  return method !== undefined && "payload" in method && method.payload === undefined;
+};
+
+/**
+ * Soft-default {@link Store.Storage} ({@link Store.withDefaultStorage}) — R fulfilled; override by
+ * providing an app store into this layer. @internal
+ */
+const withDefaultStoreBridge = <A, E, R>(
+  layer: Layer.Layer<A, E, R | Store.Storage>,
+): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
+
+/**
+ * Build the live gate behind `tag` and map it onto the toolkit service impl — shared by
+ * {@link layer} / {@link serve} / {@link serveRemote}.
+ *
+ * @internal
+ */
+const buildRunImpl = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+  R,
+>(
+  // Svc left open (`any`): the named {@link Gate} handle's `[Payload] extends [void]` `run`
+  // conditional can't be reduced for generic params, so the redundant service slot (fully determined
+  // by the pinned `InstanceSpec<I, A, E>`) is not re-checked here — the tag flows in cast-free.
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
+  config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Effect.Effect<
+  Driver<InstanceSpec<I, A, E>, R>,
+  never,
+  R | Scope.Scope | Store.Storage
+> =>
+  Effect.gen(function* () {
+    const context = yield* Effect.context<R>();
+    const provideR = <Out, Err>(
+      effect: Effect.Effect<Out, Err, R>,
+    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+    const effectiveConfig = yield* foldConfiguredSpec<
+      LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
+    >(tag.key, { ...config, name: tag.key });
+    const handle = yield* internal.makeGateHandleEffect({
+      name: effectiveConfig.name ?? tag.key,
+      scopeKey: tag.key,
+      tag,
+      effect: (input: Schema.Schema.Type<I>) =>
+        provideR(toRunFn(effectiveConfig.effect)(input)),
+      concurrency: effectiveConfig.concurrency,
+      rateLimit: effectiveConfig.rateLimit,
+      stopMode: effectiveConfig.stopMode,
+    });
+
+    const statusSub = {
+      get: handle.status.get,
+      changes: handle.status.changes,
+    };
+    // The engine `handle.run` is a `[void] extends …` thunk for a unit gate (`() => Effect`) and an
+    // input function otherwise; the contract's `run` wants a bare Effect (unit) or the same input
+    // function. `Effect.suspend` lifts the unit thunk into a plain Effect; the parameterized form
+    // passes through. Whether the gate is inputless is the tag's `run` spec verb — read cast-free via
+    // {@link runVerbIsInputless}.
+    const runImpl = runVerbIsInputless(tag)
+      ? Effect.suspend(
+          handle.run as () => Effect.Effect<
+            Schema.Schema.Type<A>,
+            WireRunErrorOf<E>
+          >,
+        )
+      : handle.run;
+
+    // The observation members pass straight through (additive-only adapter); `run` is the engine→
+    // contract boundary — the deferred unit-vs-parameterized conditional TS can't reduce for generic
+    // params — so the assembled impl is typed at the {@link ImplOf} contract once here.
+    // `ImplOf` also key-remaps `default` members; under deferred `GateWireMember<I,A,E>` that remap
+    // loses overlap with this concrete object, so the boundary goes through `unknown`.
+    const impl = {
+      status: statusSub,
+      waiting: handle.waiting,
+      inFlight: handle.inFlight,
+      completed: handle.completed,
+      failed: handle.failed,
+      interrupted: handle.interrupted,
+      metrics: handle.metrics,
+      // Shared Lifecycle protocol (badge + events + start/pause/resume/stop) from the engine handle.
+      ...Lifecycle.impl(handle.lifecycle),
+      setConcurrency: handle.setConcurrency,
+      setRateLimit: handle.setRateLimit,
+      run: runImpl,
+    } as unknown as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
+    return Hyperlink.driver(tag, impl, context);
+  });
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * Create a scoped handle with `.run` only — no live observation, no RPC.
+ *
+ * @category constructors
+ * @public
+ */
+export const make = internal.makeGateRunHandleEffect;
+
+/**
+ * Config-patch layer for a tag — merge with {@link layer} (Tag path).
+ *
+ * @category layers & serving
+ * @public
+ */
+export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
+  patch: ConfigPatch<
+    LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, never>
+  >,
+): Layer.Layer<never> => configureLayer(tag.key, patch);
+
+/**
+ * Build a `Layer` from a tag and config — yields an observable toolkit service.
+ *
+ * Soft-defaults {@link Store.Storage} (R fulfilled). Override with your app store:
+ *
+ * ```ts
+ * Gate.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * ```
+ *
+ * {@link layerMemory} is an alias for the same soft-default.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const layer = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
+  config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
+  // Gate specs have no materialize `value` leaves; `ValueErrorsOf` stays deferred under the
+  // generic `InstanceSpec` members, so restated as `never` at this toolkit boundary.
+  withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(buildRunImpl(tag, config), (built) =>
+        Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
+      ),
+    ),
+  ) as Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
+
+/**
+ * Alias of {@link layer}.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const layerMemory = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>>,
+  config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
+  layer(tag, config);
+
+/**
+ * Serve this gate **remotely (served-only)** — RPC handlers without granting the local instance.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
+ *
+ * @category layers & serving
+ * @public
+ */
+/** Extract a config's `handoff` fn as a {@link Hyperlink.ServeOptions} bag (Locked #39). @internal */
+const handoffOptionOf = (
+  config: unknown,
+): Hyperlink.ServeOptions | undefined => {
+  if (
+    typeof config === "object" &&
+    config !== null &&
+    "handoff" in config &&
+    typeof (config as { readonly handoff?: unknown }).handoff === "function"
+  ) {
+    return {
+      handoff: (config as { readonly handoff: Hyperlink.HandoffFn }).handoff,
+    };
+  }
+  return undefined;
+};
+
+/** @public */
+export const serveRemote = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
+  config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage, never, R> =>
+  withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(buildRunImpl(tag, config), (built) =>
+        Hyperlink.serveRemoteDriver(tag, built, handoffOptionOf(config)),
+      ),
+    ),
+  );
+
+/**
+ * Alias of {@link serveRemote}.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const serveRemoteMemory = serveRemote;
+
+/**
+ * Serve this gate **and** grant its local instance from one materialization.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const serve = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
+  config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage,
+  never,
+  R
+> =>
+  // Same deferred-`ValueErrorsOf` restatement as {@link layer} — Gate has no materialize leaves.
+  withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(buildRunImpl(tag, config), (built) =>
+        Hyperlink.serve(tag, built, handoffOptionOf(config)),
+      ),
+    ),
+  ) as Layer.Layer<
+    Self | Local<Self> | HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage,
+    never,
+    R
+  >;
+
+/**
+ * Alias of {@link serve}.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const serveMemory = serve;
+
+/**
+ * Class factory: tag + wire schemas + baked-in `.layer` + `.configure`.
+ *
+ * @category constructors
+ * @public
+ */
+export const define = <Self>() => {
+  function build<
+    const Name extends string,
+    I extends Schema.Top = typeof Schema.Void,
+    A extends Schema.Top = typeof Schema.Void,
+    E extends Schema.Top = typeof Schema.Never,
+    R = never,
+  >(
+    name: Name,
+    config: ServiceConfig<I, A, E, R>,
+  ) {
+    const wire = resolveRunWireSchemas(config);
+    // Pass rateLimit onto TagSchemas so `rateLimitKey` metadata stamps at mint.
+    const tag = runTag<Self>()(name, {
+      ...config,
+      rateLimit: config.rateLimit,
+    });
+    const error = wire.error;
+    const defaultSpec = { name, ...config, ...wire, error };
+    const layerConfig: LayerConfig<
+      Schema.Schema.Type<I>,
+      Schema.Schema.Type<A>,
+      Schema.Schema.Type<E>,
+      R
+    > = {
+      effect: config.effect,
+      concurrency: config.concurrency,
+      rateLimit: config.rateLimit,
+      stopMode: config.stopMode,
+      name,
+    };
+    return Object.assign(tag, {
+      defaultSpec,
+      configure: (
+        patch: ConfigPatch<
+          LayerConfig<
+            Schema.Schema.Type<I>,
+            Schema.Schema.Type<A>,
+            Schema.Schema.Type<E>,
+            R
+          >
+        >,
+      ) => configureLayer(name, patch),
+      wrapGate: (
+        fn: (
+          previous: LayerConfig<
+            Schema.Schema.Type<I>,
+            Schema.Schema.Type<A>,
+            Schema.Schema.Type<E>,
+            R
+          >["effect"],
+        ) => LayerConfig<
+          Schema.Schema.Type<I>,
+          Schema.Schema.Type<A>,
+          Schema.Schema.Type<E>,
+          R
+        >["effect"],
+      ) => configureWrapEffectField(name, fn),
+      layer: layer(tag, layerConfig),
+      // `tag` already carries the named static `.run` (stamped by `materializeGateTag`), so it is not
+      // re-set here — `Object.assign` preserves it.
+    });
+  }
+  return build;
+};
+
+/**
+ * Class factory: identity tag + wire schemas — pair with {@link layer}.
+ *
+ * @public
+ */
+export { runTag as Service };
+
+/**
+ * Resolved rate-limit bucket key stamped on a Gate Tag/Service (absent when no
+ * `rateLimit` was declared at mint). Stable metadata — not under the nest path.
+ *
+ * @category utils
+ * @public
+ */
+export const rateLimitKeyOf = rateLimitKeyOfInternal;
+
+/**
+ * Wire nest path for limiter fields (v1 always `"metrics"`). Stable metadata —
+ * widgets should discover via this helper, not by hard-coding the nest name.
+ *
+ * @category utils
+ * @public
+ */
+export const metricsKeyOf = metricsKeyOfInternal;
+
+/**
+ * Register this gate on an app {@link Store.Service} — built-in analytics reads over run facts
+ * and state history (tier 3), with the tag's `success` / `error` wire slots.
+ *
+ * @category layers & serving
+ * @public
+ */
+export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
+  typeof facetStoreRegistration<Tag, GateStoreAnalyticsContract<Tag>>
+>;
+export function store<
+  const Tag extends StoreScopeTag,
+  const Shapes extends StoreShapes,
+>(tag: Tag, extended: Shapes): ReturnType<
+  typeof facetStoreRegistration<
+    Tag,
+    GateStoreAnalyticsContract<Tag>,
+    Shapes
+  >
+>;
+export function store(tag: StoreScopeTag, extended?: StoreShapes) {
+  const contract = makeGateStoreAnalyticsContract(tag);
+  return extended === undefined
+    ? facetStoreRegistration(tag, contract)
+    : facetStoreRegistration(tag, contract, extended);
+}
+
+/**
+ * Generic runner tag + layer — no observation, no handle shape, no RPC.
+ *
+ * @category constructors
+ * @public
+ */
+export const makeRunner = <const Name extends string>(
+  config: RunnerConfig & { readonly name: Name },
+) => {
+  // @effect-diagnostics-next-line serviceNotAsClass:off
+  const tag = Context.Service<
+    Runner & { readonly _tag: Name },
+    Runner
+  >(config.name);
+  const runnerLayer = Layer.effect(tag)(internal.makeRunnerEffect(config));
+  return Object.assign(tag, { layer: runnerLayer });
+};
+
+// ── HTTP API client ─────────────────────────────────────────────────────────
+// R4: `HttpApiClient` Hyperlink Tag + app-owned `httpApiClientLayer(Tag, runtime)`.
+// Legacy Context.Service builders (`httpApiClient` / `httpApiClientService` /
+// `httpApiClientLayerEffect`) remain for migration; prefer the Tag path.
+
+export {
+  HttpApiClient,
+  httpApiClientLayer,
+  httpApiClientKind,
+  httpApiMetricsNestSpec,
+  MetricsKeyCollision,
+  AdaptiveRequiresRateLimit,
+  make as httpApiClient,
+  define as httpApiClientService,
+  layerEffect as httpApiClientLayerEffect,
+  acceptJson,
+  instrumentEndpoints,
+} from "./internal/httpApiClient";
+export type {
+  HttpApiClientConfig,
+  HttpApiClientLayerEffectConfig,
+  HttpApiClientTagConfig,
+  HttpApiClientRuntimeConfig,
+  HttpApiClientAdaptiveOptions,
+  HttpApiClientMetrics,
+} from "./internal/httpApiClient";

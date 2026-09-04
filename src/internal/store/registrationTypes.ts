@@ -31,7 +31,7 @@ type WithContract<
   Tag extends StoreScopeTag | undefined = undefined,
 > = Omit<NormalizedStoreRegistration<K, A, S>, "contract" | "tag"> & {
   readonly contract: C;
-} & (Tag extends undefined ? {} : { readonly tag: Tag });
+} & (Tag extends undefined ? unknown : { readonly tag: Tag });
 
 /** @internal */
 type ContractFromRegistration<R> = R extends { readonly contract: infer C extends StoreContractValue }
@@ -183,3 +183,25 @@ export type RegsOfStoreInput<Input> = Input extends StoreRegistration<infer K, i
             ? NormalizeRegistrationArray<Input[0]>
             : ReadonlyArray<NormalizedStoreRegistration>
           : ReadonlyArray<NormalizedStoreRegistration>;
+
+/** Bare single registration passed to {@link Store.Service} (not `[]` / `{}`). @internal */
+export type IsSingleStoreInput<Input> = Input extends ReadonlyArray<unknown>
+  ? false
+  : Input extends StoreRegistrationAny
+    ? true
+    : Input extends StandaloneRegInput
+      ? true
+      : false;
+
+/** Contract carried by a bare single {@link Store.Service} registration. @internal */
+export type ContractForSingleInput<Input> = Input extends StoreRegistrationAny
+  ? ContractFromRegistration<Input> extends infer C extends StoreContractValue
+    ? C
+    : never
+  : Input extends {
+      readonly contract: infer C extends StoreContractValue;
+      readonly scopeKey: string;
+      readonly spec: StoreSpec;
+    }
+    ? C
+    : never;

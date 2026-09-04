@@ -1,25 +1,25 @@
 /**
  * Legacy re-exports — prefer `./defineStore`.
  *
+ * Layer-bearing surfaces (`StoreServiceClass`, `applyStoreDefaultLogLevel`, the `Storage` tag)
+ * now live in the public `src/Store.ts`; this leaf re-exports only the tag-free pieces plus the
+ * pure {@link StorageApi} type from `./bridge`.
+ *
  * @module internal/store/aggregateService
  * @internal
  */
 
+export type { StorageApi } from "./bridge";
 export {
-  applyStoreDefaultLogLevel,
-  defineStoreService,
   defineStoreTag,
   defineStandaloneStore,
   isStandaloneStoreClass,
   isStoreServiceClass,
-  StoreScopeBridgeTag,
   StoreScopeNotRegistered,
   storeDefaultLogLevelSym,
   storeNamedSym,
   storeRegsSym,
   type StandaloneStoreClass,
   type StoreBundle,
-  type StoreScopeBridge,
-  type StoreServiceClass,
   type StoreTagClass,
 } from "./defineStore";

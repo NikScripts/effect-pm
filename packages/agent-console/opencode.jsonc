@@ -1,0 +1,68 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // "console" is the agent this package's client talks to (see src/opencode/client.ts).
+  //
+  // Phase 2: edit/write/patch now allowed — the agent can create and modify files.
+  // bash/task stay denied — only editing was asked for; shell execution and subagent
+  // delegation are a materially bigger blast radius and weren't part of that ask.
+  "agent": {
+    "console": {
+      "mode": "primary",
+      "description": "Phase 2 chat agent — read/search/LSP/edit; no shell, no subagent delegation.",
+      // Hard cap on agentic loop iterations — a general safety margin, not a fix for anything
+      // specific observed here. (A real runaway loop *was* hit and root-caused during this
+      // client's own build: a client-supplied `messageID` in the prompt request broke the
+      // server's turn-completion tracking, so the session never reached `session.idle`. The
+      // actual fix was dropping the client-side ID entirely — see useSessionStream.ts's top
+      // comment — not this setting. `steps` stays as a ceiling regardless.)
+      "steps": 8,
+      "permission": {
+        // The native client now answers permission requests (see
+        // agent-console-native/src/sessionPermissions.ts), so the risky tools below are "ask"
+        // rather than "deny": the session's own toggle decides whether an ask is
+        // auto-approved ("Allow all") or surfaced as an in-chat prompt. `doom_loop` stays
+        // denied — it is opencode's protection against exactly the runaway loop found and
+        // root-caused while building this client (see the `steps` comment above), and it is
+        // not something a per-session toggle should be able to switch off.
+        "doom_loop": "deny",
+        "edit": "allow",
+        // "write" (new-file creation) isn't in opencode's documented/schema-named permission
+        // keys, but PermissionObjectConfig accepts arbitrary keys via additionalProperties and
+        // the runtime honors it (confirmed hands-on, see the phase-1 write/edit spike notes
+        // in README.md — that spike is *why* both are listed explicitly here, not just "edit").
+        "write": "allow",
+        "patch": "allow",
+        "bash": "ask",
+        // Worth knowing before approving one: a `task` delegates to a general-purpose
+        // subagent with its OWN, unrestricted permissions. Confirmed hands-on — such a
+        // subagent created a file that `console`'s own edit/write/bash rules never touched.
+        // Approving a task therefore grants more than the single action it names.
+        "task": "ask",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow",
+        "webfetch": "allow"
+      },
+      // Registration, not permission — this gates whether the tool exists at all, so it has
+      // to allow `bash`/`task` for the "ask" rules above to ever fire. Left explicit rather
+      // than deleted: it is the layer that caught "write" bypassing the permission list in
+      // phase 1, and flipping either of these back to false disables the tool outright,
+      // regardless of what any session toggle says.
+      "tools": {
+        "bash": true,
+        "task": true
+      }
+    }
+    // "repo-admin" (worktree creation/scanning, see src/opencode/worktree.ts
+    // and repoScan.ts) is NOT defined here — it has to run `git worktree`
+    // commands against arbitrary repos elsewhere on disk, and opencode's
+    // agent config is directory-scoped (an agent defined here is invisible
+    // to a session whose directory isn't this project's tree — confirmed
+    // hands-on: session.shell/session.prompt 500'd with an opaque
+    // "UnknownError" instead of a clean "agent not found" when it couldn't
+    // resolve repo-admin for the target repo's directory). It's defined
+    // globally instead, in ~/.config/opencode/opencode.jsonc.
+  }
+}

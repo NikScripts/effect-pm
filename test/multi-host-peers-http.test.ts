@@ -2,15 +2,16 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Combine, combineQuery } from "../src/MultiNode";
-import * as Resource from "../src/Resource";
+import { combineQuery, combineSum } from "../src/MultiNode";
+import * as Hyperlink from "../src/Hyperlink";
+import * as Node from "../src/Node";
 
-class DbNode extends Resource.Node<DbNode>("peers-http/node") {}
-class Database extends Resource.Tag<Database>()(
+class DbNode extends Node.Service<DbNode>()("peers-http/node") {}
+class Database extends Hyperlink.Service<Database>()(
   "peers-http/Database",
   {
-    connections: Resource.effect(Schema.Number),
-    totalConnections: Resource.effect(Schema.Number).pipe(Resource.fleet), // gathered in the layer
+    connections: Hyperlink.effect(Schema.Number),
+    totalConnections: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet), // gathered in the layer
   },
   { node: DbNode },
 ) {}
@@ -22,21 +23,21 @@ const fakePeers = {
   wnba: { connections: Effect.succeed(3) },
 };
 
-const Server = Resource.httpServer([
-  Resource.serve(
+const Server = Node.httpServer([
+  Hyperlink.serve(
     Database,
     Effect.gen(function* () {
-      const peers = yield* Resource.peers(Database);
+      const peers = yield* Hyperlink.peers(Database);
       return {
         connections: Effect.succeed(2),
-        totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+        totalConnections: combineQuery(peers, (p) => p.connections, combineSum).pipe(
           Effect.map((others) => 2 + others),
         ),
       };
     }),
   ),
 ]).pipe(
-  Layer.provide(Resource.peersFrom(Database, fakePeers)), // discharge the peers capability at the serve
+  Layer.provide(Hyperlink.peersFrom(Database, fakePeers)), // discharge the peers capability at the serve
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
@@ -45,13 +46,13 @@ it("serves a peers-gathering combined field over http; a client gets the fleet t
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = addr._tag === "TcpAddress" ? addr.port : 0;
-      const transport = Resource.httpClient(DbNode, { url: `http://127.0.0.1:${port}/rpc` });
+      const transport = Hyperlink.http(DbNode, { url: `http://127.0.0.1:${port}/rpc` });
       yield* Effect.gen(function* () {
         const db = yield* Database;
         expect(yield* db.connections).toBe(2); // this instance
         expect(yield* db.totalConnections).toBe(10); // server gathered its peers + self, over the wire
       }).pipe(
-        Effect.provide(Resource.client(Database).pipe(Layer.provide(transport))),
+        Effect.provide(Hyperlink.client(Database).pipe(Layer.provide(transport))),
         Effect.scoped,
       );
     }).pipe(Effect.provide(Server), Effect.scoped),

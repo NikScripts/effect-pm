@@ -1,0 +1,13 @@
+---
+description: No casts — restructure; boundary casts only when SAFE
+globs: "{src,packages/last-ts/src,test,examples,dev}/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# No casts
+
+SSOT: [`docs/standards/types-and-naming.md`](../../docs/standards/types-and-naming.md).
+
+- No `as` / `as any` / `as unknown as` / `!`. Narrow with Schema or predicates.
+- `satisfies` named types only; `as const` OK.
+- Sole exception: pure type-level boundary, provably safe, with `// SAFE: …`.

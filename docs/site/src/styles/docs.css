@@ -1,0 +1,2269 @@
+/* Classless docs stylesheet — selectors target semantic elements only.
+   The single functional classes come from Djot attribute blocks the author sets
+   sparingly: `.must/.should/.may` (rule severity) and `.note` (callout).
+   Palette derived from src/web/theme.css (oklch, hue 260) so docs share the
+   dashboard's visual family without importing its bundle. */
+
+:root {
+  color-scheme: light dark;
+  --radius: 0.625rem;
+  --bg: oklch(0.99 0.004 260);
+  --panel: oklch(0.965 0.005 260);
+  --fg: oklch(0.24 0.01 260);
+  --muted-fg: oklch(0.5 0.01 260);
+  --card: oklch(0.955 0.006 260);
+  /* twoslash preview popup bg — lighter than --panel (the popup should read brighter than the page),
+     but kept just below --zebra-even so the zebra sections still show. */
+  --popup-bg: oklch(0.985 0.004 260);
+  /* zebra "even" section bg — deliberately LIGHTER than --panel (almost white); --card is darker. */
+  --zebra-even: oklch(0.995 0.003 260);
+  --border: oklch(0.9 0.008 260);
+  --primary: oklch(0.55 0.16 250);
+  --must: oklch(0.55 0.2 25);
+  --should: oklch(0.6 0.13 75);
+  --may: oklch(0.58 0.03 260);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.16 0.01 260);
+    --panel: oklch(0.19 0.012 260);
+    --fg: oklch(0.92 0.01 260);
+    --muted-fg: oklch(0.64 0.01 260);
+    --card: oklch(0.21 0.014 260);
+    --popup-bg: oklch(0.23 0.014 260);
+    --zebra-even: oklch(0.245 0.014 260);
+    --border: oklch(0.3 0.01 260);
+    --primary: oklch(0.74 0.14 250);
+    --must: oklch(0.7 0.19 25);
+    --should: oklch(0.8 0.13 82);
+    --may: oklch(0.62 0.02 260);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+/* Paint the root element too — this is what fills the notch / status-bar / overscroll
+   area on phones. Without it, those areas fall back to white in dark mode. */
+html {
+  background: var(--bg);
+  min-height: 100%;
+  /* Disable iOS Safari text auto-inflation ("font boosting"), which enlarges large text blocks —
+     it was doubling the multi-line expanded-type box in twoslash popups while leaving the 1-line
+     compact type and short comments alone. Keep every block at its authored size. */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 1.02rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* top bar — brand left, search + hamburger right (one bar, like the Effect site) */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: max(0.55rem, env(safe-area-inset-top)) 1.1rem 0.55rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 66rem;
+  margin: 0 auto;
+}
+@media (min-width: 1100px) {
+  .topbar-inner {
+    max-width: 84rem;
+  }
+}
+.topbar .brand {
+  color: var(--fg);
+  font-weight: 600;
+  margin-right: auto;
+  text-decoration: none;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem; /* 44px — a proper touch target (was 33px, easy to miss) */
+  height: 2.75rem;
+  padding: 0;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  /* Register taps immediately instead of waiting to see if it's a double-tap-to-zoom — the wait was
+     swallowing quick taps, so the menu "needed many tries" to open. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+/* Only on real hover devices — a bare `:hover` makes iOS need a first tap just to "hover" and a
+   second to click. */
+@media (hover: hover) {
+  .icon-btn:hover {
+    background: var(--card);
+    border-color: var(--border);
+  }
+}
+/* The stroked icon has "holes" between its lines; without this a tap landing in a gap hits the SVG
+   (or nothing) instead of the button. Make the icon transparent to pointers so the button always wins. */
+.icon-btn svg {
+  pointer-events: none;
+}
+
+/* Open/close is a pure-CSS checkbox toggle (see NavBar.tsx) so the hamburger works before hydration.
+   The checkbox is visually hidden but still togglable by its <label>s and readable by AT. */
+.menu-cb {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+/* icon swap: hamburger when closed, X when open */
+.menu-btn .i-close {
+  display: none;
+}
+.menu-cb:checked ~ .topbar .menu-btn .i-menu {
+  display: none;
+}
+.menu-cb:checked ~ .topbar .menu-btn .i-close {
+  display: inline-flex;
+}
+/* Scroll-lock is done in JS (body overflow), NOT `html:has(){overflow:hidden}` — locking the html
+   scroll container breaks the topbar's position:sticky on iOS (it drops behind the overlay, hiding
+   the close button) and resets the scroll position. */
+/* While the menu is open, pin the bar as FIXED and OPAQUE so it's guaranteed above the overlay
+   (z-50 > 40) and the close button stays tappable — sticky + a translucent backdrop-filter bar can
+   fall behind a full-screen overlay on iOS. */
+.menu-cb:checked ~ .topbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+}
+
+/* mobile menu — a full-page takeover (fixed), NOT a disclosure that pushes content.
+   Sits under the sticky top bar (which stays on top at z-index 50). Hidden until the checkbox
+   toggles it, so it can be server-rendered (always in the DOM) yet only shown on demand. */
+.menu-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 3.2rem);
+}
+.menu-cb:checked ~ .menu-overlay {
+  display: block;
+}
+.menu-inner {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3rem;
+}
+.menu-search {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+/* collapsible chapter groups — shared by the mobile overlay and the desktop sidebar */
+.nav-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.35rem;
+  background: none;
+  border: none;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.nav-caret {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted-fg);
+  transform: rotate(-90deg); /* collapsed → chevron points right */
+  transition: transform 0.15s ease;
+}
+.nav-caret.open {
+  transform: rotate(0deg);
+} /* expanded → chevron points down */
+.nav-group-items {
+  display: flex;
+  flex-direction: column;
+}
+.nav-group-items a {
+  text-decoration: none;
+  color: var(--muted-fg);
+}
+.nav-group-items a:hover,
+.nav-group-items a[aria-current="page"] {
+  color: var(--primary);
+}
+/* a lone page — styled like a top-level group head, but it's a direct link (no caret/collapse) */
+.nav-lone-link {
+  display: block;
+  padding: 0.45rem 0.35rem;
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: none;
+}
+.nav-lone-link:hover,
+.nav-lone-link[aria-current="page"] {
+  color: var(--primary);
+}
+
+/* site footer — brand + link columns + legal line */
+.site-footer {
+  margin-top: 4rem;
+  padding: 2.5rem 1.25rem 2rem;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--fg) 2.5%, transparent);
+  color: var(--muted-fg);
+  font-size: 0.85rem;
+}
+.site-footer-inner {
+  max-width: 66rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2rem 3rem;
+}
+.site-footer-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--fg);
+}
+.site-footer-tag {
+  margin: 0.5rem 0 0;
+  max-width: 24rem;
+  line-height: 1.5;
+}
+.site-footer-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+}
+.site-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.site-footer-heading {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  color: var(--fg);
+}
+.site-footer-col a {
+  color: var(--muted-fg);
+  text-decoration: none;
+}
+.site-footer-col a:hover {
+  color: var(--primary);
+}
+.site-footer-legal {
+  max-width: 66rem;
+  margin: 2rem auto 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.site-footer-legal a {
+  color: var(--muted-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.site-footer-legal a:hover {
+  color: var(--primary);
+}
+
+/* overlay context: large tap targets */
+.menu-overlay .nav-group {
+  border-bottom: 1px solid var(--border);
+}
+.menu-overlay .nav-group-head {
+  font-size: 1.02rem;
+  padding: 0.7rem 0.35rem;
+}
+.menu-overlay .nav-lone-link {
+  font-size: 1.02rem;
+  padding: 0.7rem 0.35rem;
+}
+.menu-overlay .nav-group-items a {
+  padding: 0.55rem 0.35rem 0.55rem 1.4rem;
+  font-size: 1rem;
+  color: var(--fg);
+}
+
+/* sidebar context: compact mono; hidden on phones (the overlay replaces it) */
+.sidebar {
+  display: none;
+}
+.sidebar .nav-group-head {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding: 0.35rem 1.25rem;
+}
+.sidebar .nav-lone-link {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding: 0.35rem 1.25rem;
+}
+.sidebar .nav-group-items a {
+  display: block;
+  padding: 0.28rem 1.25rem 0.28rem 1.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+/* pagination — previous / next chapter, by real title (reads like one book) */
+.prevnext {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 3rem 0 0.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.prevnext-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: 48%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+.prevnext-link:hover {
+  border-color: var(--primary);
+}
+.prevnext-next {
+  text-align: right;
+}
+.prevnext-dir {
+  font-size: 0.78rem;
+  color: var(--muted-fg);
+}
+.prevnext-title {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 5rem;
+}
+
+/* wide: static left sidebar, content beside it; the mobile menu button is hidden */
+@media (min-width: 900px) {
+  .layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+    max-width: 66rem;
+    margin: 0 auto;
+  }
+  .sidebar {
+    display: block;
+    position: sticky;
+    top: 3.2rem;
+    flex: 0 0 14rem;
+    max-height: calc(100vh - 3.2rem);
+    overflow-y: auto;
+    padding: 1.5rem 0;
+  }
+  .topbar-actions {
+    display: none;
+  }
+  /* the sidebar owns nav on wide screens; never show the overlay even if left checked on resize */
+  .menu-cb:checked ~ .menu-overlay {
+    display: none;
+  }
+  main {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  main > .prose {
+    max-width: 46rem;
+    margin: 0 auto;
+  }
+}
+
+h1 {
+  font-size: clamp(1.7rem, 5vw, 2.1rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0.6rem 0 1rem;
+  text-wrap: balance;
+}
+h2 {
+  font-size: 1.28rem;
+  letter-spacing: -0.01em;
+  margin: 2.4rem 0 0.6rem;
+}
+h3 {
+  font-size: 1.05rem;
+  margin: 1.6rem 0 0.4rem;
+}
+
+/* Section headers vs rule titles. The page renders as `<section id=slug>` (no class); its direct
+   `> h2` children are grouping headers / guide section breaks. Rule titles live one level down, inside
+   a severity-classed `<section class="must|should|may">`. Target the former: a size up + a divider
+   rule so a section header never reads as just another rule title. */
+section:not([class]) > h2 {
+  font-size: 1.6rem;
+  margin-top: 3.2rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--border);
+}
+/* the first rule right after a grouping header shouldn't stack its own big top gap */
+section:not([class]) > h2 + section > h2 {
+  margin-top: 1.1rem;
+}
+p {
+  margin: 0.85rem 0;
+}
+strong {
+  font-weight: 650;
+}
+ul,
+ol {
+  margin: 0.85rem 0;
+  padding-left: 1.4rem;
+}
+li {
+  margin: 0.3rem 0;
+}
+a {
+  color: var(--primary);
+  text-underline-offset: 2px;
+}
+
+/* A link that wraps inline code (a module/symbol reference) reads as code, not a blue link — but
+   still needs a link cue that survives touch (no hover). A dotted underline in the text color:
+   subtle, always visible, not blue. It goes solid + accent on hover. */
+a:has(> code) {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px; /* thin → smaller dots */
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); /* lighter */
+  text-underline-offset: 4px;
+}
+a:has(> code):hover {
+  text-decoration-style: solid;
+  text-decoration-color: currentColor;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  padding: 0.08em 0.35em;
+}
+pre {
+  overflow-x: auto;
+  margin: 1.1rem 0;
+  padding: 0.95rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  line-height: 1.55;
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.86rem;
+}
+
+/* Shiki: dual-theme output. Light tokens inline; swap to the dark set under a dark OS.
+   Shiki paints its own code background, so drop our --card background on highlighted pre. */
+pre.shiki {
+  background: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  /* Shiki dual-theme, done the correct way: the dark token COLOR goes on every span, but the dark
+     BACKGROUND only on the `.shiki` root <pre>. Shiki's docs snippet puts the bg on `.shiki span`
+     too, which paints each token / `.line` its own block (the per-line background bug). */
+  .shiki,
+  .shiki span {
+    color: var(--shiki-dark) !important;
+  }
+  .shiki {
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
+/* code-block chrome: pure-CSS line numbers + the copy-button island. Scoped to Shiki blocks the
+   render layer wraps in `.code-block` (docs-content.tsx); live-demo islands aren't wrapped. The
+   `> pre > code > .line` direct-child chain numbers only the main code lines, never the lines
+   inside a twoslash hover popup (those sit much deeper). */
+.code-block {
+  position: relative;
+}
+/* Repo-relative path for `{.twoslash include="…"}` fences — sits above the highlighted body. */
+.code-block-file {
+  margin: 0;
+  padding: 0.45rem 2.6rem 0.45rem 0.85rem;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--muted-fg);
+  background: color-mix(in oklab, var(--card) 92%, var(--fg) 4%);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 0.55rem 0.55rem 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-block:has(> .code-block-file) > pre {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.code-block:has(> .code-block-file) .copy-btn {
+  top: 2.35rem;
+}
+/* consistent left inset before the line-number gutter (matches .api-source-code) */
+.code-block > pre {
+  padding-left: 0.7rem;
+}
+.code-block > pre > code {
+  counter-reset: ln;
+}
+.code-block > pre > code > .line::before {
+  counter-increment: ln;
+  content: counter(ln);
+  display: inline-block;
+  width: 2ch;
+  margin-right: 1.15rem;
+  text-align: right;
+  color: color-mix(in oklab, var(--fg) 28%, transparent);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--muted-fg);
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.copy-btn svg {
+  display: block;
+}
+.code-block:hover .copy-btn,
+.copy-btn:focus-visible {
+  opacity: 1;
+}
+.copy-btn:hover {
+  color: var(--fg);
+  border-color: var(--primary);
+}
+.copy-btn[data-copied] {
+  color: var(--primary);
+  border-color: var(--primary);
+  opacity: 1;
+}
+
+/* Long lines scroll horizontally rather than wrap (owner preference) — same as any code block. */
+.code-block > pre.twoslash > code {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+/* twoslash hover types — `{.twoslash}` blocks. The popup code keeps shiki's dual-theme token
+   colours; we theme only the popup container (with `!important` to beat the `.shiki span` dark
+   rule above). Popups are pure CSS (no client JS). */
+.twoslash-hover {
+  position: relative;
+  border-bottom: 1px dotted color-mix(in oklab, var(--fg) 40%, transparent);
+}
+/* API-docgen link on a type name inside a hover preview — same dotted underline, keeps the token's
+   syntax colour, links to the doc page. No nested hover (it's a plain anchor). */
+.api-typelink {
+  border-bottom: 1px dotted color-mix(in oklab, var(--fg) 40%, transparent);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.api-typelink:hover {
+  border-bottom-color: var(--primary);
+}
+/* Touch devices: a tap on a linked token that HAS a preview must OPEN the preview, not navigate —
+   the symbol's page link lives on the declaration name inside the preview instead (see
+   highlight.ts). Links inside the popup, and linked tokens without a preview, stay tappable. */
+@media (hover: none) {
+  .twoslash-hover > a.api-typelink {
+    pointer-events: none;
+  }
+}
+.twoslash-popup-container {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 30;
+  display: none;
+  width: max-content; /* shrink-wrap to the widest section, capped by max-width below */
+  padding: 0; /* no gutter — the type fills the popup */
+  /* ONE VERTICAL scroll container: the whole popup (type + expanded + comments) scrolls up/down
+     together, capped, so the tall expanded box doesn't y-scroll on its own. Horizontally, each code
+     section scrolls itself (overflow-x below) so sections stay equal width. */
+  max-height: min(70vh, 32rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--popup-bg) !important;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
+  /* Bounded width. The popup shrink-wraps its content up to this cap. Every section fills the popup
+     (width: 100% below), so all sections are the SAME width — a long type can no longer leave the
+     comment box short. Past the cap: prose (comments) WRAPS; code (type / expanded) does NOT wrap —
+     it scrolls horizontally within its own section, since a type broken mid-line is unreadable. */
+  max-width: min(92vw, 42rem);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: left;
+}
+/* Visibility is JS-managed (a `.is-open` class with a small close-delay) so the pointer can cross the
+   external gap between the token and the popup without it vanishing. See TwoslashHover.tsx. */
+.twoslash-hover.is-open > .twoslash-popup-container {
+  display: block;
+}
+/* The type is a <code>, so it inherited the base code chrome (border/radius/padding). Strip it so
+   it reads as the popup's content, filling the width, not a boxed chip inside the popup. */
+.twoslash-popup-code {
+  display: block;
+  padding: 0; /* the type fills the preview, no inset */
+  font-family: var(--font-mono);
+  background: transparent !important;
+  border: none;
+  border-radius: 0;
+  white-space: pre; /* code never wraps; prettier-formatted types carry their own line breaks */
+  overflow-x: auto; /* a too-wide line scrolls within its own section, not the whole popup */
+}
+/* Rich popups render the type as a nested shiki <pre>, which carries the base `pre {}` border, radius,
+   and padding — a boxed chip. Drop only the border + radius (and reset margin); keep shiki's own inline
+   background (the original white) and give it padding so the type fills the popup as a clean panel. */
+.twoslash-popup-code pre {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: 0;
+}
+/* Short single-line types render INLINE (no nested <pre>), so the pre-padding above doesn't apply and
+   they'd touch the popup edges. Give those the same inset directly on the code box. */
+.twoslash-popup-code:not(:has(pre)) {
+  padding: 0.5rem 0.7rem;
+}
+.twoslash-popup-docs {
+  margin: 0;
+  padding: 0.45rem 0.7rem 0.5rem;
+  color: var(--muted-fg);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  white-space: normal; /* prose wraps to the popup width */
+  overflow-wrap: break-word;
+}
+/* The "dual preview" expanded-declaration box — its own panel wedged BETWEEN the compact type box and
+   the JSDoc comments box. */
+.twoslash-popup-expand {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  white-space: pre; /* expanded type keeps its prettier line breaks */
+  overflow-x: auto; /* scrolls within its own section when a line is still wide */
+}
+.twoslash-popup-expand pre {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: 0;
+}
+/* Single scroll container: inner panels never scroll on their own, and their shiki <pre> backgrounds
+   are cleared so the zebra section colour below shows through. The popup container (overflow: auto)
+   is the one scroller for both axes. */
+.twoslash-popup-container pre {
+  overflow: visible;
+  background: transparent !important;
+}
+/* Zebra sections, anchored at the END: the last section is always transparent and it alternates
+   backward — [transparent] · [white, transparent] · [transparent, white, transparent]. `nth-last-child`
+   counts the query popup's arrow LAST, so it never shifts the content parity; the arrow is forced
+   transparent. "even" = --zebra-even (almost white — lighter than the popup panel; --card is darker). */
+.twoslash-popup-arrow {
+  background: transparent !important;
+}
+.twoslash-popup-container > :nth-last-child(odd) {
+  background: transparent !important;
+}
+.twoslash-popup-container > :nth-last-child(even) {
+  background: var(--zebra-even) !important;
+}
+/* Every section fills the popup exactly, so all sections are the SAME width and the zebra bg spans the
+   full line. The popup shrink-wraps to its widest content (capped by max-width); wide code scrolls
+   inside its own section (overflow-x above) rather than stretching the section past its siblings. */
+.twoslash-popup-code,
+.twoslash-popup-expand,
+.twoslash-popup-docs {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* each JSDoc tag on its own line, with a space between the tag name and its value
+   (`@category layers`, `@since 4.0.0`) instead of running together. */
+.twoslash-popup-docs-tag {
+  display: block;
+}
+.twoslash-popup-docs-tag-name {
+  color: var(--primary);
+  margin-right: 0.4em;
+}
+/* JSDoc markdown in the comments box: paragraph spacing + highlighted fenced code blocks
+   (`renderJsdocMarkdown` in highlight.ts renders these — the default just dumped raw ``` text). */
+.twoslash-popup-docs p {
+  margin: 0.15rem 0;
+}
+.twoslash-popup-docs p:first-child {
+  margin-top: 0;
+}
+.twoslash-popup-docs p:last-child {
+  margin-bottom: 0;
+}
+/* Markdown block elements now emitted by the mdast rewrite (lists / headings / links / emphasis /
+   quotes), sized compact for the narrow popup so they don't tower over the prose. */
+.twoslash-popup-docs ul,
+.twoslash-popup-docs ol {
+  margin: 0.2rem 0;
+  padding-left: 1.1rem;
+}
+.twoslash-popup-docs li {
+  margin: 0.1rem 0;
+}
+.twoslash-popup-docs h1,
+.twoslash-popup-docs h2,
+.twoslash-popup-docs h3,
+.twoslash-popup-docs h4,
+.twoslash-popup-docs h5,
+.twoslash-popup-docs h6 {
+  margin: 0.4rem 0 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+.twoslash-popup-docs a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* `{@link …}` reference — blue like a link, but non-navigating (target isn't resolved to a URL). */
+.twoslash-jsdoc-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: default;
+}
+/* a `{@link}` that resolved to a doc page is a real anchor — tappable */
+a.twoslash-jsdoc-link {
+  cursor: pointer;
+}
+a.twoslash-jsdoc-link:hover {
+  text-decoration-thickness: 2px;
+}
+.twoslash-popup-docs strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.twoslash-popup-docs em {
+  font-style: italic;
+}
+.twoslash-popup-docs blockquote {
+  margin: 0.3rem 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--border);
+  color: var(--muted-fg);
+}
+.twoslash-popup-docs-code {
+  margin: 0.4rem 0;
+}
+.twoslash-popup-docs-code:last-child {
+  margin-bottom: 0;
+}
+.twoslash-popup-docs-code pre {
+  padding: 0.45rem 0.6rem !important;
+  border-radius: 0.35rem;
+  background: color-mix(in oklab, var(--fg) 7%, transparent) !important;
+  overflow-x: auto;
+}
+/* match the comment prose size so code fences don't tower over it — force it on the <code>/tokens
+   themselves (the earlier rule on `pre` was overridden by shiki's own sizing). */
+.twoslash-popup-docs code,
+.twoslash-popup-docs code span {
+  font-size: 0.73rem !important;
+}
+/* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
+   background with a border and rounded corners. Strip it so it blends into the description instead of
+   being a boxed chip. (The main type code, .twoslash-popup-code, is already handled above.) */
+.twoslash-popup-container code:not(.twoslash-popup-code) {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+/* Long lines scroll horizontally. Caveat: overflow-x: auto makes this a scroll container, which
+   clips both axes at the box — so the twoslash hover popup is cut off at the top. Escaping the popup
+   while scrolling isn't possible in pure CSS on Safari (would need CSS anchor positioning, unsupported,
+   or a JS reposition). Tracked for the doc-site owner. */
+.twoslash {
+  overflow-x: auto;
+}
+
+/* Inline type-error display is DISABLED. Twoslash under this repo's compiler config doesn't surface
+   type diagnostics (a plain `const x: number = "s"` yields zero error nodes, with or without an
+   `// @errors:` marker), so there's nothing to style. The build guardrail that keeps doc snippets
+   honest is `scripts/verify-twoslash-guides.ts` (it checks `result.errors`), not inline squiggles.
+   If error display is wanted later, it needs a diagnostics/handbookOptions fix in the twoslasher, then
+   `.twoslash-error` (token squiggle) + `.twoslash-error-line` (message) rules here. */
+
+/* rule severity — a section carrying one metadata class from Djot.
+   Severity is signalled solely by the chip after the heading (below); no left bar. */
+section[class~="must"] > h2::after,
+section[class~="should"] > h2::after,
+section[class~="may"] > h2::after,
+h2[class~="draft"]::after {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  vertical-align: 0.32em;
+  margin-left: 0.6rem;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.9;
+}
+section[class~="must"] > h2::after {
+  content: "MUST";
+  color: var(--must);
+}
+section[class~="should"] > h2::after {
+  content: "SHOULD";
+  color: var(--should);
+}
+section[class~="may"] > h2::after {
+  content: "MAY";
+  color: var(--may);
+}
+/* a glossary term still to be made exemplary (examples etc.); remove the `{.draft}` when done. */
+h2[class~="draft"]::after {
+  content: "DRAFT";
+  color: var(--should);
+}
+
+/* appliesTo — the scopes a rule governs, shown as muted pills under the heading. */
+.applies-to {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: -0.4rem 0 1rem;
+}
+.applies-to .scope-chip {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted-fg);
+  opacity: 0.9;
+}
+
+/* the one callout class */
+.note {
+  margin: 1.2rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  color: var(--muted-fg);
+}
+
+/* live-island placeholder (stub until a real QueueWidget is wired) */
+[data-island] {
+  display: block;
+  margin: 1.2rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px dashed var(--primary);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+
+/* package-manager toggle — the `​```install` block (PackageInstall island). Tabs on top, the resolved
+   command below with a copy button. Selection persists + syncs across blocks. */
+.pm-install {
+  margin: 1.1rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.pm-tabs {
+  display: flex;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.pm-tab {
+  padding: 0.4rem 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted-fg);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.pm-tab:hover {
+  color: var(--fg);
+}
+.pm-tab[data-active] {
+  color: var(--fg);
+  border-bottom-color: var(--primary);
+}
+.pm-command {
+  position: relative;
+  padding: 0.8rem 1.1rem;
+  background: var(--card);
+  overflow-x: auto;
+}
+.pm-command code {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: pre;
+}
+/* the install box is a discrete widget — always show its copy button (no hover reveal, works on touch) */
+.pm-command .copy-btn {
+  opacity: 1;
+}
+
+/* tables — Djot pipe tables (docs-content renders table/row/cell). */
+table {
+  width: 100%;
+  margin: 1.1rem 0;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+th,
+td {
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+thead th,
+tr:first-child th {
+  border-bottom: 2px solid var(--border);
+}
+th {
+  font-weight: 650;
+}
+table code {
+  white-space: nowrap;
+}
+
+/* first-column code reads as a term: the code on its own line, the label dropping below it. */
+td:first-child code {
+  display: block;
+  width: fit-content;
+  margin-bottom: 0.15rem;
+}
+
+/* ===== page aside: migration draft note + on-this-page TOC ===== */
+.prose {
+  min-width: 0;
+}
+.page-aside {
+  display: none;
+}
+
+/* three columns once there's room: nav | content | this-page aside */
+@media (min-width: 1100px) {
+  /* 84rem total = 14 (nav) + 1.5 + ~53 (content, capped 56) + 2.5 + 13 (aside): the CENTER
+     absorbs the width — a fixed prose cap here sent all extra space to the right gutter. */
+  .layout {
+    max-width: 84rem;
+  }
+  main {
+    max-width: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 2.5rem;
+  }
+  .prose {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 56rem;
+  }
+  .page-aside {
+    display: block;
+    flex: 0 0 13rem;
+    position: sticky;
+    top: 3.2rem;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    padding: 1.5rem 0;
+  }
+  .draft-banner {
+    display: none;
+  } /* the aside carries the note on wide screens */
+}
+
+/* DRAFT badge + migration checklist */
+.draft-badge {
+  display: inline-block;
+  padding: 0.08rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--should);
+  border: 1px solid var(--should);
+  border-radius: 999px;
+}
+.draft-note {
+  margin-bottom: 1.6rem;
+  padding: 0.85rem;
+  background: color-mix(in oklab, var(--should) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--should) 35%, var(--border));
+  border-radius: var(--radius);
+}
+.draft-note-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.45rem;
+  margin-bottom: 0.7rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.draft-check {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.draft-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--muted-fg);
+}
+.draft-check-item[data-done] {
+  color: var(--fg);
+}
+.draft-check-box {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+}
+.draft-check-item[data-done] .draft-check-box {
+  color: var(--bg);
+  background: var(--should);
+  border-color: var(--should);
+}
+
+/* on-this-page TOC */
+.toc-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted-fg);
+  margin: 0 0 0.55rem;
+}
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--muted-fg);
+  text-decoration: none;
+}
+.toc a:hover {
+  color: var(--primary);
+}
+.toc .toc-sub a {
+  padding-left: 0.85rem;
+  font-size: 0.78rem;
+}
+
+/* collapsible draft banner — phones only (the aside is hidden there) */
+.draft-banner {
+  margin: 0 0 1.25rem;
+  padding: 0.6rem 0.85rem;
+  background: color-mix(in oklab, var(--should) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--should) 35%, var(--border));
+  border-radius: var(--radius);
+}
+.draft-banner summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+.draft-banner summary::-webkit-details-marker {
+  display: none;
+}
+.draft-banner[open] summary {
+  margin-bottom: 0.7rem;
+}
+.draft-banner-label {
+  color: var(--fg);
+}
+
+/* ===== glossary term links + hover-preview popup ===== */
+/* a link into the glossary reads as a defined term, not a nav link: a dotted accent underline, help cursor */
+a[href*="/docs/glossary#"] {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+a[href*="/docs/glossary#"]:hover {
+  text-decoration-color: var(--primary);
+}
+
+.glossary-popup {
+  position: fixed;
+  z-index: 60;
+  display: none;
+  max-width: min(88vw, 22rem);
+  padding: 0.65rem 0.8rem;
+  background: var(--popup-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+.glossary-popup-term {
+  font-weight: 650;
+  margin-bottom: 0.2rem;
+}
+.glossary-popup-def {
+  color: var(--muted-fg);
+}
+
+/* ===== API reference (generated from api.json by scripts/gen-api.ts) ===== */
+
+.api-back {
+  margin: 0 0 1.2rem;
+  font-size: 0.85rem;
+}
+.api-back a {
+  color: var(--muted-fg);
+  text-decoration: none;
+}
+.api-back a:hover {
+  color: var(--primary);
+}
+
+/* landing grid of namespaces */
+.api-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.55rem;
+  margin: 1.4rem 0;
+}
+.api-index-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem;
+}
+.api-index-item:hover {
+  border-color: var(--primary);
+}
+.api-index-count {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.api-ns-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.api-ns-count {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--muted-fg);
+  font-weight: 500;
+}
+
+.api-syms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 1.4rem;
+}
+.api-sym {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 0.95rem;
+  scroll-margin-top: 1rem;
+}
+.api-sym-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.55rem;
+}
+.api-sym-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.api-src {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted-fg);
+  white-space: nowrap;
+}
+/* the file:line is a GitHub link — a light muted grey by default, the link colour only on hover */
+a.api-src {
+  color: color-mix(in oklab, var(--muted-fg) 65%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a.api-src:hover {
+  color: var(--primary);
+}
+
+.api-kind {
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+.api-kind-type,
+.api-kind-interface {
+  color: var(--should);
+  background: color-mix(in oklab, var(--should) 13%, transparent);
+}
+.api-kind-const {
+  color: var(--may);
+  background: color-mix(in oklab, var(--may) 13%, transparent);
+}
+
+.api-sig {
+  margin: 0 0 0.5rem;
+  overflow-x: auto;
+}
+.api-sig pre {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.79rem;
+}
+.api-doc {
+  font-size: 0.87rem;
+  color: var(--muted-fg);
+  margin-top: 0.3rem;
+}
+.api-doc p {
+  margin: 0.4rem 0;
+}
+.api-doc code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+.api-doc strong {
+  color: var(--fg);
+}
+
+/* the export's actual source — its own standalone container, always shown, real file line numbers.
+   The container is rounded; the code pre inside is flat (below) so it fills to these corners. */
+.api-source {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
+}
+.api-source-head {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--muted-fg);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: color-mix(in oklab, var(--fg) 4%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+.api-source-head .api-src {
+  margin-left: 0;
+}
+.api-source-lines {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+.api-source-code {
+  counter-reset: ln var(--ln-start);
+  overflow-x: auto;
+  font-size: 0.78rem;
+}
+/* only the main code pre (a direct child) — NOT the <pre>s nested in twoslash hover popups, whose
+   own x-padding (e.g. the pretty-type preview) must survive. Flat: no border/radius from base pre {}. */
+.api-source-code > pre {
+  margin: 0;
+  padding: 0.55rem 0 0.55rem 0.7rem; /* left inset before the gutter, matching .code-block */
+  border: none;
+  border-radius: 0;
+}
+/* number every rendered code line, starting from the export's file line */
+.api-source-code .line {
+  counter-increment: ln;
+}
+.api-source-code .line::before {
+  content: counter(ln);
+  display: inline-block;
+  width: 3ch;
+  margin-right: 1rem;
+  padding-right: 0.7rem;
+  text-align: right;
+  color: color-mix(in oklab, var(--fg) 32%, transparent);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+/* the twoslash hover popups render their type as code with its own `.line` spans — those must NOT
+   get a line number, nor advance the gutter counter for the real lines below them */
+.api-source-code .twoslash-popup-container .line {
+  counter-increment: none;
+}
+.api-source-code .twoslash-popup-container .line::before {
+  content: none;
+}
+
+.api-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+.api-chip {
+  font-size: 0.68rem;
+  padding: 0.12rem 0.42rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+.api-chip-cat {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+.api-chip-link {
+  color: var(--muted-fg);
+  border: 1px solid var(--border);
+}
+/* referenced-by chips share the look but are NOT {@link} references — no prefix */
+.api-chip-ref {
+  color: var(--muted-fg);
+  border: 1px solid var(--border);
+}
+.api-chip-ref:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.api-chip-link::before {
+  content: "@link ";
+  opacity: 0.6;
+}
+
+/* API namespace page: a light list of symbol rows (full detail lives on each symbol's own page) */
+.api-rows {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+@media (min-width: 900px) {
+  .api-rows { grid-template-columns: 1fr 1fr; }
+}
+.api-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--bg);
+  min-width: 0;
+}
+.api-row[data-kind="type"],
+.api-row[data-kind="interface"] { border-left-color: color-mix(in oklab, var(--should) 55%, transparent); }
+.api-row[data-kind="const"] { border-left-color: color-mix(in oklab, var(--may) 60%, transparent); }
+.api-row:hover { background: var(--panel); border-color: var(--primary); border-left-color: var(--primary); }
+.api-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.api-row-name {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.api-row-sum {
+  color: var(--muted-fg);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* group headers pin under the topbar while their section scrolls */
+.api-group-title {
+  position: sticky;
+  top: 3.1rem;
+  z-index: 5;
+  background: color-mix(in oklab, var(--bg) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+/* long-press-to-copy: toast confirmation for the twoslash type popups */
+.copy-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+  z-index: 70;
+  padding: 0.5rem 0.95rem;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0;
+  transform: translate(-50%, 0.8rem);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.copy-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .copy-toast {
+    transform: translate(-50%, 0);
+    transition: opacity 0.18s ease;
+  }
+}
+/* Preview sections are double-tap-to-copy. `manipulation` kills the iOS double-tap-to-zoom (and its
+   300ms delay) without touching text selection — a plain tap-and-drag still selects normally. */
+.twoslash-popup-code,
+.twoslash-popup-docs {
+  touch-action: manipulation;
+}
+
+/* Copied-flash: a brief wash on the section you double-tapped, confirming the copy alongside the
+   toast. Washes toward --fg (dark in light mode, light in dark mode) so it's high-contrast against
+   the section's own background in either theme. */
+.twoslash-popup-code.tw-copied,
+.twoslash-popup-docs.tw-copied {
+  position: relative;
+}
+.twoslash-popup-code.tw-copied::after,
+.twoslash-popup-docs.tw-copied::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--fg) 34%, transparent);
+  animation: tw-copied-fade 0.45s ease forwards;
+}
+@keyframes tw-copied-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .twoslash-popup-code.tw-copied::after,
+  .twoslash-popup-docs.tw-copied::after {
+    animation: none;
+  }
+}
+
+/* --- search (typeahead panel + full results page) --- */
+.search-panel {
+  margin: 0.4rem 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+}
+.search-section {
+  padding: 0.3rem 0 0.4rem;
+}
+.search-panel .search-section + .search-section {
+  border-top: 1px solid var(--border);
+}
+.search-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.35rem 0.85rem 0.15rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+.search-section-head a {
+  font-size: 0.72rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.search-hit {
+  display: block;
+  padding: 0.32rem 0.85rem;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 6px;
+}
+.search-hit:hover,
+.search-hit:focus-visible,
+.search-hit.is-active {
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+}
+.search-hit mark {
+  background: color-mix(in oklab, var(--primary) 24%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.search-hit-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.86rem;
+  font-weight: 550;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.search-hit-ctx {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  font-family: inherit;
+  font-weight: normal;
+}
+.search-hit-sum {
+  display: block;
+  font-size: 0.76rem;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-all {
+  display: block;
+  padding: 0.5rem 0.85rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+.search-note {
+  padding: 0.5rem 0.2rem;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+/* module-page symbol groups: jump chips under the title, section headers over the rows */
+.api-group-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.8rem 0 1.4rem;
+}
+.api-group-toc a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  font-size: 0.8rem;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.api-group-toc a:hover {
+  border-color: var(--primary);
+}
+.api-group-title {
+  margin: 2.2rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.05rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* copy buttons on blocks WITHOUT a .code-block wrapper (API pages) — portaled into the pre by
+   the CodeCopy island, same .copy-btn as everywhere else; the pre anchors + reveals it */
+pre {
+  position: relative;
+}
+pre:hover > .copy-btn,
+pre:focus-within > .copy-btn {
+  opacity: 1;
+}
+/* touch devices have no hover — keep the button faintly present */
+@media (hover: none) {
+  pre > .copy-btn {
+    opacity: 0.55;
+  }
+}
+
+/* 404 */
+.notfound {
+  max-width: 34rem;
+  margin: 3rem auto;
+  padding: 0 1.25rem;
+}
+.notfound-search {
+  margin: 1.2rem 0;
+}
+
+/* ⌘K hint chip (search trigger + 404 field) */
+.search-kbd {
+  padding: 0.08rem 0.4rem;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--fg);
+  opacity: 0.55;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+/* Spotlight-style search: sidebar trigger shaped like a field; centered modal over a dim backdrop */
+.search-trigger {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 15rem;
+  padding: 0.45rem 0.7rem;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--muted-fg, color-mix(in oklab, var(--fg) 55%, transparent));
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.search-trigger:hover {
+  border-color: var(--primary);
+}
+@media (min-width: 900px) {
+  .search-trigger {
+    display: flex;
+  }
+}
+.search-modal .menu-search:focus,
+.search-modal .menu-search:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.search-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 14vh 1rem 1rem;
+  background: color-mix(in oklab, var(--bg) 40%, transparent);
+  backdrop-filter: blur(3px);
+}
+.search-modal {
+  width: min(41rem, 100%);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 60px color-mix(in oklab, black 35%, transparent);
+  overflow: hidden;
+}
+.search-modal .menu-search {
+  margin: 0.75rem 0.75rem 0.25rem;
+  width: calc(100% - 1.5rem);
+}
+.search-modal-results {
+  overflow-y: auto;
+  padding: 0.25rem 0.75rem 0.75rem;
+}
+.search-modal .search-panel {
+  border: none;
+  background: transparent;
+}
+.search-modal .search-note {
+  padding: 0.6rem 0.4rem;
+}
+
+/* desktop sidebar entry: tighter input, hits ellipsize into the narrow column */
+.sidebar-search {
+  position: relative;
+  margin-bottom: 0.9rem;
+}
+.sidebar-search .menu-search {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+}
+.sidebar-search .search-hit {
+  padding: 0.28rem 0.6rem;
+}
+.sidebar-search .search-hit-title {
+  display: block;
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-search .search-hit-title .api-kind {
+  margin-left: 0.35rem;
+}
+.search-page .search-section {
+  margin-bottom: 1.2rem;
+}
+.search-page .search-hit-sum {
+  white-space: normal;
+}
+
+/* aside variants for API + search pages */
+.aside-count {
+  color: var(--muted-fg);
+  font-size: 0.72rem;
+}
+.aside-facts {
+  margin: 0 0 0.8rem;
+  font-size: 0.82rem;
+}
+.aside-facts dt {
+  margin-top: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted-fg);
+}
+.aside-facts dd {
+  margin: 0.1rem 0 0;
+}
+.aside-facts dd a {
+  color: var(--fg);
+  text-decoration: none;
+}
+.aside-facts dd a:hover {
+  color: var(--primary);
+}
+.aside-source {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  word-break: break-all;
+}
+.aside-facts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--muted-fg);
+}
+.aside-facts-list kbd {
+  padding: 0.04rem 0.35rem;
+  margin-right: 0.15rem;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* package page, hyperlink-ts layout: flagship hero cards + compact module grid */
+.api-pkg-stats {
+  margin: -0.4rem 0 1.4rem;
+  color: var(--muted-fg);
+  font-size: 0.9rem;
+}
+.api-pkg-sub {
+  margin: 1.8rem 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted-fg);
+}
+.api-heroes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.api-hero {
+  display: block;
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.api-hero:hover {
+  border-color: var(--primary);
+}
+.api-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.api-hero-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1.02rem;
+}
+.api-hero-desc {
+  margin: 0.35rem 0 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.api-hero-syms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.api-hero-chip {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  background: var(--bg);
+}
+.api-hero-more {
+  color: var(--muted-fg);
+}
+.api-minis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.55rem;
+}
+.api-mini {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  background: var(--bg);
+}
+.api-mini:hover {
+  border-color: var(--primary);
+}
+.api-mini-name {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .api-heroes {
+    grid-template-columns: 1fr;
+  }
+  .api-minis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* /releases — one section per version, anchored */
+.release { margin-bottom: 2.4rem; }
+.release-version {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+.release ul { padding-left: 1.2rem; }
+.release li { margin: 0.35rem 0; }
+
+/* edit-this-page + version badge + shortcuts card */
+.edit-page {
+  display: inline-block;
+  margin: 2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted-fg);
+}
+.edit-page:hover { color: var(--primary); }
+.version-badge {
+  margin-right: auto;
+  padding: 0.1rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted-fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+}
+.version-badge:hover { color: var(--primary); border-color: var(--primary); }
+.topbar-inner .brand:has(+ .version-badge) { margin-right: 0; }
+.shortcuts-card { padding: 0.9rem 1.1rem; max-width: 26rem; }
+.shortcuts-list { display: grid; grid-template-columns: auto 1fr; gap: 0.45rem 0.9rem; margin: 0.6rem 0 0; font-size: 0.85rem; }
+.shortcuts-list dt kbd {
+  padding: 0.05rem 0.4rem;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.shortcuts-list dd { margin: 0; color: var(--muted-fg); }
+
+/* --- landing page (/) — full-viewport coming-soon lockup (brand host) --- */
+body:has(.landing) {
+  padding: 0;
+}
+/* Quiet brand page: no docs chrome (search / nav / footer) — demo lives on dev. */
+body:has(.landing) .topbar,
+body:has(.landing) .menu-cb,
+body:has(.landing) .menu-overlay,
+body:has(.landing) .site-footer,
+body:has(.landing) .sidebar {
+  display: none;
+}
+body:has(.landing) .layout {
+  max-width: none;
+  gap: 0;
+}
+/* the base main is capped at 46rem (and the >=900px media pins margin to 0, not auto) — on the
+   landing the section owns its own widths, so lift the cap entirely or landscape phones
+   (900-1099px) render the whole hero 46rem wide and hard-left */
+body:has(.landing) main {
+  max-width: none;
+  /* base main carries 1.25rem side + 5rem bottom padding — on phones that's why the card
+     couldn't reach the edges; the landing owns its own spacing */
+  padding: 0;
+}
+.landing {
+  /* main is a flex row — stretch to fill it, or the hero hugs its content off-center */
+  width: 100%;
+  /* full viewport — topbar is hidden on this page */
+  min-height: 100dvh;
+  display: flex;
+  /* safe: when the hero is TALLER than the viewport (landscape phones), fall back to top
+     alignment instead of clipping the wordmark above the scroll origin */
+  align-items: safe center;
+  justify-content: center;
+  text-align: left;
+  padding: 1.6rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
+}
+.landing-inner {
+  max-width: 70rem; /* ~1120px body cap */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.landing-title {
+  margin: 0;
+  font-size: 1em;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: var(--primary);
+}
+.landing-sub {
+  margin: 0.4rem 0 0;
+  font-size: 0.27em;
+  font-weight: 500;
+  color: var(--muted-fg);
+  letter-spacing: 0.01em;
+}
+/* the wordmark block: shrink-wraps to the heading and centers by MARGIN, not text-align —
+   "for Effect" keeps the heading's left edge. */
+.landing-mark {
+  width: fit-content;
+  margin-inline: auto;
+  /* ONE size drives the whole lockup: title and sub are em-fractions of this, so their ratio
+     (and the tuck offsets) hold constant across every viewport instead of drifting on
+     independent vw curves */
+  font-size: clamp(3.6rem, 13vw, 7.5rem);
+  margin-block: clamp(1.2rem, 3.5vh, 2.4rem) clamp(0.9rem, 2.5vh, 1.8rem);
+}
+.landing-mark .landing-sub {
+  /* tucked under the "Hy": left edge of the wordmark, pulled up into its descender space.
+     Offsets in the MARK's em (the sub's font-size is 0.27em of it) so the tuck scales with
+     the lockup as one object. */
+  text-align: left;
+  margin-top: -0.05em;
+  padding-left: 0.18em;
+}
+/* one flowing motto line: a quiet crescendo ending on the orange yield* */
+.landing-motto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  align-self: center;
+  gap: 0.5rem;
+  margin: clamp(1.4rem, 3.5vh, 2.2rem) 0 1.2rem;
+  font-family: var(--font-sans);
+  font-size: clamp(1.15rem, 2.6vw, 1.55rem);
+  letter-spacing: 0.005em;
+  color: var(--muted-fg);
+}
+.landing-motto span:nth-child(2) {
+  color: color-mix(in oklab, var(--fg) 70%, var(--muted-fg));
+}
+/* the staircase: definition steps in from the left, yield* steps out to the right */
+.landing-motto span:nth-child(1) {
+  transform: translateX(-3.5rem);
+}
+.landing-motto .landing-motto-accent {
+  transform: translateX(3.5rem);
+}
+/* narrow screens: shallower staircase so the outer lines keep clear of the edges */
+@media (max-width: 520px) {
+  .landing-motto span:nth-child(1) {
+    transform: translateX(-2rem);
+  }
+  .landing-motto .landing-motto-accent {
+    transform: translateX(2rem);
+  }
+}
+.landing-motto-accent {
+  color: var(--fg);
+  font-weight: 550;
+}
+.landing-motto code {
+  font-family: var(--font-mono);
+  color: oklch(0.62 0.17 55);
+  background: none;
+  padding: 0;
+  border: none;
+  font-size: 0.95em;
+}
+@media (prefers-color-scheme: dark) {
+  .landing-motto code {
+    color: oklch(0.75 0.16 60);
+  }
+}
+.landing-soon {
+  align-self: center;
+  margin: 1.9rem 0 2.2rem;
+  padding: 0.5rem 1.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+  background: var(--panel);
+}
+
+/* dev-only gen-hovers restamp toast (HoverGenProgress island) — Safari-download style,
+   bottom right: label + count over a thin determinate bar. */
+.hovergen-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 80;
+  width: 18.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popup-bg);
+  box-shadow: 0 6px 24px oklch(0 0 0 / 0.14);
+}
+.hovergen-toast-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+.hovergen-toast-label {
+  font-size: 0.8rem;
+  color: var(--fg);
+}
+.hovergen-toast-count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted-fg);
+  white-space: nowrap;
+}
+.hovergen-toast-label {
+  white-space: nowrap;
+}
+.hovergen-toast-track {
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.hovergen-toast-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.6s ease;
+}

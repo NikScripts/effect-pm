@@ -1,0 +1,15 @@
+---
+description: Apps import last-ts only — never waku (host boundary)
+globs: "{docs/last,docs/site,packages/last-ts,examples}/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# No `waku` imports in apps
+
+SSOT: [`docs/standards/working-agreement.md`](../../docs/standards/working-agreement.md) (`no-waku-app-imports`).
+ESLint enforces.
+
+- Apps: `last-ts/config`, `last-ts/server`, `last-ts/Waku`, `last-ts/vite` — never `waku` / `waku/*`.
+- `waku` is an optional peer of `last-ts` only (`packages/last-ts/**` may import it).
+- No `getConfig` / `pageConfig` / `Page.asDefault`.
+- Teaching spine: [`docs/handoffs/last-ts-spine.md`](../../docs/handoffs/last-ts-spine.md).
