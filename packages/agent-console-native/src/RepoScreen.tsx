@@ -206,7 +206,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       <SystemIcon
         name="chevron.forward"
         size={13}
-        color={colors.tint}
+        color={colors.secondaryLabel}
       />
     </TouchableOpacity>
   );
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   seeAllText: {
-    color: colors.tint,
+    color: colors.secondaryLabel,
     fontSize: 15,
     fontWeight: "600",
   },
